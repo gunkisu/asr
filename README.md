@@ -1,4 +1,4 @@
-# asr (Acoustic Speech Recognition)
+# ASR (Acoustic Speech Recognition)
 Acoustic Speech Recognition with Hyper-Networks
 
 (1) Baseline Model (Single Utterance)
@@ -28,3 +28,5 @@ Acoustic Speech Recognition with Hyper-Networks
 - Stacked LSTM with two utterances train setting
 - Test model with single utterance
 - Test model with two concatenated utterances
+
+Goal is to learn user-adaptive features, and this feature decides the model by generating parameters.
