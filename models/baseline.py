@@ -1,4 +1,4 @@
-from lasagne.nonlinearities import softmax
+from libs.lasagne.layers import SequenceSoftmaxLayer
 from lasagne.layers import InputLayer, DenseLayer
 from libs.lasagne.blocks import BidirLSTMBlock
 
@@ -37,9 +37,11 @@ def deep_bidir_lstm_model(input_var,
     ################
     # output layer #
     ################
-    output_layer = DenseLayer(incoming=prev_input_layer,
-                              num_units=num_outputs,
-                              nonlinearity=softmax)
+    output_layer = SequenceSoftmaxLayer(incoming=DenseLayer(incoming=prev_input_layer,
+                                                            num_units=num_outputs,
+                                                            nonlinearity=None),
+                                        mask_input=mask_layer)
+
 
     return output_layer
 

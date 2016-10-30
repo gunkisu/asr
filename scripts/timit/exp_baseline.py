@@ -103,7 +103,7 @@ def set_network_predictor(input_data,
 
     # get prediction cost
     predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1])),
-                                                  targets=T.flatten(target_data, 1))
+                                            targets=T.flatten(target_data, 1))
     predict_cost = predict_cost*T.flatten(target_mask, 1)
     predict_cost = predict_cost.sum()/target_mask.sum()
 
@@ -112,8 +112,8 @@ def set_network_predictor(input_data,
                                          input_mask,
                                          target_data,
                                          target_mask],
-                                  outputs=[predict_idx,
-                                           predict_cost])
+                                 outputs=[predict_idx,
+                                          predict_cost])
 
     return predict_fn
 

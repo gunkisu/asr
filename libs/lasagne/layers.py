@@ -11,6 +11,41 @@ from lasagne.random import get_rng
 floatX = theano.config.floatX
 eps = np.finfo(floatX).eps
 
+class SequenceSoftmaxLayer(MergeLayer):
+    def __init__(self,
+                 incoming,
+                 mask_input=None,
+                 **kwargs):
+
+        incomings = [incoming,]
+        self.mask_incoming_index = -1
+        if mask_input is not None:
+            incomings.append(mask_input)
+            self.mask_incoming_index = len(incomings) - 1
+
+        super(SequenceSoftmaxLayer, self).__init__(incomings, **kwargs)
+
+
+    def get_output_shape_for(self, input_shapes):
+        return input_shapes[0]
+
+    def get_output_for(self, inputs, **kwargs):
+        input = inputs[0]
+        mask = None
+        if self.mask_incoming_index>0:
+            mask = inputs[1]
+
+
+        # softmax operation for probability
+        output = T.exp(input)
+        if mask:
+            output = output*mask[:, :, None]
+        output = output/(T.sum(output, axis=-1, keepdims=True) + eps)
+
+        return output
+
+
+
 class LSTMLayer(MergeLayer):
     def __init__(self, incoming, num_units,
                  ingate=Gate(),
