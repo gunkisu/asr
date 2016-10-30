@@ -9,7 +9,7 @@ from lasagne.regularization import regularize_network_params, l2
 from lasagne.objectives import categorical_crossentropy
 from lasagne.updates import total_norm_constraint
 from libs.lasagne.utils import get_model_param_values, get_update_params_values
-from libs.lasagne.updates import adamax
+from libs.lasagne.updates import adamax, nesterov_momentum
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
@@ -325,23 +325,23 @@ if __name__ == '__main__':
     # TODO: parser
 
     options = OrderedDict()
-    options['num_units_list'] =  (128, 128, 128)
+    options['num_units_list'] =  (250, 250, 250, 250, 250)
     options['num_inputs'] = 123
     options['num_outputs'] = 63
     options['dropout_ratio'] = 0.2
     options['use_layer_norm'] = True
 
-    options['updater'] = adamax
-    options['lr'] = 0.001
-    options['grad_norm'] = 10.0
-    options['l2_lambda'] = 1e-5
+    options['updater'] = nesterov_momentum
+    options['lr'] = 0.1
+    options['grad_norm'] = 1.0
+    options['l2_lambda'] = 1e-7
     options['updater_params'] = None
 
     options['batch_size'] = 32
-    options['num_epochs'] = 100
+    options['num_epochs'] = 200
 
-    options['train_disp_freq'] = 100
-    options['train_save_freq'] = 1000
+    options['train_disp_freq'] = 10
+    options['train_save_freq'] = 100
 
     options['data_path'] = '/home/kimts/data/speech/timit_fbank_framewise.h5'
     options['save_path'] = '/home/kimts/scripts/speech/timit_baseline'
