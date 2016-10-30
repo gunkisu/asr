@@ -301,7 +301,7 @@ def main(options):
             cur_trainer_params_val = get_update_params_values(trainer_params)
             cur_total_batch_cnt = total_batch_cnt
             pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
-                        open(options['save_path'] + '_last_model.pkl', 'rb'))
+                        open(options['save_path'] + '_last_model.pkl', 'wb'))
 
     except KeyboardInterrupt:
         print('Training Interrupted')
@@ -309,7 +309,7 @@ def main(options):
         cur_trainer_params_val = get_update_params_values(trainer_params)
         cur_total_batch_cnt = total_batch_cnt
         pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
-                    open(options['save_path'] + '_last_model.pkl', 'rb'))
+                    open(options['save_path'] + '_last_model.pkl', 'wb'))
 
     # test_datastream = timit_datastream(path=options['data_path'],
     #                                    which_set='test',
