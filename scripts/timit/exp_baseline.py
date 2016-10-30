@@ -229,7 +229,7 @@ def main(options):
                                         batch_size=options['batch_size'],
                                         local_copy=False)
     valid_datastream = timit_datastream(path=options['data_path'],
-                                        which_set='dev',
+                                        which_set='test',
                                         batch_size=options['batch_size'],
                                         local_copy=False)
 
@@ -310,12 +310,12 @@ def main(options):
         pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
                     open(options['save_path'] + '_last_model.pkl', 'rb'))
 
-    test_datastream = timit_datastream(path=options['data_path'],
-                                       which_set='test',
-                                       batch_size=options['batch_size'],
-                                       local_copy=False)
-    test_nll, test_bpc, test_per = network_evaluation(predict_fn,
-                                                      test_datastream)
+    # test_datastream = timit_datastream(path=options['data_path'],
+    #                                    which_set='test',
+    #                                    batch_size=options['batch_size'],
+    #                                    local_copy=False)
+    # test_nll, test_bpc, test_per = network_evaluation(predict_fn,
+    #                                                   test_datastream)
 
     print test_nll, test_bpc, test_per
 
