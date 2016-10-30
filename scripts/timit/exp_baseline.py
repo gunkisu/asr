@@ -9,6 +9,7 @@ from lasagne.regularization import regularize_network_params, l2
 from lasagne.objectives import categorical_crossentropy
 from lasagne.updates import total_norm_constraint
 from libs.lasagne.utils import get_model_param_values, get_update_params_values
+from libs.lasagne.updates import adamax
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
@@ -329,7 +330,7 @@ if __name__ == '__main__':
     options['dropout_ratio'] = 0.2
     options['use_layer_norm'] = True
 
-    options['updater'] = lasagne.updates.adamax
+    options['updater'] = adamax
     options['lr'] = 0.001
     options['grad_norm'] = 10.0
     options['l2_lambda'] = 1e-5
