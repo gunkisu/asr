@@ -151,6 +151,7 @@ def network_evaluation(predict_fn,
 
         # average over sequence
         match_avg = numpy.sum(match_data, axis=-1)/numpy.sum(target_mask, axis=-1)
+        match_avg = match_avg.mean()
 
         # add up cost
         total_nll += predict_cost
@@ -339,8 +340,8 @@ if __name__ == '__main__':
     options['batch_size'] = 32
     options['num_epochs'] = 100
 
-    options['train_disp_freq'] = 1000
-    options['train_save_freq'] = 5000
+    options['train_disp_freq'] = 100
+    options['train_save_freq'] = 1000
 
     options['data_path'] = '/home/kimts/data/speech/timit_fbank_framewise.h5'
     options['save_path'] = '/home/kimts/scripts/speech/timit_baseline'
