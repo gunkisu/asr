@@ -316,8 +316,8 @@ def main(options):
     #                                    local_copy=False)
     # test_nll, test_bpc, test_per = network_evaluation(predict_fn,
     #                                                   test_datastream)
-
-    print test_nll, test_bpc, test_per
+    #
+    # print test_nll, test_bpc, test_per
 
 if __name__ == '__main__':
     parser = ArgumentParser()
