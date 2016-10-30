@@ -227,11 +227,11 @@ def main(options):
     train_datastream = timit_datastream(path=options['data_path'],
                                         which_set='train',
                                         batch_size=options['batch_size'],
-                                        local_copy=True)
+                                        local_copy=False)
     valid_datastream = timit_datastream(path=options['data_path'],
                                         which_set='dev',
                                         batch_size=options['batch_size'],
-                                        local_copy=True)
+                                        local_copy=False)
 
     ##################
     # start training #
@@ -313,7 +313,7 @@ def main(options):
     test_datastream = timit_datastream(path=options['data_path'],
                                        which_set='test',
                                        batch_size=options['batch_size'],
-                                       local_copy=True)
+                                       local_copy=False)
     test_nll, test_bpc, test_per = network_evaluation(predict_fn,
                                                       test_datastream)
 
