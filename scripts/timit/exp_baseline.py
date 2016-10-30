@@ -52,7 +52,7 @@ def set_network_trainer(input_data,
     predict_idx = T.argmax(predict_data, axis=-1)
 
     # get prediction cost
-    train_predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1])),
+    train_predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1])) + eps,
                                                   targets=T.flatten(target_data, 1))
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
     train_predict_cost = train_predict_cost.sum()/target_mask.sum()
@@ -103,7 +103,7 @@ def set_network_predictor(input_data,
     predict_idx = T.argmax(predict_data, axis=-1)
 
     # get prediction cost
-    predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1])),
+    predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1]))+eps,
                                             targets=T.flatten(target_data, 1))
     predict_cost = predict_cost*T.flatten(target_mask, 1)
     predict_cost = predict_cost.sum()/target_mask.sum()
