@@ -14,6 +14,9 @@ eps = np.finfo(floatX).eps
 class SequenceSoftmaxLayer(MergeLayer):
     def __init__(self,
                  incoming,
+                 num_outputs,
+                 W=init.GlorotUniform(),
+                 b=init.Constant(0.),
                  mask_input=None,
                  **kwargs):
 
@@ -23,11 +26,23 @@ class SequenceSoftmaxLayer(MergeLayer):
             incomings.append(mask_input)
             self.mask_incoming_index = len(incomings) - 1
 
+        self.num_outputs = num_outputs
+
         super(SequenceSoftmaxLayer, self).__init__(incomings, **kwargs)
 
+        num_inputs = self.input_shapes[0][-1]
+
+        self.W = self.add_param(W, (num_inputs, num_outputs), name="W")
+
+        if b is None:
+            self.b = None
+        else:
+            self.b = self.add_param(b, (num_outputs,), name="b", regularizable=False)
 
     def get_output_shape_for(self, input_shapes):
-        return input_shapes[0]
+        num_samples = input_shapes[0][0]
+        num_steps = input_shapes[0][1]
+        return (num_samples, num_steps, self.num_outputs)
 
     def get_output_for(self, inputs, **kwargs):
         input = inputs[0]
@@ -35,12 +50,16 @@ class SequenceSoftmaxLayer(MergeLayer):
         if self.mask_incoming_index>0:
             mask = inputs[1]
 
+        # dense operation
+        activation = T.dot(input, self.W)
+        if self.b is not None:
+            activation = activation + self.b[None, None, :]
 
         # softmax operation for probability
-        output = T.exp(input)
+        activation = T.exp(activation)
         if mask:
-            output = output*mask[:, :, None]
-        output = output/(T.sum(output, axis=-1, keepdims=True) + eps)
+            activation = activation*mask[:, :, None]
+        output = activation/(T.sum(activation, axis=-1, keepdims=True) + eps)
 
         return output
 

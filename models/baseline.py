@@ -1,6 +1,6 @@
 from libs.lasagne.layers import SequenceSoftmaxLayer
-from lasagne.layers import InputLayer, DenseLayer
-from libs.lasagne.blocks import BidirLSTMBlock
+from lasagne.layers import InputLayer, DropoutLayer
+from libs.lasagne.layers import BiDirLSTMLayer
 
 def deep_bidir_lstm_model(input_var,
                           mask_var,
@@ -26,22 +26,20 @@ def deep_bidir_lstm_model(input_var,
     num_layers = len(num_units_list)
     prev_input_layer = input_layer
     for l in range(num_layers):
-        prev_input_layer = BidirLSTMBlock(data_layer=prev_input_layer,
-                                          mask_layer=mask_layer,
+        prev_input_layer = BiDirLSTMLayer(incoming=DropoutLayer(prev_input_layer, p=dropout_ratio),
+                                          mask_input=mask_layer,
                                           num_units=num_units_list[l],
-                                          dropout_ratio=dropout_ratio,
                                           use_layer_norm=use_layer_norm,
+                                          dropout_ratio=dropout_ratio,
                                           learn_init=learn_init,
                                           grad_clipping=grad_clipping)
 
     ################
     # output layer #
     ################
-    output_layer = SequenceSoftmaxLayer(incoming=DenseLayer(incoming=prev_input_layer,
-                                                            num_units=num_outputs,
-                                                            nonlinearity=None),
+    output_layer = SequenceSoftmaxLayer(incoming=DropoutLayer(prev_input_layer, p=dropout_ratio),
+                                        num_outputs=num_outputs,
                                         mask_input=mask_layer)
-
 
     return output_layer
 
