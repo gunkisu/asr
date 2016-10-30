@@ -4,6 +4,7 @@ from libs.lasagne.blocks import BidirLSTMBlock
 
 def deep_bidir_lstm_model(input_var,
                           mask_var,
+                          num_inputs,
                           num_units_list,
                           num_outputs,
                           dropout_ratio=0.2,
@@ -13,7 +14,7 @@ def deep_bidir_lstm_model(input_var,
     ###############
     # input layer #
     ###############
-    input_layer = InputLayer(shape=(None, None, None),
+    input_layer = InputLayer(shape=(None, None, num_inputs),
                              input_var=input_var)
 
     mask_layer = InputLayer(shape=(None, None),

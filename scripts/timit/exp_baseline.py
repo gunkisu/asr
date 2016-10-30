@@ -16,6 +16,7 @@ eps = numpy.finfo(floatX).eps
 
 def build_network(input_data,
                   input_mask,
+                  num_inputs=123,
                   num_units_list=(128, 128, 128),
                   num_outputs=63,
                   dropout_ratio=0.2,
@@ -24,6 +25,7 @@ def build_network(input_data,
                   grad_clipping=0.0):
     network = deep_bidir_lstm_model(input_var=input_data,
                                     mask_var=input_mask,
+                                    num_inputs=num_inputs,
                                     num_units_list=num_units_list,
                                     num_outputs=num_outputs,
                                     dropout_ratio=dropout_ratio,
@@ -177,6 +179,7 @@ def main(options):
     # network
     network = build_network(input_data=input_data,
                             input_mask=input_mask,
+                            num_inputs=options['num_inputs'],
                             num_units_list=options['num_units_list'],
                             num_outputs=options['num_outputs'],
                             dropout_ratio=0.2,
@@ -321,6 +324,7 @@ if __name__ == '__main__':
 
     options = OrderedDict()
     options['num_units_list'] =  (128, 128, 128)
+    options['num_inputs'] = 123
     options['num_outputs'] = 63
     options['dropout_ratio'] = 0.2
     options['use_layer_norm'] = True
