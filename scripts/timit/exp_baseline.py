@@ -343,6 +343,7 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/timit_fbank_framewise.h5'
     options['save_path'] = '/home/kimts/scripts/speech/timit_baseline'
+    options['load_params'] = None
 
     main(options)
 
