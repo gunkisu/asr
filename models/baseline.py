@@ -1,4 +1,4 @@
-from libs.lasagne.layers import SequenceSoftmaxLayer
+from libs.lasagne.layers import SequenceSoftmaxLayer, SequenceLayerNormLayer
 from lasagne.layers import InputLayer, DropoutLayer
 from libs.lasagne.layers import BiDirLSTMLayer
 
@@ -24,7 +24,7 @@ def deep_bidir_lstm_model(input_var,
     # stacked bidir lstm layer #
     ############################
     num_layers = len(num_units_list)
-    prev_input_layer = input_layer
+    prev_input_layer = SequenceLayerNormLayer(incoming=input_layer)
     for l in range(num_layers):
         prev_input_layer = BiDirLSTMLayer(incoming=DropoutLayer(prev_input_layer, p=dropout_ratio),
                                           mask_input=mask_layer,

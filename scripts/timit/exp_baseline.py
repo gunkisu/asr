@@ -237,7 +237,7 @@ def main(options):
     ##################
     # start training #
     ##################
-    evaluation_history =[[1000.0, 1000.0, 1.0], [1000.0, 1000.0 ,1.0]]
+    evaluation_history =[[[1000.0, 1000.0, 1.0], [1000.0, 1000.0 ,1.0]]]
     check_early_stop = 0
     total_batch_cnt = 0
 
@@ -255,11 +255,6 @@ def main(options):
                 train_predict_cost = train_output[2]
                 train_regularizer_cost = train_output[3]
                 network_grads_norm = train_output[4]
-
-                print data[0][0, 0, :10]
-                print 'train_predict_cost: ', train_predict_cost
-                print 'train_regularizer_cost: ', train_regularizer_cost
-                print 'network_grads_norm: ', network_grads_norm
 
                 # count batch
                 total_batch_cnt += 1
