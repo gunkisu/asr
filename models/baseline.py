@@ -1,4 +1,5 @@
-from libs.lasagne.layers import SequenceSoftmaxLayer, SequenceLayerNormLayer
+from lasagne import nonlinearities
+from libs.lasagne.layers import SequenceDenseLayer, SequenceLayerNormLayer
 from lasagne.layers import InputLayer, DropoutLayer
 from libs.lasagne.layers import BiDirLSTMLayer
 
@@ -8,6 +9,7 @@ def deep_bidir_lstm_model(input_var,
                           num_units_list,
                           num_outputs,
                           dropout_ratio=0.2,
+                          use_softmax=True,
                           use_layer_norm=True,
                           learn_init=False,
                           grad_clipping=0.0):
@@ -37,10 +39,10 @@ def deep_bidir_lstm_model(input_var,
     ################
     # output layer #
     ################
-    output_layer = SequenceSoftmaxLayer(incoming=DropoutLayer(prev_input_layer, p=dropout_ratio),
-                                        num_outputs=num_outputs,
-                                        mask_input=mask_layer)
-
+    output_layer = SequenceDenseLayer(incoming=DropoutLayer(prev_input_layer, p=dropout_ratio),
+                                      num_outputs=num_outputs,
+                                      mask_input=mask_layer,
+                                      nonlinearity=nonlinearities.softmax if use_softmax else None)
     return output_layer
 
 

@@ -31,15 +31,14 @@ class SequenceLayerNormLayer(Layer):
         output = self.alpha[None, None, :]*output + self.beta[None, None, :]
         return output
 
-
-
-class SequenceSoftmaxLayer(MergeLayer):
+class SequenceDenseLayer(MergeLayer):
     def __init__(self,
                  incoming,
                  num_outputs,
                  W=init.GlorotUniform(),
                  b=init.Constant(0.),
                  mask_input=None,
+                 nonlinearity=nonlinearities.rectify,
                  **kwargs):
 
         incomings = [incoming,]
@@ -50,7 +49,7 @@ class SequenceSoftmaxLayer(MergeLayer):
 
         self.num_outputs = num_outputs
 
-        super(SequenceSoftmaxLayer, self).__init__(incomings, **kwargs)
+        super(SequenceDenseLayer, self).__init__(incomings, **kwargs)
 
         num_inputs = self.input_shapes[0][-1]
 
@@ -60,6 +59,12 @@ class SequenceSoftmaxLayer(MergeLayer):
             self.b = None
         else:
             self.b = self.add_param(b, (num_outputs,), name="b", regularizable=False)
+
+        if nonlinearity is None:
+            self.nonlinearity = nonlinearities.identity
+        else:
+            self.nonlinearity = nonlinearities.softmax
+
 
     def get_output_shape_for(self, input_shapes):
         num_samples = input_shapes[0][0]
@@ -77,12 +82,14 @@ class SequenceSoftmaxLayer(MergeLayer):
         if self.b is not None:
             activation = activation + self.b[None, None, :]
 
-        # softmax operation for probability
-        activation = T.exp(activation)
-        if mask:
-            activation = activation*mask[:, :, None]
-        output = activation/(T.sum(activation, axis=-1, keepdims=True) + eps)
-
+        if self.nonlinearity==nonlinearities.softmax:
+            # softmax operation for probability
+            activation = T.exp(activation)
+            if mask:
+                activation = activation*mask[:, :, None]
+            output = activation/(T.sum(activation, axis=-1, keepdims=True) + eps)
+        else:
+            output = self.nonlinearity(output)
         return output
 
 
