@@ -385,9 +385,9 @@ if __name__ == '__main__':
     options['dropout_ratio'] = 0.2
     options['use_layer_norm'] = True
 
-    options['updater'] = adam
-    options['lr'] = 0.001
-    options['grad_norm'] = 1.0
+    options['updater'] = nesterov_momentum
+    options['lr'] = 0.01
+    options['grad_norm'] = 10.0
     options['l2_lambda'] = 1e-7
     options['updater_params'] = None
 
