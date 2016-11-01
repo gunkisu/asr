@@ -89,7 +89,7 @@ class SequenceDenseLayer(MergeLayer):
                 activation = activation*mask[:, :, None]
             output = activation/(T.sum(activation, axis=-1, keepdims=True) + eps)
         else:
-            output = self.nonlinearity(output)
+            output = self.nonlinearity(activation)
         return output
 
 
