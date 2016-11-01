@@ -79,7 +79,8 @@ def set_network_trainer(input_data,
     train_ctc_cost = ctc_cost(y=target_data.dimshuffle(1, 0),
                               y_mask=target_mask.dimshuffle(1, 0),
                               y_hat=network_output.dimshuffle(1, 0, 2),
-                              y_hat_mask=input_mask.dimshuffle(1, 0))
+                              y_hat_mask=input_mask.dimshuffle(1, 0),
+                              skip_softmax=True)
     train_ctc_cost = train_ctc_cost.mean()
 
     train_cost_per_char = train_ctc_cost/target_mask.sum()
@@ -129,7 +130,8 @@ def set_network_predictor(input_data,
     pred_ctc_cost = ctc_cost(y=target_data.dimshuffle(1, 0),
                              y_mask=target_mask.dimshuffle(1, 0),
                              y_hat=network_output.dimshuffle(1, 0, 2),
-                             y_hat_mask=input_mask.dimshuffle(1, 0))
+                             y_hat_mask=input_mask.dimshuffle(1, 0),
+                             skip_softmax=True)
     pred_ctc_cost = pred_ctc_cost.mean()
 
     pred_cost_per_char = pred_ctc_cost/target_mask.sum()
