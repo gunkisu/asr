@@ -298,9 +298,10 @@ def main(options):
 
                 # get output
                 train_output = training_fn(*train_input)
-                train_predict_cost = train_output[2]
-                train_regularizer_cost = train_output[3]
-                network_grads_norm = train_output[4]
+                train_ctc_cost = train_output[0]
+                train_cost_per_char = train_output[1]
+                train_regularizer_cost = train_output[2]
+                network_grads_norm = train_output[3]
 
                 # count batch
                 total_batch_cnt += 1
@@ -311,7 +312,8 @@ def main(options):
                     print 'Model Name: ', options['save_path'].split('/')[-1]
                     print '============================================================================================'
                     print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt)
-                    print 'Prediction Cost: ', str(train_predict_cost)
+                    print 'CTC Cost: ', str(train_ctc_cost)
+                    print 'Per Char Cost: ', str(train_cost_per_char)
                     print 'Regularizer Cost: ', str(train_regularizer_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
                     print '============================================================================================'
