@@ -14,6 +14,8 @@ stage=0
 
 . utils/parse_options.sh || exit 1;
 
+# Target generation
+
 if [ $stage -le 0 ]; then
 	ali-to-pdf $alidir/final.mdl "ark:gunzip -c $alidir/ali.*.gz |" ark,t:- | sort > $dir/all_targets.txt
 
@@ -33,6 +35,7 @@ if [ $stage -le 0 ]; then
 	$lvsrdir/bin/kaldi2fuel.py $h5f add_text --applymap $dir/applymap.txt $dir/all_targets.txt targets
 fi
 
+# Feature generation
 
 if [ $stage -le 1 ]; then
 	for ds in ${datasets[*]}
@@ -46,5 +49,18 @@ if [ $stage -le 1 ]; then
 	compute-global-cmvn-stats.py scp:$dir/all_feats.scp ark:$dir/cmvn-g.stats
 	apply-global-cmvn.py --global-stats=ark:$dir/cmvn-g.stats scp:$dir/all_feats_with_targets.scp ark:- | \
 		$lvsrdir/bin/kaldi2fuel.py $h5f add ark:- fmllr_feat
+
 fi
+
+# Split information
+
+if [ $stage -le 2 ]; then
+	for ds in ${datasets[*]}
+	do
+			cat $data/$ds/feats.scp | sort | uniq > $dir/${ds}_feats.scp
+		join $dir/target_uids.txt $dir/$ds_feats.scp > $dir/${ds}_feats_with_targets.scp
+		$lvsrdir/bin/kaldi2fuel.py $h5f split all=$dir/all_feats_with_targets.scp $ds=$dir/${ds}_feats_with_targets.scp
+	done
+fi
+
 
