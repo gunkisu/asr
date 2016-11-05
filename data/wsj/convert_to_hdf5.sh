@@ -65,10 +65,14 @@ fi
 if [ $stage -le 2 ]; then
 	for ds in ${datasets[*]}
 	do
-			cat $data/$ds/feats.scp | sort | uniq > $dir/${ds}_feats.scp
+		cat $data/$ds/feats.scp | sort | uniq > $dir/${ds}_feats.scp
 		join $dir/target_uids.txt $dir/$ds_feats.scp > $dir/${ds}_feats_with_targets.scp
-		$lvsrdir/bin/kaldi2fuel.py $h5f split all=$dir/all_feats_with_targets.scp $ds=$dir/${ds}_feats_with_targets.scp
 	done
+
+	for ds in ${datasets[*]}
+	do
+		echo $ds=$dir/${ds}_feats_with_targets.scp
+	done | xargs $lvsrdir/bin/kaldi2fuel.py $h5f split all=$dir/all_feats_with_targets.scp
 fi
 
 
