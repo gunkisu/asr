@@ -1,6 +1,14 @@
 #!/bin/bash
+#
+# Assumes that Kaldi is installed in $KALDI_ROOT and 
+# this script is run in $KALDI_ROOT/egs/wsj/s5. 
+# You can also create links to the files and directories in $KALDI_ROOT/egs/wsj/s5 instead.
+# Required file: path.sh
+# Required directories: utils, data-fmllr-tri4b/train_si284_tr90,
+# data-fmllr-tri4b/train_si284_cv10, and exp/tri4b_ali_si284.
+# It uses kaldi2fuel.py from attention-lvcsr to convert features and targets into a hdf5 file readable by fuel.
 
-. ./path.sh ## Source the tools/utils (import the queue.pl)
+. ./path.sh ## Source the tools and utils
 
 datasets=(train_si284_tr90 train_si284_cv10)
 
@@ -8,14 +16,16 @@ data=data-fmllr-tri4b
 dir=exp/hyperud
 alidir=exp/tri4b_ali_si284
 h5f=exp/hyperud/wsj_fmllr.h5
+
 lvsrdir=/u/songinch/song/attention-lvcsr
 
 stage=0
 
+mkdir -p $dir
+
 . utils/parse_options.sh || exit 1;
 
 # Target generation
-
 if [ $stage -le 0 ]; then
 	ali-to-pdf $alidir/final.mdl "ark:gunzip -c $alidir/ali.*.gz |" ark,t:- | sort > $dir/all_targets.txt
 
@@ -36,14 +46,13 @@ if [ $stage -le 0 ]; then
 fi
 
 # Feature generation
-
 if [ $stage -le 1 ]; then
 	for ds in ${datasets[*]}
 	do
 		cat $data/$ds/feats.scp
 	done | sort | uniq > $dir/all_feats.scp
 
-	# filter out features without targets
+	# Filter out features without targets
 	join $dir/target_uids.txt $dir/all_feats.scp > $dir/all_feats_with_targets.scp
 	
 	compute-global-cmvn-stats.py scp:$dir/all_feats.scp ark:$dir/cmvn-g.stats
@@ -52,8 +61,7 @@ if [ $stage -le 1 ]; then
 
 fi
 
-# Split information
-
+# Split generation
 if [ $stage -le 2 ]; then
 	for ds in ${datasets[*]}
 	do
