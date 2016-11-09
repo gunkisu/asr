@@ -609,18 +609,18 @@ class ScaleHyperLSTMLayer(MergeLayer):
             scale_outer_in = T.concatenate([T.dot(slice_factor(fact_in, 0), self.V1_in_to_ingate),
                                             T.dot(slice_factor(fact_in, 1), self.V1_in_to_forgetgate),
                                             T.dot(slice_factor(fact_in, 2), self.V1_in_to_cell),
-                                            T.dot(slice_factor(fact_in, 2), self.V1_in_to_outgate)],
+                                            T.dot(slice_factor(fact_in, 3), self.V1_in_to_outgate)],
                                            axis=1)
             scale_outer_hid = T.concatenate([T.dot(slice_factor(fact_hid, 0), self.V1_hid_to_ingate),
                                              T.dot(slice_factor(fact_hid, 1), self.V1_hid_to_forgetgate),
                                              T.dot(slice_factor(fact_hid, 2), self.V1_hid_to_cell),
-                                             T.dot(slice_factor(fact_hid, 2), self.V1_hid_to_outgate)],
+                                             T.dot(slice_factor(fact_hid, 3), self.V1_hid_to_outgate)],
                                             axis=1)
 
             outer_bias = T.concatenate([T.dot(slice_factor(fact_bias, 0), self.V1_bias_ingate),
                                         T.dot(slice_factor(fact_bias, 1), self.V1_bias_forgetgate),
                                         T.dot(slice_factor(fact_bias, 2), self.V1_bias_cell),
-                                        T.dot(slice_factor(fact_bias, 2), self.V1_bias_outgate)],
+                                        T.dot(slice_factor(fact_bias, 3), self.V1_bias_outgate)],
                                        axis=1)
 
             ##############
@@ -711,7 +711,7 @@ class ScaleHyperLSTMLayer(MergeLayer):
             sequences = [inner_input, outer_input, mask]
             step_fun = step_masked
         else:
-            sequences = input
+            sequences = [inner_input, outer_input]
             step_fun = step
 
         ones = T.ones((num_batch, 1))
