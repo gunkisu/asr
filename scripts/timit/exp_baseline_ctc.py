@@ -394,6 +394,7 @@ if __name__ == '__main__':
     options['grad_norm'] = 10.0
     options['l2_lambda'] = 1e-7
     options['updater_params'] = None
+    options['grad_clipping'] = 0.0
 
     options['pool_size'] = 100
     options['max_total_frames'] = 2000
