@@ -387,6 +387,7 @@ if __name__ == '__main__':
     options['num_outputs'] = 63+1
     options['dropout_ratio'] = 0.2
     options['use_layer_norm'] = True
+    options['weight_noise'] = 0.075
 
     options['updater'] = nesterov_momentum
     options['lr'] = 0.01
