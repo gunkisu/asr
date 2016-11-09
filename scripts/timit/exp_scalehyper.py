@@ -326,11 +326,11 @@ if __name__ == '__main__':
 
     options = OrderedDict()
 
-    num_layers = 3
+    num_layers = 1
 
-    options['num_inner_units_list'] = (125,)*num_layers
-    options['num_factor_units_list'] = (125,)*num_layers
-    options['num_outer_units_list'] = (250,)*num_layers
+    options['num_inner_units_list'] = (64,)*num_layers
+    options['num_factor_units_list'] = (32,)*num_layers
+    options['num_outer_units_list'] = (128,)*num_layers
 
     options['num_inputs'] = 123
     options['num_outputs'] = 63
