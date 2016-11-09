@@ -728,8 +728,14 @@ class ScaleHyperLSTMLayer(MergeLayer):
             outer_hid_init = T.dot(ones, self.outer_hid_init)
 
         non_seqs = [inner_cell_mask, outer_cell_mask]
+        if not self.precompute_input:
+            non_seqs += [W_inner_in_stacked, b_inner_stacked,
+                         W_outer_in_stacked]
+
         non_seqs += [W_inner_hid_stacked, W_outer_hid_stacked,
-                     V0_in_stacked, V0_hid_stacked, V0_bias_stacked]
+                     V0_in_stacked, b0_in_stacked,
+                     V0_hid_stacked, b0_hid_stacked,
+                     V0_bias_stacked]
 
         non_seqs += [self.V1_in_to_ingate,
                      self.V1_in_to_forgetgate,
@@ -751,10 +757,6 @@ class ScaleHyperLSTMLayer(MergeLayer):
                          self.W_outer_cell_to_ingate,
                          self.W_outer_cell_to_forgetgate,
                          self.W_outer_cell_to_outgate]
-
-        if not self.precompute_input:
-            non_seqs += [W_inner_in_stacked, b_inner_stacked,
-                         W_outer_in_stacked]
 
         if self.use_layer_norm:
             non_seqs +=[self.alpha_inner_gate,
