@@ -1,6 +1,6 @@
 from lasagne import nonlinearities
 from libs.lasagne.layers import SequenceDenseLayer, SequenceLayerNormLayer
-from lasagne.layers import InputLayer, DropoutLayer
+from lasagne.layers import InputLayer, DropoutLayer, ConcatLayer
 from libs.lasagne.hyper_layers import BiDirScaleHyperLSTMLayer, ScaleHyperLSTMLayer
 
 def deep_bidir_scale_hyper_lstm_model(input_var,
@@ -35,7 +35,18 @@ def deep_bidir_scale_hyper_lstm_model(input_var,
     else:
         prev_input_layer = input_layer
     for l in range(num_layers):
-        prev_input_layer = ScaleHyperLSTMLayer(incoming=DropoutLayer(prev_input_layer, p=dropout_ratio),
+        prev_fwd_input_layer = ScaleHyperLSTMLayer(incoming=DropoutLayer(prev_input_layer, p=dropout_ratio),
+                                               mask_input=mask_layer,
+                                               num_inner_units=num_inner_units_list[l],
+                                               num_inner_factor_units=num_factor_units_list[l],
+                                               num_outer_units=num_outer_units_list[l],
+                                               dropout_ratio=dropout_ratio,
+                                               use_layer_norm=use_layer_norm,
+                                               weight_noise=weight_noise,
+                                               learn_init=learn_init,
+                                               grad_clipping=grad_clipping,
+                                               backwards=False)
+        prev_bwd_input_layer = ScaleHyperLSTMLayer(incoming=DropoutLayer(prev_input_layer, p=dropout_ratio),
                                                mask_input=mask_layer,
                                                num_inner_units=num_inner_units_list[l],
                                                num_inner_factor_units=num_factor_units_list[l],
@@ -46,6 +57,7 @@ def deep_bidir_scale_hyper_lstm_model(input_var,
                                                learn_init=learn_init,
                                                grad_clipping=grad_clipping,
                                                backwards=True)
+        prev_input_layer = ConcatLayer([prev_fwd_input_layer, prev_bwd_input_layer], axis=-1)
         # prev_input_layer = BiDirScaleHyperLSTMLayer(incoming=DropoutLayer(prev_input_layer, p=dropout_ratio),
         #                                             mask_input=mask_layer,
         #                                             num_inner_units=num_inner_units_list[l],
