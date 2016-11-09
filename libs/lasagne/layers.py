@@ -92,7 +92,6 @@ class SequenceDenseLayer(MergeLayer):
             output = self.nonlinearity(activation)
         return output
 
-
 class LSTMLayer(MergeLayer):
     def __init__(self,
                  incoming,

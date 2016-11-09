@@ -794,16 +794,16 @@ class ScaleHyperLSTMLayer(MergeLayer):
         # When it is requested that we only return the final sequence step,
         # we need to slice it out immediately after scan is applied
         if self.only_return_final:
-            hid_out = outer_hid_out[-1]
+            outer_hid_out = outer_hid_out[-1]
         else:
             # dimshuffle back to (n_batch, n_time_steps, n_features))
-            hid_out = outer_hid_out.dimshuffle(1, 0, 2)
+            outer_hid_out = outer_hid_out.dimshuffle(1, 0, 2)
 
             # if scan is backward reverse the output
             if self.backwards:
-                hid_out = outer_hid_out[:, ::-1]
+                outer_hid_out = outer_hid_out[:, ::-1]
 
-        return hid_out
+        return outer_hid_out
 
 
 class BiDirScaleHyperLSTMLayer(MergeLayer):
@@ -985,15 +985,12 @@ class BiDirScaleHyperLSTMLayer(MergeLayer):
         if self.fwd_inner_hid_init_incoming_index > 0:
             fwd_inner_hid_init = inputs[self.fwd_inner_hid_init_incoming_index]
             input_dict[self.input_layers[self.fwd_inner_hid_init_incoming_index]] = fwd_inner_hid_init
-
         if self.fwd_inner_cell_init_incoming_index > 0:
             fwd_inner_cell_init = inputs[self.fwd_inner_cell_init_incoming_index]
             input_dict[self.input_layers[self.fwd_inner_cell_init_incoming_index]] = fwd_inner_cell_init
-
         if self.fwd_outer_hid_init_incoming_index > 0:
             fwd_outer_hid_init = inputs[self.fwd_outer_hid_init_incoming_index]
             input_dict[self.input_layers[self.fwd_outer_hid_init_incoming_index]] = fwd_outer_hid_init
-
         if self.fwd_outer_cell_init_incoming_index > 0:
             fwd_outer_cell_init = inputs[self.fwd_outer_cell_init_incoming_index]
             input_dict[self.input_layers[self.fwd_outer_cell_init_incoming_index]] = fwd_outer_cell_init
@@ -1001,15 +998,12 @@ class BiDirScaleHyperLSTMLayer(MergeLayer):
         if self.bwd_inner_hid_init_incoming_index > 0:
             bwd_inner_hid_init = inputs[self.bwd_inner_hid_init_incoming_index]
             input_dict[self.input_layers[self.bwd_inner_hid_init_incoming_index]] = bwd_inner_hid_init
-
         if self.bwd_inner_cell_init_incoming_index > 0:
             bwd_inner_cell_init = inputs[self.bwd_inner_cell_init_incoming_index]
             input_dict[self.input_layers[self.bwd_inner_cell_init_incoming_index]] = bwd_inner_cell_init
-
         if self.bwd_outer_hid_init_incoming_index > 0:
             bwd_outer_hid_init = inputs[self.bwd_outer_hid_init_incoming_index]
             input_dict[self.input_layers[self.bwd_outer_hid_init_incoming_index]] = bwd_outer_hid_init
-
         if self.bwd_outer_cell_init_incoming_index > 0:
             bwd_outer_cell_init = inputs[self.bwd_outer_cell_init_incoming_index]
             input_dict[self.input_layers[self.bwd_outer_cell_init_incoming_index]] = bwd_outer_cell_init
