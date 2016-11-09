@@ -22,6 +22,7 @@ def build_network(input_data,
                   num_outputs=63,
                   dropout_ratio=0.2,
                   use_layer_norm=True,
+                  weight_noise=0.0,
                   learn_init=True,
                   grad_clipping=0.0):
     network = deep_bidir_lstm_model(input_var=input_data,
@@ -31,6 +32,7 @@ def build_network(input_data,
                                     num_outputs=num_outputs,
                                     dropout_ratio=dropout_ratio,
                                     use_layer_norm=use_layer_norm,
+                                    weight_noise=weight_noise,
                                     learn_init=learn_init,
                                     grad_clipping=grad_clipping)
     return network
@@ -48,7 +50,6 @@ def set_network_trainer(input_data,
 
     # get network output data
     predict_data = get_output(network, deterministic=False)
-
     predict_idx = T.argmax(predict_data, axis=-1)
 
     # get prediction cost
@@ -184,8 +185,9 @@ def main(options):
                             num_inputs=options['num_inputs'],
                             num_units_list=options['num_units_list'],
                             num_outputs=options['num_outputs'],
-                            dropout_ratio=0.2,
-                            use_layer_norm=True,
+                            dropout_ratio=options['dropout_ratio'],
+                            use_layer_norm=options['use_layer_norm'],
+                            weight_noise=options['weight_noise'],
                             learn_init=True,
                             grad_clipping=0.0)
     network_params = get_all_params(network, trainable=True)
@@ -311,15 +313,6 @@ def main(options):
         pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
                     open(options['save_path'] + '_last_model.pkl', 'wb'))
 
-    # test_datastream = timit_datastream(path=options['data_path'],
-    #                                    which_set='test',
-    #                                    batch_size=options['batch_size'],
-    #                                    local_copy=False)
-    # test_nll, test_bpc, test_per = network_evaluation(predict_fn,
-    #                                                   test_datastream)
-    #
-    # print test_nll, test_bpc, test_per
-
 if __name__ == '__main__':
     parser = ArgumentParser()
     # TODO: parser
@@ -330,6 +323,7 @@ if __name__ == '__main__':
     options['num_outputs'] = 63
     options['dropout_ratio'] = 0.2
     options['use_layer_norm'] = True
+    options['weight_noise'] = 0.0
 
     options['updater'] = nesterov_momentum
     options['lr'] = 0.1

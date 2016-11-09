@@ -47,6 +47,7 @@ def build_network(input_data,
                   num_outputs=64,
                   dropout_ratio=0.2,
                   use_layer_norm=True,
+                  weight_noise=0.0,
                   learn_init=True,
                   grad_clipping=0.0):
     network = deep_bidir_lstm_model(input_var=input_data,
@@ -56,9 +57,10 @@ def build_network(input_data,
                                     num_outputs=num_outputs,
                                     dropout_ratio=dropout_ratio,
                                     use_layer_norm=use_layer_norm,
+                                    weight_noise=weight_noise,
                                     learn_init=learn_init,
-                                    use_softmax=False,
-                                    grad_clipping=grad_clipping)
+                                    grad_clipping=grad_clipping,
+                                    use_softmax = False)
     return network
 
 def set_network_trainer(input_data,
@@ -224,10 +226,11 @@ def main(options):
                             num_inputs=options['num_inputs'],
                             num_units_list=options['num_units_list'],
                             num_outputs=options['num_outputs'],
-                            dropout_ratio=0.2,
-                            use_layer_norm=True,
+                            dropout_ratio=options['dropout_ratio'],
+                            use_layer_norm=options['use_layer_norm'],
+                            weight_noise=options['weight_noise'],
                             learn_init=True,
-                            grad_clipping=0.0)
+                            grad_clipping=options['grad_clipping'])
     network_params = get_all_params(network, trainable=True)
 
     ###################
@@ -266,15 +269,15 @@ def main(options):
     ################
     print 'Load data stream'
     train_dataset, train_datastream = timit_datastream(path=options['data_path'],
-                                        which_set='train',
-                                        pool_size=options['pool_size'],
-                                        maximum_frames=options['max_total_frames'],
-                                        local_copy=False)
+                                                       which_set='train',
+                                                       pool_size=options['pool_size'],
+                                                       maximum_frames=options['max_total_frames'],
+                                                       local_copy=False)
     valid_dataset, valid_datastream = timit_datastream(path=options['data_path'],
-                                        which_set='dev',
-                                        pool_size=options['pool_size'],
-                                        maximum_frames=options['max_total_frames'],
-                                        local_copy=False)
+                                                       which_set='dev',
+                                                       pool_size=options['pool_size'],
+                                                       maximum_frames=options['max_total_frames'],
+                                                       local_copy=False)
 
     phone_dict = train_dataset.get_phoneme_dict()
     phoneme_dict = {k: phone_to_phoneme_dict[v] if v in phone_to_phoneme_dict else v for k, v in phone_dict.iteritems()}

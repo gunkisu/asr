@@ -9,8 +9,10 @@ def deep_bidir_lstm_model(input_var,
                           num_units_list,
                           num_outputs,
                           dropout_ratio=0.2,
-                          use_softmax=True,
                           use_layer_norm=True,
+                          use_input_layer_norm=False,
+                          weight_noise=0.0,
+                          use_softmax=True,
                           learn_init=False,
                           grad_clipping=0.0):
     ###############
@@ -26,13 +28,17 @@ def deep_bidir_lstm_model(input_var,
     # stacked bidir lstm layer #
     ############################
     num_layers = len(num_units_list)
-    prev_input_layer = SequenceLayerNormLayer(incoming=input_layer)
+    if use_input_layer_norm:
+        prev_input_layer = SequenceLayerNormLayer(incoming=input_layer)
+    else:
+        prev_input_layer = input_layer
     for l in range(num_layers):
         prev_input_layer = BiDirLSTMLayer(incoming=DropoutLayer(prev_input_layer, p=dropout_ratio),
                                           mask_input=mask_layer,
                                           num_units=num_units_list[l],
-                                          use_layer_norm=use_layer_norm,
                                           dropout_ratio=dropout_ratio,
+                                          use_layer_norm=use_layer_norm,
+                                          weight_noise=weight_noise,
                                           learn_init=learn_init,
                                           grad_clipping=grad_clipping)
 
