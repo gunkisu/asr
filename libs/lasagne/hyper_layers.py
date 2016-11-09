@@ -847,7 +847,7 @@ class BiDirScaleHyperLSTMLayer(MergeLayer):
         self.mask_incoming_index = -1
         if mask_input is not None:
             incomings.append(mask_input)
-            self.mask_incoming_index = len(incomings)-11
+            self.mask_incoming_index = len(incomings)-1
 
         self.fwd_inner_hid_init_incoming_index = -1
         if isinstance(fwd_inner_hid_init, Layer):
