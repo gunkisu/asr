@@ -22,7 +22,6 @@ targets.dims[0].attach_scale(targets_shapes)
 targets.dims.create_scale(targets_shapes_labels, 'shape_labels')
 targets.dims[0].attach_scale(targets_shapes_labels)
 
-alignments = list(open('exp/hyperud/all_targets.txt'))
 tmp = [l.strip().split(None, 1) for l in open('exp/hyperud/all_targets.txt')]
 tmp_uttid = [(a, b.split()) for a, b in tmp]
     
