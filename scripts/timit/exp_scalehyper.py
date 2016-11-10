@@ -2,65 +2,44 @@ from argparse import ArgumentParser
 import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict
-from data.timit.timit import timit_datastream
-from models.baseline import deep_bidir_lstm_model
+from data.timit.timit import framewise_timit_datastream
+from models.scale_hyper_nets import deep_bidir_scale_hyper_lstm_model
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
-from picklable_itertools import groupby
+from lasagne.objectives import categorical_crossentropy
 from lasagne.updates import total_norm_constraint
 from libs.lasagne.utils import get_model_param_values, get_update_params_values
-from libs.lasagne.updates import adamax, nesterov_momentum, adam
-from libs.ctc_utils import pseudo_cost as ctc_cost
-from libs.ctc_utils import ctc_strip
-from libs.eval_utils import Evaluation
+from libs.lasagne.updates import adamax, nesterov_momentum
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
-phone_to_phoneme_dict = {'ao':   'aa',
-                         'ax':   'ah',
-                         'ax-h': 'ah',
-                         'axr':  'er',
-                         'hv':   'hh',
-                         'ix':   'ih',
-                         'el':   'l',
-                         'em':   'm',
-                         'en':   'n',
-                         'nx':   'n',
-                         'ng':   'eng',
-                         'zh':   'sh',
-                         'pcl':  'sil',
-                         'tcl':  'sil',
-                         'kcl':  'sil',
-                         'bcl':  'sil',
-                         'dcl':  'sil',
-                         'gcl':  'sil',
-                         'h#':   'sil',
-                         'pau':  'sil',
-                         'epi':  'sil',
-                         'ux':   'uw'}
 
 def build_network(input_data,
                   input_mask,
-                  num_inputs=129,
-                  num_units_list=(128, 128, 128),
-                  num_outputs=64,
+                  num_inputs=123,
+                  num_inner_units_list=(64, 64, 64),
+                  num_factor_units_list=(64, 64, 64),
+                  num_outer_units_list=(128, 128, 128),
+                  num_outputs=63,
                   dropout_ratio=0.2,
                   use_layer_norm=True,
                   weight_noise=0.0,
                   learn_init=True,
                   grad_clipping=0.0):
-    network = deep_bidir_lstm_model(input_var=input_data,
-                                    mask_var=input_mask,
-                                    num_inputs=num_inputs,
-                                    num_units_list=num_units_list,
-                                    num_outputs=num_outputs,
-                                    dropout_ratio=dropout_ratio,
-                                    use_layer_norm=use_layer_norm,
-                                    weight_noise=weight_noise,
-                                    learn_init=learn_init,
-                                    grad_clipping=grad_clipping,
-                                    use_softmax = False)
+
+    network = deep_bidir_scale_hyper_lstm_model(input_var=input_data,
+                                                mask_var=input_mask,
+                                                num_inputs=num_inputs,
+                                                num_inner_units_list=num_inner_units_list,
+                                                num_factor_units_list=num_factor_units_list,
+                                                num_outer_units_list=num_outer_units_list,
+                                                num_outputs=num_outputs,
+                                                dropout_ratio=dropout_ratio,
+                                                use_layer_norm=use_layer_norm,
+                                                weight_noise=weight_noise,
+                                                learn_init=learn_init,
+                                                grad_clipping=grad_clipping)
     return network
 
 def set_network_trainer(input_data,
@@ -75,17 +54,14 @@ def set_network_trainer(input_data,
                         load_updater_params=None):
 
     # get network output data
-    network_output = get_output(network, deterministic=False)
+    predict_data = get_output(network, deterministic=False)
+    predict_idx = T.argmax(predict_data, axis=-1)
 
     # get prediction cost
-    train_ctc_cost = ctc_cost(y=target_data.dimshuffle(1, 0),
-                              y_mask=target_mask.dimshuffle(1, 0),
-                              y_hat=network_output.dimshuffle(1, 0, 2),
-                              y_hat_mask=input_mask.dimshuffle(1, 0),
-                              skip_softmax=True)
-    train_ctc_cost = train_ctc_cost.mean()
-
-    train_cost_per_char = train_ctc_cost/target_mask.sum()
+    train_predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1])) + eps,
+                                                  targets=T.flatten(target_data, 1))
+    train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
+    train_predict_cost = train_predict_cost.sum()/target_mask.sum()
 
     # get regularizer cost
     train_regularizer_cost = regularize_network_params(network, penalty=l2)
@@ -94,7 +70,7 @@ def set_network_trainer(input_data,
     network_params = get_all_params(network, trainable=True)
 
     # get network gradients with clipping
-    network_grads = theano.grad(cost=train_ctc_cost + train_regularizer_cost*l2_lambda,
+    network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost*l2_lambda,
                                 wrt=network_params)
     network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
                                                               max_norm=grad_max_norm,
@@ -112,8 +88,9 @@ def set_network_trainer(input_data,
                                           input_mask,
                                           target_data,
                                           target_mask],
-                                  outputs=[train_ctc_cost,
-                                           train_cost_per_char,
+                                  outputs=[predict_data,
+                                           predict_idx,
+                                           train_predict_cost,
                                            train_regularizer_cost,
                                            network_grads_norm],
                                   updates=train_updates)
@@ -126,44 +103,36 @@ def set_network_predictor(input_data,
                           network):
 
     # get network output data
-    network_output = get_output(network, deterministic=True)
+    predict_data = get_output(network, deterministic=True)
+
+    # get prediction index
+    predict_idx = T.argmax(predict_data, axis=-1)
 
     # get prediction cost
-    pred_ctc_cost = ctc_cost(y=target_data.dimshuffle(1, 0),
-                             y_mask=target_mask.dimshuffle(1, 0),
-                             y_hat=network_output.dimshuffle(1, 0, 2),
-                             y_hat_mask=input_mask.dimshuffle(1, 0),
-                             skip_softmax=True)
-    pred_ctc_cost = pred_ctc_cost.mean()
-
-    pred_cost_per_char = pred_ctc_cost/target_mask.sum()
-
-    # get prediction idx
-    pred_output_idx = T.argmax(network_output, axis=-1)
+    predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1]))+eps,
+                                            targets=T.flatten(target_data, 1))
+    predict_cost = predict_cost*T.flatten(target_mask, 1)
+    predict_cost = predict_cost.sum()/target_mask.sum()
 
     # get prediction function
     predict_fn = theano.function(inputs=[input_data,
                                          input_mask,
                                          target_data,
                                          target_mask],
-                                 outputs=[pred_output_idx,
-                                          pred_ctc_cost,
-                                          pred_cost_per_char])
+                                 outputs=[predict_idx,
+                                          predict_cost])
 
     return predict_fn
 
 def network_evaluation(predict_fn,
-                       data_stream,
-                       phoneme_dict,
-                       black_list):
+                       data_stream):
 
     data_iterator = data_stream.get_epoch_iterator()
 
     # evaluation results
-    total_ctc = 0.
+    total_nll = 0.
     total_per = 0.
-    total_sample = 0.
-    total_batch = 0.
+    total_cnt = 0.
 
     # for each batch
     for i, data in enumerate(data_iterator):
@@ -181,30 +150,25 @@ def network_evaluation(predict_fn,
                                     target_data,
                                     target_mask)
         predict_idx = predict_output[0]
-        predict_ctc_cost = predict_output[1]
-        pred_cost_per_char = predict_output[2]
+        predict_cost = predict_output[1]
 
-        total_ctc += predict_ctc_cost
-        total_batch += 1.
+        # compare with target data
+        match_data = (target_data == predict_idx)*target_mask
 
-        # for each data
-        for j in range(input_data.shape[0]):
-            cur_target_data = target_data[j, :numpy.sum(target_mask[j])]
-            cur_predict_data = predict_idx[j, :numpy.sum(input_mask[j])]
-            cur_predict_data = ctc_strip(cur_predict_data)
+        # average over sequence
+        match_avg = numpy.sum(match_data, axis=-1)/numpy.sum(target_mask, axis=-1)
+        match_avg = match_avg.mean()
 
-            cur_target_phoneme = [phoneme_dict[phone_ind] for phone_ind in cur_target_data if phoneme_dict[phone_ind] not in black_list]
-            cur_predict_phoneme = [phoneme_dict[phone_ind] for phone_ind in cur_predict_data if phoneme_dict[phone_ind] not in black_list]
+        # add up cost
+        total_nll += predict_cost
+        total_per += (1.0 - match_avg)
+        total_cnt += 1.
 
-            targets = [x[0] for x in groupby(cur_target_phoneme)]
-            predictions = [x[0] for x in groupby(cur_predict_phoneme)]
-            total_per += Evaluation.wer([predictions], [targets])
-            total_sample += 1
+    total_nll /= total_cnt
+    total_bpc = total_nll/numpy.log(2.0)
+    total_per /= total_cnt
 
-    total_ctc = total_ctc/total_batch
-    total_per = total_per.sum()/total_sample
-
-    return total_ctc, total_per
+    return total_nll, total_bpc, total_per
 
 
 def main(options):
@@ -224,13 +188,15 @@ def main(options):
     network = build_network(input_data=input_data,
                             input_mask=input_mask,
                             num_inputs=options['num_inputs'],
-                            num_units_list=options['num_units_list'],
+                            num_inner_units_list=options['num_inner_units_list'],
+                            num_factor_units_list=options['num_factor_units_list'],
+                            num_outer_units_list=options['num_outer_units_list'],
                             num_outputs=options['num_outputs'],
                             dropout_ratio=options['dropout_ratio'],
                             use_layer_norm=options['use_layer_norm'],
                             weight_noise=options['weight_noise'],
                             learn_init=True,
-                            grad_clipping=options['grad_clipping'])
+                            grad_clipping=0.0)
     network_params = get_all_params(network, trainable=True)
 
     ###################
@@ -268,27 +234,19 @@ def main(options):
     # load dataset #
     ################
     print 'Load data stream'
-    train_dataset, train_datastream = timit_datastream(path=options['data_path'],
-                                                       which_set='train',
-                                                       pool_size=options['pool_size'],
-                                                       maximum_frames=options['max_total_frames'],
-                                                       local_copy=False)
-    valid_dataset, valid_datastream = timit_datastream(path=options['data_path'],
-                                                       which_set='dev',
-                                                       pool_size=options['pool_size'],
-                                                       maximum_frames=options['max_total_frames'],
-                                                       local_copy=False)
-
-    phone_dict = train_dataset.get_phoneme_dict()
-    phoneme_dict = {k: phone_to_phoneme_dict[v] if v in phone_to_phoneme_dict else v for k, v in phone_dict.iteritems()}
-    ind_to_phoneme = {v: k for k, v in phoneme_dict.iteritems()}
-    black_list = ['<START>', '<STOP>', 'q', '<END>']
-
+    train_datastream = framewise_timit_datastream(path=options['data_path'],
+                                                  which_set='train',
+                                                  batch_size=options['batch_size'],
+                                                  local_copy=False)
+    valid_datastream = framewise_timit_datastream(path=options['data_path'],
+                                                  which_set='test',
+                                                  batch_size=options['batch_size'],
+                                                  local_copy=False)
 
     ##################
     # start training #
     ##################
-    evaluation_history =[[[1000.0, 1.0], [1000.0, 1.0]]]
+    evaluation_history =[[[1000.0, 1000.0, 1.0], [1000.0, 1000.0 ,1.0]]]
     check_early_stop = 0
     total_batch_cnt = 0
 
@@ -303,10 +261,9 @@ def main(options):
 
                 # get output
                 train_output = training_fn(*train_input)
-                train_ctc_cost = train_output[0]
-                train_cost_per_char = train_output[1]
-                train_regularizer_cost = train_output[2]
-                network_grads_norm = train_output[3]
+                train_predict_cost = train_output[2]
+                train_regularizer_cost = train_output[3]
+                network_grads_norm = train_output[4]
 
                 # count batch
                 total_batch_cnt += 1
@@ -317,26 +274,21 @@ def main(options):
                     print 'Model Name: ', options['save_path'].split('/')[-1]
                     print '============================================================================================'
                     print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt)
-                    print 'CTC Cost: ', str(train_ctc_cost)
-                    print 'Per Char Cost: ', str(train_cost_per_char)
+                    print 'Prediction Cost: ', str(train_predict_cost)
                     print 'Regularizer Cost: ', str(train_regularizer_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
                     print '============================================================================================'
-                    print 'Train CTC Cost: ', str(evaluation_history[-1][0][0]), ', PER: ', str(evaluation_history[-1][0][-1])
-                    print 'Valid CTC Cost: ', str(evaluation_history[-1][1][0]), ', PER: ', str(evaluation_history[-1][1][-1])
+                    print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', PER: ', str(evaluation_history[-1][0][2])
+                    print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', PER: ', str(evaluation_history[-1][1][2])
 
             # evaluation
-            train_ctc_cost, train_per = network_evaluation(predict_fn=predict_fn,
-                                                           data_stream=train_datastream,
-                                                           phoneme_dict=phoneme_dict,
-                                                           black_list=black_list)
-            valid_ctc_cost, valid_per = network_evaluation(predict_fn=predict_fn,
-                                                           data_stream=valid_datastream,
-                                                           phoneme_dict=phoneme_dict,
-                                                           black_list=black_list)
+            train_nll, train_bpc, train_per = network_evaluation(predict_fn,
+                                                                 train_datastream)
+            valid_nll, valid_bpc, valid_per = network_evaluation(predict_fn,
+                                                                 valid_datastream)
 
             # check over-fitting
-            if valid_per>evaluation_history[-1][1][-1]:
+            if valid_per>evaluation_history[-1][1][2]:
                 check_early_stop += 1.
             else:
                 check_early_stop = 0.
@@ -349,8 +301,8 @@ def main(options):
                 break
 
             # save results
-            evaluation_history.append([[train_ctc_cost, train_per],
-                                       [valid_ctc_cost, valid_per]])
+            evaluation_history.append([[train_nll, train_bpc, train_per],
+                                       [valid_nll, valid_bpc, valid_per]])
             numpy.savez(options['save_path'] + '_eval_history',
                         eval_history=evaluation_history)
 
@@ -368,43 +320,38 @@ def main(options):
         pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
                     open(options['save_path'] + '_last_model.pkl', 'wb'))
 
-    # test_datastream = timit_datastream(path=options['data_path'],
-    #                                    which_set='test',
-    #                                    batch_size=options['batch_size'],
-    #                                    local_copy=False)
-    # test_nll, test_bpc, test_per = network_evaluation(predict_fn,
-    #                                                   test_datastream)
-    #
-    # print test_nll, test_bpc, test_per
-
 if __name__ == '__main__':
     parser = ArgumentParser()
     # TODO: parser
 
     options = OrderedDict()
-    options['num_units_list'] =  (250, 250, 250, 250, 250)
-    options['num_inputs'] = 129
-    options['num_outputs'] = 63+1
+
+    num_layers = 1
+
+    options['num_inner_units_list'] = (64,)*num_layers
+    options['num_factor_units_list'] = (32,)*num_layers
+    options['num_outer_units_list'] = (128,)*num_layers
+
+    options['num_inputs'] = 123
+    options['num_outputs'] = 63
     options['dropout_ratio'] = 0.2
     options['use_layer_norm'] = True
-    options['weight_noise'] = 0.075
+    options['weight_noise'] = 0.0
 
     options['updater'] = nesterov_momentum
-    options['lr'] = 0.01
-    options['grad_norm'] = 10.0
+    options['lr'] = 0.1
+    options['grad_norm'] = 1.0
     options['l2_lambda'] = 1e-7
     options['updater_params'] = None
-    options['grad_clipping'] = 0.0
 
-    options['pool_size'] = 100
-    options['max_total_frames'] = 2000
+    options['batch_size'] = 32
     options['num_epochs'] = 200
 
     options['train_disp_freq'] = 10
     options['train_save_freq'] = 100
 
-    options['data_path'] = '/home/kimts/data/speech/timit_alignment.h5'
-    options['save_path'] = '/home/kimts/scripts/speech/timit_baseline_ctc'
+    options['data_path'] = '/home/kimts/data/speech/timit_fbank_framewise.h5'
+    options['save_path'] = '/home/kimts/scripts/speech/timit_baseline'
     options['load_params'] = None
 
     main(options)
