@@ -11,9 +11,26 @@ from lasagne.updates import total_norm_constraint
 from libs.lasagne.utils import get_model_param_values, get_update_params_values
 from libs.lasagne.updates import adamax, nesterov_momentum, momentum
 
+from fuel.datasets.hdf5 import H5PYDataset
+
+from data.schemes import SequentialShuffledScheme
+
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
+def get_datastream(path, which_set='train_si84', batch_size=8):
+    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
+    shuffle_rng = numpy.random.RandomState(123)
+    iterator_scheme = SequentialShuffledScheme(num_examples=wsj_dataset.num_examples,
+                                               batch_size=batch_size,
+                                               rng=shuffle_rng)
+
+    base_stream = DataStream(dataset=wsj_dataset,
+                             iteration_scheme=iterator_scheme)
+
+    fs = FilterSources(data_stream=base_stream, ['features', 'targets'])
+    padded_stream = Padding(data_stream=fs)
+    return padded_stream
 
 def build_network(input_data,
                   input_mask,
@@ -166,33 +183,22 @@ def network_evaluation(predict_fn,
 
 
 def main(options):
-    
-
-    ################
-    # load dataset #
-    ################
     print 'Load data stream'
-    train_datastream = framewise_wsj_datastream(path=options['data_path'],
+
+    train_datastream = get_datastream(path=options['data_path'],
                                                   which_set='train_si84',
                                                   batch_size=options['batch_size'],
                                                   local_copy=False)
-    valid_datastream = framewise_wsj_datastream(path=options['data_path'],
-                                                  which_set='train_si284_cv10',
+    valid_datastream = get_datastream(path=options['data_path'],
+                                                  which_set='test_dev93',
                                                   batch_size=options['batch_size'],
                                                   local_copy=False)
-    #################
-    # build network #
-    #################
     print 'Build and compile network'
-    # input data
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
-
-    # target data
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    # network
     network = build_network(input_data=input_data,
                             input_mask=input_mask,
                             num_inputs=options['num_inputs'],
@@ -204,15 +210,9 @@ def main(options):
                             grad_clipping=1.0)
     network_params = get_all_params(network, trainable=True)
 
-    ###################
-    # load parameters #
-    ###################
     if options['load_params']:
         print 'Load parameters into network'
 
-    #########################
-    # build network trainer #
-    #########################
     print 'Build network trainer'
     training_fn, trainer_params = set_network_trainer(input_data=input_data,
                                                       input_mask=input_mask,
@@ -225,9 +225,6 @@ def main(options):
                                                       l2_lambda=options['l2_lambda'],
                                                       load_updater_params=options['updater_params'])
 
-    ###########################
-    # build network predictor #
-    ###########################
     print 'Build network predictor'
     predict_fn = set_network_predictor(input_data=input_data,
                                        input_mask=input_mask,
@@ -236,9 +233,6 @@ def main(options):
                                        network=network)
 
 
-    ##################
-    # start training #
-    ##################
     evaluation_history =[[[1000.0, 1000.0, 1.0], [1000.0, 1000.0 ,1.0]]]
     check_early_stop = 0
     total_batch_cnt = 0
