@@ -2,14 +2,14 @@ from argparse import ArgumentParser
 import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict
-from data.timit.timit import framewise_timit_datastream
+from data.wsj.wsj import framewise_wsj_datastream
 from models.baseline import deep_bidir_lstm_model
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.objectives import categorical_crossentropy
 from lasagne.updates import total_norm_constraint
 from libs.lasagne.utils import get_model_param_values, get_update_params_values
-from libs.lasagne.updates import adamax, nesterov_momentum
+from libs.lasagne.updates import adamax, nesterov_momentum, momentum
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
@@ -87,7 +87,7 @@ def set_network_trainer(input_data,
                                            train_predict_cost,
                                            train_regularizer_cost,
                                            network_grads_norm],
-                                  updates=train_updates)
+                                  updates=train_updates, allow_input_downcast=True)
     return training_fn, trainer_params
 
 def set_network_predictor(input_data,
@@ -114,7 +114,7 @@ def set_network_predictor(input_data,
                                          target_data,
                                          target_mask],
                                  outputs=[predict_idx,
-                                          predict_cost])
+                                          predict_cost], allow_input_downcast=True)
 
     return predict_fn
 
@@ -166,6 +166,20 @@ def network_evaluation(predict_fn,
 
 
 def main(options):
+    
+
+    ################
+    # load dataset #
+    ################
+    print 'Load data stream'
+    train_datastream = framewise_wsj_datastream(path=options['data_path'],
+                                                  which_set='train_si84',
+                                                  batch_size=options['batch_size'],
+                                                  local_copy=False)
+    valid_datastream = framewise_wsj_datastream(path=options['data_path'],
+                                                  which_set='train_si284_cv10',
+                                                  batch_size=options['batch_size'],
+                                                  local_copy=False)
     #################
     # build network #
     #################
@@ -187,7 +201,7 @@ def main(options):
                             dropout_ratio=0.2,
                             use_layer_norm=True,
                             learn_init=True,
-                            grad_clipping=0.0)
+                            grad_clipping=1.0)
     network_params = get_all_params(network, trainable=True)
 
     ###################
@@ -221,18 +235,6 @@ def main(options):
                                        target_mask=target_mask,
                                        network=network)
 
-    ################
-    # load dataset #
-    ################
-    print 'Load data stream'
-    train_datastream = framewise_timit_datastream(path=options['data_path'],
-                                                  which_set='train',
-                                                  batch_size=options['batch_size'],
-                                                  local_copy=False)
-    valid_datastream = framewise_timit_datastream(path=options['data_path'],
-                                                  which_set='test',
-                                                  batch_size=options['batch_size'],
-                                                  local_copy=False)
 
     ##################
     # start training #
@@ -325,26 +327,27 @@ if __name__ == '__main__':
     # TODO: parser
 
     options = OrderedDict()
-    options['num_units_list'] =  (250, 250, 250, 250, 250)
-    options['num_inputs'] = 123
-    options['num_outputs'] = 63
-    options['dropout_ratio'] = 0.2
-    options['use_layer_norm'] = True
+    options['num_units_list'] =  (500, 500, 500, 500, 500)
+    #options['num_units_list'] =  (250, 250)
+    options['num_inputs'] = 40
+    options['num_outputs'] = 3436
+    options['dropout_ratio'] = 0.0
+    options['use_layer_norm'] = False
 
-    options['updater'] = nesterov_momentum
+    options['updater'] = momentum
     options['lr'] = 0.1
-    options['grad_norm'] = 1.0
-    options['l2_lambda'] = 1e-7
+    options['grad_norm'] = 10.0
+    options['l2_lambda'] = 0
     options['updater_params'] = None
 
-    options['batch_size'] = 32
+    options['batch_size'] = 8
     options['num_epochs'] = 200
 
     options['train_disp_freq'] = 10
     options['train_save_freq'] = 100
 
-    options['data_path'] = '/home/songinch/data/speech/timit_fbank_framewise.h5'
-    options['save_path'] = '/home/songinch/exp/timit_baseline'
+    options['data_path'] = '/home/songinch/data/speech/wsj_fmllr.h5'
+    options['save_path'] = '/home/songinch/exp/wsj_baseline'
     options['load_params'] = None
 
     main(options)
