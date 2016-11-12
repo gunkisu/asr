@@ -16,8 +16,9 @@ features_shapes_labels[...] = ['frame'.encode('utf8'), 'feature'.encode('utf8')]
 features.dims.create_scale(features_shapes_labels, 'shape_labels')
 features.dims[0].attach_scale(features_shapes_labels)
 
-targets = f.create_dataset('targets', (37394,), dtype=h5py.special_dtype(vlen=numpy.int32), maxshape=(None,))
+targets = f.create_dataset('targets', (38230,), dtype=h5py.special_dtype(vlen=numpy.int32), maxshape=(None,))
 targets.dims[0].label='batch'
+targets_shapes = f.create_dataset('targets_shapes', (38230,1), dtype='int32', maxshape=(None,1))
 targets_shapes_labels = f.create_dataset('targets_shapes_labels', (1,), dtype='S7')
 targets_shapes_labels[...] = ['frame'.encode('utf8')]
 targets.dims.create_scale(targets_shapes, 'shapes')
@@ -51,8 +52,8 @@ for row_idx, (uttid, value) in enumerate(reader):
 split_dict = {
         'train_si284': {'features': (0, 37394), 'targets': (0, 37394), 'uttids': (0, 37394)},
         'train_si84': {'features': (0, 7138), 'targets': (0, 7138), 'uttids': (0, 7138)},
-        'test_eval92': {'features': (37394, 37394+333), 'uttids': (37394, 37394+333)},
-        'test_dev93': {'features': (37394+333, 37394+333+503), 'uttids': (37394+333, 37394+333+503)}
+        'test_eval92': {'features': (37394, 37394+333), 'targets': (37394, 37394+333), 'uttids': (37394, 37394+333)},
+        'test_dev93': {'features': (37394+333, 37394+333+503), 'targets': (37394+333, 37394+333+503), 'uttids': (37394+333, 37394+333+503)}
         }
 
 f.attrs['split'] = H5PYDataset.create_split_array(split_dict)

@@ -4,29 +4,24 @@ from theano import tensor as T
 from collections import OrderedDict
 from models.baseline import deep_bidir_lstm_model
 from lasagne.layers import get_output, get_all_params
-
+from libs.lasagne.utils import get_model_param_values, get_update_params_values
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
-from data.schemes import SequentialShuffledScheme
-from fuel.transformers import Padding
+from fuel.schemes import BatchScheme
+from fuel.transformers import Padding, FilterSources
+
 import kaldi_io
-
-from libs.lasagne.utils import get_model_param_values, get_update_params_values
-
 import sys
 
 floatX = theano.config.floatX
 
 def get_datastream(path, which_set='test_eval92', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    shuffle_rng = numpy.random.RandomState(123)
-    iterator_scheme = SequentialShuffledScheme(num_examples=wsj_dataset.num_examples,
-                                               batch_size=batch_size,
-                                               rng=shuffle_rng)
+    iterator_scheme = BatchScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
-    padded_stream = Padding(data_stream=base_stream)
-
+    fs = FilterSources(data_stream=base_stream, ['features', 'uttids'])
+    padded_stream = Padding(data_stream=fs)
     return padded_stream
 
 def build_network(input_data,
@@ -49,6 +44,15 @@ def build_network(input_data,
                                     grad_clipping=grad_clipping)
     return network
 
+def ff(input_data, input_mask, network):
+    predict_data = get_output(network, deterministic=True)
+    predict_fn = theano.function(inputs=[input_data,
+                                         input_mask],
+                                 outputs=[predict_data])
+
+    return predict_fn
+
+
 def main(options):
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
@@ -70,17 +74,22 @@ def main(options):
         print 'Must specfiy network to load'
         sys.exit(1)
 
-    ff_fn = ff(input_data=input_data,
-                                       input_mask=input_mask,
-                                       target_data=target_data,
-                                       target_mask=target_mask,
-                                       network=network)
+    ff_fn = ff(input_data=input_data, input_mask=input_mask, network=network)
 
-    test_stream = get_datastream(options['data_path'], 'test_eval92', options['batch_size']) 
+    test_stream = get_datastream(options['data_path'], options['dataset'], options['batch_size']) 
 
+    writer = kaldi_io.BaseFloatMatrixWriter(options['save_path'])
 
     for example in test_stream.get_epoch_iterator():
-        net_output = ff_fn(*example)
+        input_data, input_mask, uttids = example 
+
+        net_output = ff_fn(input_data, input_mask)
+
+
+        for uttid, output in zip(uttids, net_output):
+            writer.write(uttid, output)
+
+    writer.close()
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -93,8 +102,9 @@ if __name__ == '__main__':
     options['dropout_ratio'] = 0.2
     options['use_layer_norm'] = True
 
-    options['data_path'] = '/home/songinch/data/speech/timit_fbank_framewise.h5'
-    options['save_path'] = '/home/songinch/data/speech/'
+    options['dataset'] = 'test_dev93'
+    options['data_path'] = '/home/songinch/data/speech/wsj_fbank123.h5'
+    options['save_path'] = 'ark:/home/songinch/data/speech/test_dev93_pred.ark'
     options['load_params'] = '/path/to/model' 
 
     main(options)
