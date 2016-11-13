@@ -13,7 +13,7 @@ from libs.lasagne.updates import adamax, nesterov_momentum, momentum
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
-from fuel.schemes import ConstantScheme
+from fuel.schemes import ConstantScheme, SequentialScheme
 from fuel.transformers import Padding, FilterSources
 
 #from data.schemes import SequentialShuffledScheme
@@ -23,7 +23,7 @@ eps = numpy.finfo(floatX).eps
 
 def get_datastream(path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    iterator_scheme = ConstantScheme(batch_size=batch_size,num_examples=wsj_dataset.num_examples)
+    iterator_scheme = SequentialScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
     print base_stream.sources
@@ -320,7 +320,7 @@ if __name__ == '__main__':
     options = OrderedDict()
     options['num_units_list'] =  (500, 500, 500, 500, 500)
     #options['num_units_list'] =  (250, 250)
-    options['num_inputs'] = 40
+    options['num_inputs'] = 123
     options['num_outputs'] = 3436
     options['dropout_ratio'] = 0.0
     options['use_layer_norm'] = False
@@ -337,8 +337,8 @@ if __name__ == '__main__':
     options['train_disp_freq'] = 10
     options['train_save_freq'] = 100
 
-    options['data_path'] = '/home/songinch/data/speech/wsj_fbank123.h5'
-    options['save_path'] = '/home/songinch/exp/wsj_baseline'
+    options['data_path'] = '~/data/speech/wsj_fbank123.h5'
+    options['save_path'] = '~/data/exp/wsj_baseline'
     options['load_params'] = None
 
     main(options)
