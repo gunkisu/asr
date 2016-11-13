@@ -10,7 +10,7 @@
 
 . ./path.sh ## Source the tools and utils
 
-datasets=(train_si284_tr90 train_si284_cv10)
+datasets=(train_si84, train_si284, test_eval92, test_dev93)
 
 data=data-fmllr-tri4b
 dir=exp/hyperud
