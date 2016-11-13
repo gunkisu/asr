@@ -34,8 +34,9 @@ tmp = [l.strip().split(None, 1) for l in open('exp/hyperud/all_targets.txt')]
 tmp_uttid = [(a, b.split()) for a, b in tmp]
     
 for num_utt, (uttid, value) in enumerate(tmp_uttid):
-    targets_shapes[num_utt,:] = len(value) 
-    targets[num_utt] = numpy.asarray(value).ravel()
+    int_value = [int(v) for v in value]
+    targets_shapes[num_utt,:] = len(int_value) 
+    targets[num_utt] = numpy.asarray(int_value).ravel()
 
 # Add uttid information
 uttids = [l.split(None, 1)[0] for l open('exp/hyperud/fbank123.scp')]
