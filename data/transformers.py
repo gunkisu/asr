@@ -264,13 +264,11 @@ class Normalize(Transformer):
             data['features'][i] /= self.stds
         return data.values()
 
-
 def length_getter(dt):
     def get_length(k):
         return dt[k].shape[0]
 
     return get_length
-
 
 class SortByLegth(Transformer):
     def __init__(self, data_stream, source='features'):

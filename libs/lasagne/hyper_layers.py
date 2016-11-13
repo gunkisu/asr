@@ -12,7 +12,8 @@ eps = numpy.finfo(floatX).eps
 
 class ScaleHyperLSTMLayer(MergeLayer):
     def __init__(self,
-                 incoming,
+                 inner_incoming,
+                 outer_incoming,
                  num_inner_units,
                  num_inner_factor_units,
                  num_outer_units,
@@ -43,7 +44,8 @@ class ScaleHyperLSTMLayer(MergeLayer):
                  only_return_final=False,
                  **kwargs):
 
-        incomings = [incoming]
+        incomings = [inner_incoming,
+                     outer_incoming]
 
         self.mask_incoming_index = -1
         if mask_input is not None:
@@ -106,20 +108,18 @@ class ScaleHyperLSTMLayer(MergeLayer):
             raise ValueError("Gradient steps must be -1 when unroll_scan is true.")
 
         # Retrieve the dimensionality of the incoming layer
-        input_shape = self.input_shapes[0]
+        inner_input_shape = self.input_shapes[0]
+        outer_input_shape = self.input_shapes[1]
 
-        if unroll_scan and input_shape[1] is None:
-            raise ValueError("Input sequence length cannot be specified as "
-                             "None when unroll_scan is True")
-
-        num_inputs = numpy.prod(input_shape[2:])
+        num_inner_inputs = numpy.prod(inner_input_shape[2:])
+        num_outer_inputs = numpy.prod(outer_input_shape[2:])
 
         ##############
         # inner loop #
         ##############
         def add_inner_gate_params(gate, gate_name):
             return (self.add_param(gate.W_in,
-                                   shape=(num_inputs, num_inner_units),
+                                   shape=(num_inner_inputs, num_inner_units),
                                    name="W_inner_in_to_{}".format(gate_name)),
                     self.add_param(gate.W_hid,
                                    shape=(num_inner_units, num_inner_units),
@@ -295,7 +295,7 @@ class ScaleHyperLSTMLayer(MergeLayer):
         ##############
         def add_outer_gate_params(gate, gate_name):
             return (self.add_param(gate.W_in,
-                                   shape=(num_inputs, num_outer_units),
+                                   shape=(num_outer_inputs, num_outer_units),
                                    name="W_outer_in_to_{}".format(gate_name)),
                     self.add_param(gate.W_hid,
                                    shape=(num_outer_units, num_outer_units),
@@ -390,7 +390,8 @@ class ScaleHyperLSTMLayer(MergeLayer):
 
     def get_output_for(self, inputs, deterministic=False, **kwargs):
         # input
-        input = inputs[0]
+        inner_input = inputs[0]
+        outer_input = inputs[1]
 
         # mask
         mask = None
@@ -417,11 +418,17 @@ class ScaleHyperLSTMLayer(MergeLayer):
         if self.outer_cell_init_incoming_index > 0:
             outer_cell_init = inputs[self.outer_cell_init_incoming_index]
 
-        if input.ndim > 3:
-            input = T.flatten(input, 3)
+        if inner_input.ndim > 3:
+            inner_input = T.flatten(inner_input, 3)
 
-        input = input.dimshuffle(1, 0, 2)
-        seq_len, num_batch, _ = input.shape
+        if outer_input.ndim > 3:
+            outer_input = T.flatten(outer_input, 3)
+
+        inner_input = inner_input.dimshuffle(1, 0, 2)
+        seq_len, num_batch, _ = inner_input.shape
+
+        outer_input = outer_input.dimshuffle(1, 0, 2)
+        seq_len, num_batch, _ = outer_input.shape
 
         ##############
         # inner loop #
@@ -495,11 +502,11 @@ class ScaleHyperLSTMLayer(MergeLayer):
 
         # pre-compute inner/outer input
         if self.precompute_input:
-            inner_input = T.dot(input, W_inner_in_stacked) + b_inner_stacked
-            outer_input = T.dot(input, W_outer_in_stacked)
+            inner_input = T.dot(inner_input, W_inner_in_stacked) + b_inner_stacked
+            outer_input = T.dot(outer_input, W_outer_in_stacked)
         else:
-            inner_input = input
-            outer_input = input
+            inner_input = inner_input
+            outer_input = outer_input
 
         # slice for inner
         def slice_inner(x, n):
@@ -806,211 +813,211 @@ class ScaleHyperLSTMLayer(MergeLayer):
         return outer_hid_out
 
 
-class BiDirScaleHyperLSTMLayer(MergeLayer):
-    def __init__(self,
-                 incoming,
-                 num_inner_units,
-                 num_inner_factor_units,
-                 num_outer_units,
-                 inner_ingate=Gate(),
-                 inner_forgetgate=Gate(b=init.Constant(1.)),
-                 inner_cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
-                 inner_outgate=Gate(),
-                 outer_ingate=Gate(),
-                 outer_forgetgate=Gate(b=init.Constant(1.)),
-                 outer_cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
-                 outer_outgate=Gate(),
-                 nonlinearity=nonlinearities.tanh,
-                 fwd_inner_cell_init=init.Constant(0.),
-                 fwd_inner_hid_init=init.Constant(0.),
-                 fwd_outer_cell_init=init.Constant(0.),
-                 fwd_outer_hid_init=init.Constant(0.),
-                 bwd_inner_cell_init=init.Constant(0.),
-                 bwd_inner_hid_init=init.Constant(0.),
-                 bwd_outer_cell_init=init.Constant(0.),
-                 bwd_outer_hid_init=init.Constant(0.),
-                 dropout_ratio=0.2,
-                 use_layer_norm=True,
-                 weight_noise=0.0,
-                 backwards=False,
-                 learn_init=False,
-                 peepholes=True,
-                 gradient_steps=-1,
-                 grad_clipping=0,
-                 unroll_scan=False,
-                 precompute_input=True,
-                 mask_input=None,
-                 only_return_final=False,
-                 **kwargs):
-        incomings = [incoming]
-
-        self.mask_incoming_index = -1
-        if mask_input is not None:
-            incomings.append(mask_input)
-            self.mask_incoming_index = len(incomings)-1
-
-        self.fwd_inner_hid_init_incoming_index = -1
-        if isinstance(fwd_inner_hid_init, Layer):
-            incomings.append(fwd_inner_hid_init)
-            self.fwd_inner_hid_init_incoming_index = len(incomings)-1
-
-        self.fwd_inner_cell_init_incoming_index = -1
-        if isinstance(fwd_inner_cell_init, Layer):
-            incomings.append(fwd_inner_cell_init)
-            self.fwd_inner_cell_init_incoming_index = len(incomings)-1
-
-        self.fwd_outer_hid_init_incoming_index = -1
-        if isinstance(fwd_outer_hid_init, Layer):
-            incomings.append(fwd_outer_hid_init)
-            self.fwd_outer_hid_init_incoming_index = len(incomings)-1
-
-        self.fwd_outer_cell_init_incoming_index = -1
-        if isinstance(fwd_outer_cell_init, Layer):
-            incomings.append(fwd_outer_cell_init)
-            self.fwd_outer_cell_init_incoming_index = len(incomings)-1
-
-        self.bwd_inner_hid_init_incoming_index = -1
-        if isinstance(bwd_inner_hid_init, Layer):
-            incomings.append(bwd_inner_hid_init)
-            self.bwd_inner_hid_init_incoming_index = len(incomings)-1
-
-        self.bwd_inner_cell_init_incoming_index = -1
-        if isinstance(bwd_inner_cell_init, Layer):
-            incomings.append(bwd_inner_cell_init)
-            self.bwd_inner_cell_init_incoming_index = len(incomings)-1
-
-        self.bwd_outer_hid_init_incoming_index = -1
-        if isinstance(bwd_outer_hid_init, Layer):
-            incomings.append(bwd_outer_hid_init)
-            self.bwd_outer_hid_init_incoming_index = len(incomings)-1
-
-        self.bwd_outer_cell_init_incoming_index = -1
-        if isinstance(bwd_outer_cell_init, Layer):
-            incomings.append(bwd_outer_cell_init)
-            self.bwd_outer_cell_init_incoming_index = len(incomings)-1
-
-        super(BiDirScaleHyperLSTMLayer, self).__init__(incomings, **kwargs)
-
-        self.fwd_lstm_layer = ScaleHyperLSTMLayer(incoming=incoming,
-                                                  num_inner_units=num_inner_units,
-                                                  num_inner_factor_units=num_inner_factor_units,
-                                                  num_outer_units=num_outer_units,
-                                                  inner_ingate=inner_ingate,
-                                                  inner_forgetgate=inner_forgetgate,
-                                                  inner_cell=inner_cell,
-                                                  inner_outgate=inner_outgate,
-                                                  outer_ingate=outer_ingate,
-                                                  outer_forgetgate=outer_forgetgate,
-                                                  outer_cell=outer_cell,
-                                                  outer_outgate=outer_outgate,
-                                                  nonlinearity=nonlinearity,
-                                                  inner_cell_init=fwd_inner_cell_init,
-                                                  inner_hid_init=fwd_inner_hid_init,
-                                                  outer_cell_init=fwd_outer_cell_init,
-                                                  outer_hid_init=fwd_outer_hid_init,
-                                                  dropout_ratio=dropout_ratio,
-                                                  use_layer_norm=use_layer_norm,
-                                                  weight_noise=weight_noise,
-                                                  backwards=False,
-                                                  learn_init=learn_init,
-                                                  peepholes=peepholes,
-                                                  gradient_steps=gradient_steps,
-                                                  grad_clipping=grad_clipping,
-                                                  unroll_scan=unroll_scan,
-                                                  precompute_input=precompute_input,
-                                                  mask_input=mask_input,
-                                                  only_return_final=only_return_final,
-                                                  **kwargs)
-        self.params.update(self.fwd_lstm_layer.params)
-
-        self.bwd_lstm_layer = ScaleHyperLSTMLayer(incoming=incoming,
-                                                  num_inner_units=num_inner_units,
-                                                  num_inner_factor_units=num_inner_factor_units,
-                                                  num_outer_units=num_outer_units,
-                                                  inner_ingate=inner_ingate,
-                                                  inner_forgetgate=inner_forgetgate,
-                                                  inner_cell=inner_cell,
-                                                  inner_outgate=inner_outgate,
-                                                  outer_ingate=outer_ingate,
-                                                  outer_forgetgate=outer_forgetgate,
-                                                  outer_cell=outer_cell,
-                                                  outer_outgate=outer_outgate,
-                                                  nonlinearity=nonlinearity,
-                                                  inner_cell_init=bwd_inner_cell_init,
-                                                  inner_hid_init=bwd_inner_hid_init,
-                                                  outer_cell_init=bwd_outer_cell_init,
-                                                  outer_hid_init=bwd_outer_hid_init,
-                                                  dropout_ratio=dropout_ratio,
-                                                  use_layer_norm=use_layer_norm,
-                                                  weight_noise=weight_noise,
-                                                  backwards=True,
-                                                  learn_init=learn_init,
-                                                  peepholes=peepholes,
-                                                  gradient_steps=gradient_steps,
-                                                  grad_clipping=grad_clipping,
-                                                  unroll_scan=unroll_scan,
-                                                  precompute_input=precompute_input,
-                                                  mask_input=mask_input,
-                                                  only_return_final=only_return_final,
-                                                  **kwargs)
-        self.params.update(self.bwd_lstm_layer.params)
-
-        self.output_layer = ConcatLayer(incomings=[self.fwd_lstm_layer,
-                                                   self.bwd_lstm_layer],
-                                        axis=-1)
-
-        self.num_units = num_outer_units*2
-        self.only_return_final = only_return_final
-
-    def get_output_shape_for(self, input_shapes):
-        num_samples = input_shapes[0][0]
-        num_step = input_shapes[0][1]
-        num_units = self.num_units
-
-        if self.only_return_final:
-            return (num_samples, num_units)
-        else:
-            return (num_samples, num_step, num_units)
-
-    def get_output_for(self, inputs, deterministic=False, **kwargs):
-        input_dict = {}
-
-        input = inputs[0]
-        input_dict[self.input_layers[0]] = input
-
-        if self.mask_incoming_index > 0:
-            mask = inputs[self.mask_incoming_index]
-            input_dict[self.input_layers[self.mask_incoming_index]] = mask
-
-        if self.fwd_inner_hid_init_incoming_index > 0:
-            fwd_inner_hid_init = inputs[self.fwd_inner_hid_init_incoming_index]
-            input_dict[self.input_layers[self.fwd_inner_hid_init_incoming_index]] = fwd_inner_hid_init
-        if self.fwd_inner_cell_init_incoming_index > 0:
-            fwd_inner_cell_init = inputs[self.fwd_inner_cell_init_incoming_index]
-            input_dict[self.input_layers[self.fwd_inner_cell_init_incoming_index]] = fwd_inner_cell_init
-        if self.fwd_outer_hid_init_incoming_index > 0:
-            fwd_outer_hid_init = inputs[self.fwd_outer_hid_init_incoming_index]
-            input_dict[self.input_layers[self.fwd_outer_hid_init_incoming_index]] = fwd_outer_hid_init
-        if self.fwd_outer_cell_init_incoming_index > 0:
-            fwd_outer_cell_init = inputs[self.fwd_outer_cell_init_incoming_index]
-            input_dict[self.input_layers[self.fwd_outer_cell_init_incoming_index]] = fwd_outer_cell_init
-
-        if self.bwd_inner_hid_init_incoming_index > 0:
-            bwd_inner_hid_init = inputs[self.bwd_inner_hid_init_incoming_index]
-            input_dict[self.input_layers[self.bwd_inner_hid_init_incoming_index]] = bwd_inner_hid_init
-        if self.bwd_inner_cell_init_incoming_index > 0:
-            bwd_inner_cell_init = inputs[self.bwd_inner_cell_init_incoming_index]
-            input_dict[self.input_layers[self.bwd_inner_cell_init_incoming_index]] = bwd_inner_cell_init
-        if self.bwd_outer_hid_init_incoming_index > 0:
-            bwd_outer_hid_init = inputs[self.bwd_outer_hid_init_incoming_index]
-            input_dict[self.input_layers[self.bwd_outer_hid_init_incoming_index]] = bwd_outer_hid_init
-        if self.bwd_outer_cell_init_incoming_index > 0:
-            bwd_outer_cell_init = inputs[self.bwd_outer_cell_init_incoming_index]
-            input_dict[self.input_layers[self.bwd_outer_cell_init_incoming_index]] = bwd_outer_cell_init
-
-
-        output = get_output(self.output_layer,
-                            inputs=input_dict,
-                            deterministic=deterministic)
-
-        return output
+# class BiDirScaleHyperLSTMLayer(MergeLayer):
+#     def __init__(self,
+#                  incoming,
+#                  num_inner_units,
+#                  num_inner_factor_units,
+#                  num_outer_units,
+#                  inner_ingate=Gate(),
+#                  inner_forgetgate=Gate(b=init.Constant(1.)),
+#                  inner_cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
+#                  inner_outgate=Gate(),
+#                  outer_ingate=Gate(),
+#                  outer_forgetgate=Gate(b=init.Constant(1.)),
+#                  outer_cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
+#                  outer_outgate=Gate(),
+#                  nonlinearity=nonlinearities.tanh,
+#                  fwd_inner_cell_init=init.Constant(0.),
+#                  fwd_inner_hid_init=init.Constant(0.),
+#                  fwd_outer_cell_init=init.Constant(0.),
+#                  fwd_outer_hid_init=init.Constant(0.),
+#                  bwd_inner_cell_init=init.Constant(0.),
+#                  bwd_inner_hid_init=init.Constant(0.),
+#                  bwd_outer_cell_init=init.Constant(0.),
+#                  bwd_outer_hid_init=init.Constant(0.),
+#                  dropout_ratio=0.2,
+#                  use_layer_norm=True,
+#                  weight_noise=0.0,
+#                  backwards=False,
+#                  learn_init=False,
+#                  peepholes=True,
+#                  gradient_steps=-1,
+#                  grad_clipping=0,
+#                  unroll_scan=False,
+#                  precompute_input=True,
+#                  mask_input=None,
+#                  only_return_final=False,
+#                  **kwargs):
+#         incomings = [incoming]
+#
+#         self.mask_incoming_index = -1
+#         if mask_input is not None:
+#             incomings.append(mask_input)
+#             self.mask_incoming_index = len(incomings)-1
+#
+#         self.fwd_inner_hid_init_incoming_index = -1
+#         if isinstance(fwd_inner_hid_init, Layer):
+#             incomings.append(fwd_inner_hid_init)
+#             self.fwd_inner_hid_init_incoming_index = len(incomings)-1
+#
+#         self.fwd_inner_cell_init_incoming_index = -1
+#         if isinstance(fwd_inner_cell_init, Layer):
+#             incomings.append(fwd_inner_cell_init)
+#             self.fwd_inner_cell_init_incoming_index = len(incomings)-1
+#
+#         self.fwd_outer_hid_init_incoming_index = -1
+#         if isinstance(fwd_outer_hid_init, Layer):
+#             incomings.append(fwd_outer_hid_init)
+#             self.fwd_outer_hid_init_incoming_index = len(incomings)-1
+#
+#         self.fwd_outer_cell_init_incoming_index = -1
+#         if isinstance(fwd_outer_cell_init, Layer):
+#             incomings.append(fwd_outer_cell_init)
+#             self.fwd_outer_cell_init_incoming_index = len(incomings)-1
+#
+#         self.bwd_inner_hid_init_incoming_index = -1
+#         if isinstance(bwd_inner_hid_init, Layer):
+#             incomings.append(bwd_inner_hid_init)
+#             self.bwd_inner_hid_init_incoming_index = len(incomings)-1
+#
+#         self.bwd_inner_cell_init_incoming_index = -1
+#         if isinstance(bwd_inner_cell_init, Layer):
+#             incomings.append(bwd_inner_cell_init)
+#             self.bwd_inner_cell_init_incoming_index = len(incomings)-1
+#
+#         self.bwd_outer_hid_init_incoming_index = -1
+#         if isinstance(bwd_outer_hid_init, Layer):
+#             incomings.append(bwd_outer_hid_init)
+#             self.bwd_outer_hid_init_incoming_index = len(incomings)-1
+#
+#         self.bwd_outer_cell_init_incoming_index = -1
+#         if isinstance(bwd_outer_cell_init, Layer):
+#             incomings.append(bwd_outer_cell_init)
+#             self.bwd_outer_cell_init_incoming_index = len(incomings)-1
+#
+#         super(BiDirScaleHyperLSTMLayer, self).__init__(incomings, **kwargs)
+#
+#         self.fwd_lstm_layer = ScaleHyperLSTMLayer(incoming=incoming,
+#                                                   num_inner_units=num_inner_units,
+#                                                   num_inner_factor_units=num_inner_factor_units,
+#                                                   num_outer_units=num_outer_units,
+#                                                   inner_ingate=inner_ingate,
+#                                                   inner_forgetgate=inner_forgetgate,
+#                                                   inner_cell=inner_cell,
+#                                                   inner_outgate=inner_outgate,
+#                                                   outer_ingate=outer_ingate,
+#                                                   outer_forgetgate=outer_forgetgate,
+#                                                   outer_cell=outer_cell,
+#                                                   outer_outgate=outer_outgate,
+#                                                   nonlinearity=nonlinearity,
+#                                                   inner_cell_init=fwd_inner_cell_init,
+#                                                   inner_hid_init=fwd_inner_hid_init,
+#                                                   outer_cell_init=fwd_outer_cell_init,
+#                                                   outer_hid_init=fwd_outer_hid_init,
+#                                                   dropout_ratio=dropout_ratio,
+#                                                   use_layer_norm=use_layer_norm,
+#                                                   weight_noise=weight_noise,
+#                                                   backwards=False,
+#                                                   learn_init=learn_init,
+#                                                   peepholes=peepholes,
+#                                                   gradient_steps=gradient_steps,
+#                                                   grad_clipping=grad_clipping,
+#                                                   unroll_scan=unroll_scan,
+#                                                   precompute_input=precompute_input,
+#                                                   mask_input=mask_input,
+#                                                   only_return_final=only_return_final,
+#                                                   **kwargs)
+#         self.params.update(self.fwd_lstm_layer.params)
+#
+#         self.bwd_lstm_layer = ScaleHyperLSTMLayer(incoming=incoming,
+#                                                   num_inner_units=num_inner_units,
+#                                                   num_inner_factor_units=num_inner_factor_units,
+#                                                   num_outer_units=num_outer_units,
+#                                                   inner_ingate=inner_ingate,
+#                                                   inner_forgetgate=inner_forgetgate,
+#                                                   inner_cell=inner_cell,
+#                                                   inner_outgate=inner_outgate,
+#                                                   outer_ingate=outer_ingate,
+#                                                   outer_forgetgate=outer_forgetgate,
+#                                                   outer_cell=outer_cell,
+#                                                   outer_outgate=outer_outgate,
+#                                                   nonlinearity=nonlinearity,
+#                                                   inner_cell_init=bwd_inner_cell_init,
+#                                                   inner_hid_init=bwd_inner_hid_init,
+#                                                   outer_cell_init=bwd_outer_cell_init,
+#                                                   outer_hid_init=bwd_outer_hid_init,
+#                                                   dropout_ratio=dropout_ratio,
+#                                                   use_layer_norm=use_layer_norm,
+#                                                   weight_noise=weight_noise,
+#                                                   backwards=True,
+#                                                   learn_init=learn_init,
+#                                                   peepholes=peepholes,
+#                                                   gradient_steps=gradient_steps,
+#                                                   grad_clipping=grad_clipping,
+#                                                   unroll_scan=unroll_scan,
+#                                                   precompute_input=precompute_input,
+#                                                   mask_input=mask_input,
+#                                                   only_return_final=only_return_final,
+#                                                   **kwargs)
+#         self.params.update(self.bwd_lstm_layer.params)
+#
+#         self.output_layer = ConcatLayer(incomings=[self.fwd_lstm_layer,
+#                                                    self.bwd_lstm_layer],
+#                                         axis=-1)
+#
+#         self.num_units = num_outer_units*2
+#         self.only_return_final = only_return_final
+#
+#     def get_output_shape_for(self, input_shapes):
+#         num_samples = input_shapes[0][0]
+#         num_step = input_shapes[0][1]
+#         num_units = self.num_units
+#
+#         if self.only_return_final:
+#             return (num_samples, num_units)
+#         else:
+#             return (num_samples, num_step, num_units)
+#
+#     def get_output_for(self, inputs, deterministic=False, **kwargs):
+#         input_dict = {}
+#
+#         input = inputs[0]
+#         input_dict[self.input_layers[0]] = input
+#
+#         if self.mask_incoming_index > 0:
+#             mask = inputs[self.mask_incoming_index]
+#             input_dict[self.input_layers[self.mask_incoming_index]] = mask
+#
+#         if self.fwd_inner_hid_init_incoming_index > 0:
+#             fwd_inner_hid_init = inputs[self.fwd_inner_hid_init_incoming_index]
+#             input_dict[self.input_layers[self.fwd_inner_hid_init_incoming_index]] = fwd_inner_hid_init
+#         if self.fwd_inner_cell_init_incoming_index > 0:
+#             fwd_inner_cell_init = inputs[self.fwd_inner_cell_init_incoming_index]
+#             input_dict[self.input_layers[self.fwd_inner_cell_init_incoming_index]] = fwd_inner_cell_init
+#         if self.fwd_outer_hid_init_incoming_index > 0:
+#             fwd_outer_hid_init = inputs[self.fwd_outer_hid_init_incoming_index]
+#             input_dict[self.input_layers[self.fwd_outer_hid_init_incoming_index]] = fwd_outer_hid_init
+#         if self.fwd_outer_cell_init_incoming_index > 0:
+#             fwd_outer_cell_init = inputs[self.fwd_outer_cell_init_incoming_index]
+#             input_dict[self.input_layers[self.fwd_outer_cell_init_incoming_index]] = fwd_outer_cell_init
+#
+#         if self.bwd_inner_hid_init_incoming_index > 0:
+#             bwd_inner_hid_init = inputs[self.bwd_inner_hid_init_incoming_index]
+#             input_dict[self.input_layers[self.bwd_inner_hid_init_incoming_index]] = bwd_inner_hid_init
+#         if self.bwd_inner_cell_init_incoming_index > 0:
+#             bwd_inner_cell_init = inputs[self.bwd_inner_cell_init_incoming_index]
+#             input_dict[self.input_layers[self.bwd_inner_cell_init_incoming_index]] = bwd_inner_cell_init
+#         if self.bwd_outer_hid_init_incoming_index > 0:
+#             bwd_outer_hid_init = inputs[self.bwd_outer_hid_init_incoming_index]
+#             input_dict[self.input_layers[self.bwd_outer_hid_init_incoming_index]] = bwd_outer_hid_init
+#         if self.bwd_outer_cell_init_incoming_index > 0:
+#             bwd_outer_cell_init = inputs[self.bwd_outer_cell_init_incoming_index]
+#             input_dict[self.input_layers[self.bwd_outer_cell_init_incoming_index]] = bwd_outer_cell_init
+#
+#
+#         output = get_output(self.output_layer,
+#                             inputs=input_dict,
+#                             deterministic=deterministic)
+#
+#         return output
