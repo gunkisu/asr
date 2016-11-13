@@ -10,11 +10,14 @@ from lasagne.objectives import categorical_crossentropy
 from lasagne.updates import total_norm_constraint
 from libs.lasagne.utils import get_model_param_values, get_update_params_values
 from libs.lasagne.updates import adamax, nesterov_momentum
+from libs.param_utils import set_model_param_value
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
-
+#################
+# BUILD NETWORK #
+#################
 def build_network(input_data,
                   input_mask,
                   num_inputs=123,
@@ -25,6 +28,7 @@ def build_network(input_data,
                   weight_noise=0.0,
                   learn_init=True,
                   grad_clipping=0.0):
+    # stacked bi-directional lstm
     network = deep_bidir_lstm_model(input_var=input_data,
                                     mask_var=input_mask,
                                     num_inputs=num_inputs,
@@ -37,6 +41,9 @@ def build_network(input_data,
                                     grad_clipping=grad_clipping)
     return network
 
+#################
+# BUILD TRAINER #
+#################
 def set_network_trainer(input_data,
                         input_mask,
                         target_data,
@@ -47,38 +54,56 @@ def set_network_trainer(input_data,
                         grad_max_norm=10.,
                         l2_lambda=1e-5,
                         load_updater_params=None):
-
-    # get network output data
+    ###########################
+    # get network output data #
+    ###########################
+    # frame-wise prediction distribution
     predict_data = get_output(network, deterministic=False)
+    # frame-wise max index
     predict_idx = T.argmax(predict_data, axis=-1)
 
-    # get prediction cost
+    ################################
+    # get training cost (CCE + L2) #
+    ################################
+    # get prediction cost (cce)
     train_predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1])) + eps,
                                                   targets=T.flatten(target_data, 1))
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
     train_predict_cost = train_predict_cost.sum()/target_mask.sum()
-
-    # get regularizer cost
+    # get regularizer cost (L2)
     train_regularizer_cost = regularize_network_params(network, penalty=l2)
 
-    # get network parameters
+
+    ##########################
+    # get network parameters #
+    ##########################
     network_params = get_all_params(network, trainable=True)
 
-    # get network gradients with clipping
+    #########################
+    # get network gradients #
+    #########################
+    # get gradient over cost
     network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost*l2_lambda,
                                 wrt=network_params)
+    # get gradient norm constraint
     network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
                                                               max_norm=grad_max_norm,
                                                               return_norm=True)
 
-    # set updater
+    #######################
+    # get network updater #
+    #######################
+    # get learning rate variable
     train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
+    # get updater
     train_updates, trainer_params = updater(loss_or_grads=network_grads,
                                             params=network_params,
                                             learning_rate=train_lr,
                                             load_params_dict=load_updater_params)
 
-    # get training (update) function
+    ################################
+    # get network updater function #
+    ################################
     training_fn = theano.function(inputs=[input_data,
                                           input_mask,
                                           target_data,
@@ -91,25 +116,33 @@ def set_network_trainer(input_data,
                                   updates=train_updates)
     return training_fn, trainer_params
 
+###################
+# BUILD PREDICTOR #
+###################
 def set_network_predictor(input_data,
                           input_mask,
                           target_data,
                           target_mask,
                           network):
-
-    # get network output data
+    ###########################
+    # get network output data #
+    ###########################
+    # frame-wise prediction distribution
     predict_data = get_output(network, deterministic=True)
-
-    # get prediction index
+    # frame-wise max index
     predict_idx = T.argmax(predict_data, axis=-1)
 
-    # get prediction cost
+    #############################
+    # get prediction cost (CCE) #
+    #############################
     predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1]))+eps,
                                             targets=T.flatten(target_data, 1))
     predict_cost = predict_cost*T.flatten(target_mask, 1)
     predict_cost = predict_cost.sum()/target_mask.sum()
 
-    # get prediction function
+    ###########################
+    # get prediction function #
+    ###########################
     predict_fn = theano.function(inputs=[input_data,
                                          input_mask,
                                          target_data,
@@ -119,17 +152,27 @@ def set_network_predictor(input_data,
 
     return predict_fn
 
+#############
+# EVALUATOR #
+#############
 def network_evaluation(predict_fn,
                        data_stream):
-
+    #####################
+    # get data iterator #
+    #####################
     data_iterator = data_stream.get_epoch_iterator()
 
-    # evaluation results
+    #########################
+    # set evaluation result #
+    #########################
     total_nll = 0.
     total_per = 0.
     total_cnt = 0.
 
-    # for each batch
+    ##############
+    # evaluation #
+    ##############
+    # for each batch iteration
     for i, data in enumerate(data_iterator):
         # get input data
         input_data = data[0]
@@ -159,6 +202,7 @@ def network_evaluation(predict_fn,
         total_per += (1.0 - match_avg)
         total_cnt += 1.
 
+    # get final result
     total_nll /= total_cnt
     total_bpc = total_nll/numpy.log(2.0)
     total_per /= total_cnt
@@ -188,15 +232,23 @@ def main(options):
                             dropout_ratio=options['dropout_ratio'],
                             use_layer_norm=options['use_layer_norm'],
                             weight_noise=options['weight_noise'],
-                            learn_init=True,
-                            grad_clipping=0.0)
+                            learn_init=options['learn_init'],
+                            grad_clipping=options['grad_clipping'])
+
     network_params = get_all_params(network, trainable=True)
 
     ###################
-    # load parameters #
+    # Load Parameters #
     ###################
-    if options['load_params']:
-        print 'Load parameters into network'
+    if 'reload_model' in options:
+        print('Loading Parameters...')
+        pretrain_network_params_val,  pretrain_update_params_val, pretrain_total_batch_cnt = pickle.load(open(options['reload_model'], 'rb'))
+
+        print('Applying Parameters...')
+        set_model_param_value(network_params, pretrain_network_params_val)
+    else:
+        pretrain_update_params_val = None
+        pretrain_total_batch_cnt = 0
 
     #########################
     # build network trainer #
@@ -211,7 +263,7 @@ def main(options):
                                                       learning_rate=options['lr'],
                                                       grad_max_norm=options['grad_norm'],
                                                       l2_lambda=options['l2_lambda'],
-                                                      load_updater_params=options['updater_params'])
+                                                      load_updater_params=pretrain_update_params_val)
 
     ###########################
     # build network predictor #
@@ -249,6 +301,9 @@ def main(options):
         for e_idx in range(options['num_epochs']):
             # for each batch
             for b_idx, data in enumerate(train_datastream.get_epoch_iterator()):
+                total_batch_cnt += 1
+                if pretrain_total_batch_cnt>=total_batch_cnt:
+                    continue
                 # get input, target data
                 train_input = data
 
@@ -257,9 +312,6 @@ def main(options):
                 train_predict_cost = train_output[2]
                 train_regularizer_cost = train_output[3]
                 network_grads_norm = train_output[4]
-
-                # count batch
-                total_batch_cnt += 1
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
@@ -289,7 +341,7 @@ def main(options):
                 pickle.dump(best_network_params_vals,
                             open(options['save_path'] + '_best_model.pkl', 'wb'))
 
-            if check_early_stop>3:
+            if check_early_stop>10:
                 print('Training Early Stopped')
                 break
 
@@ -299,6 +351,7 @@ def main(options):
             numpy.savez(options['save_path'] + '_eval_history',
                         eval_history=evaluation_history)
 
+            # save recent networks
             cur_network_params_val = get_model_param_values(network_params)
             cur_trainer_params_val = get_update_params_values(trainer_params)
             cur_total_batch_cnt = total_batch_cnt
@@ -340,6 +393,9 @@ if __name__ == '__main__':
     options['data_path'] = '/home/kimts/data/speech/timit_fbank_framewise.h5'
     options['save_path'] = '/home/kimts/scripts/speech/timit_baseline'
     options['load_params'] = None
+
+    options['learn_init'] = True
+    options['grad_clipping'] = 1.0
 
     main(options)
 
