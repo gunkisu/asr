@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+import os
 import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict
@@ -13,7 +14,7 @@ from libs.lasagne.updates import adamax, nesterov_momentum, momentum
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
-from fuel.schemes import ConstantScheme, SequentialScheme
+from fuel.schemes import ShuffledScheme
 from fuel.transformers import Padding, FilterSources
 
 #from data.schemes import SequentialShuffledScheme
@@ -23,10 +24,10 @@ eps = numpy.finfo(floatX).eps
 
 def get_datastream(path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    iterator_scheme = SequentialScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
+    print path, which_set
+    iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
-    print base_stream.sources
     fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
     padded_stream = Padding(data_stream=fs)
     return padded_stream
@@ -257,16 +258,13 @@ def main(options):
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
-                    print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
-                    print '============================================================================================'
                     print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt)
                     print 'Prediction Cost: ', str(train_predict_cost)
                     print 'Regularizer Cost: ', str(train_regularizer_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
-                    print '============================================================================================'
-                    print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', PER: ', str(evaluation_history[-1][0][2])
-                    print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', PER: ', str(evaluation_history[-1][1][2])
+                    print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
+                    print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
 
             # evaluation
             train_nll, train_bpc, train_per = network_evaluation(predict_fn,
@@ -329,8 +327,8 @@ if __name__ == '__main__':
     options['train_disp_freq'] = 10
     options['train_save_freq'] = 100
 
-    options['data_path'] = '/u/songinch/data/speech/wsj_fbank123.h5'
-    options['save_path'] = '/u/songinch/data/exp/wsj_baseline'
+    options['data_path'] = '/home/songinch/data/speech/wsj_fbank123.h5'
+    options['save_path'] = '/home/songinch/data/exp/wsj_baseline'
     options['load_params'] = None
 
     main(options)
