@@ -7,7 +7,7 @@ from lasagne.layers import get_output, get_all_params
 from libs.lasagne.utils import get_model_param_values, get_update_params_values
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
-from fuel.schemes import BatchScheme
+from fuel.schemes import ShuffledScheme
 from fuel.transformers import Padding, FilterSources
 
 import kaldi_io
@@ -17,7 +17,8 @@ floatX = theano.config.floatX
 
 def get_datastream(path, which_set='test_eval92', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    iterator_scheme = BatchScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
+    print path, which_set
+    iterator_scheme = ShuffledScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
     fs = FilterSources(data_stream=base_stream, ['features', 'uttids'])
@@ -70,22 +71,22 @@ def main(options):
                             grad_clipping=0.0)
     network_params = get_all_params(network, trainable=True)
 
-    if not options['load_params']:
+    if options['reload_model']:
+        print('Loading model...')
+        pretrain_network_params_val,  pretrain_update_params_val, pretrain_total_batch_cnt = pickle.load(open(options['reload_model'], 'rb'))
+        set_model_param_value(network_params, pretrain_network_params_val)
+    else:
         print 'Must specfiy network to load'
         sys.exit(1)
 
     ff_fn = ff(input_data=input_data, input_mask=input_mask, network=network)
-
     test_stream = get_datastream(options['data_path'], options['dataset'], options['batch_size']) 
-
     writer = kaldi_io.BaseFloatMatrixWriter(options['save_path'])
 
     for example in test_stream.get_epoch_iterator():
         input_data, input_mask, uttids = example 
 
         net_output = ff_fn(input_data, input_mask)
-
-
         for uttid, output in zip(uttids, net_output):
             writer.write(uttid, output)
 
@@ -105,7 +106,7 @@ if __name__ == '__main__':
     options['dataset'] = 'test_dev93'
     options['data_path'] = '/home/songinch/data/speech/wsj_fbank123.h5'
     options['save_path'] = 'ark:/home/songinch/data/speech/test_dev93_pred.ark'
-    options['load_params'] = '/path/to/model' 
+    options['reload_model'] = '/home/songinch/model/speech/' 
 
     main(options)
 
