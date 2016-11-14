@@ -13,6 +13,7 @@ from libs.lasagne.updates import adamax, nesterov_momentum, adam
 from libs.ctc_utils import pseudo_cost as ctc_cost
 from libs.ctc_utils import ctc_strip
 from libs.eval_utils import Evaluation
+from libs.param_utils import set_model_param_value
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
@@ -39,7 +40,9 @@ phone_to_phoneme_dict = {'ao':   'aa',
                          'pau':  'sil',
                          'epi':  'sil',
                          'ux':   'uw'}
-
+#################
+# BUILD NETWORK #
+#################
 def build_network(input_data,
                   input_mask,
                   num_inputs=129,
@@ -49,7 +52,8 @@ def build_network(input_data,
                   use_layer_norm=True,
                   weight_noise=0.0,
                   learn_init=True,
-                  grad_clipping=0.0):
+                  grad_clipping=1.0):
+    # stacked bi-directional lstm (without softmax)
     network = deep_bidir_lstm_model(input_var=input_data,
                                     mask_var=input_mask,
                                     num_inputs=num_inputs,
@@ -63,6 +67,9 @@ def build_network(input_data,
                                     use_softmax = False)
     return network
 
+#################
+# BUILD TRAINER #
+#################
 def set_network_trainer(input_data,
                         input_mask,
                         target_data,
@@ -73,41 +80,57 @@ def set_network_trainer(input_data,
                         grad_max_norm=10.,
                         l2_lambda=1e-5,
                         load_updater_params=None):
-
+    ###########################
+    # get network output data #
+    ###########################
     # get network output data
     network_output = get_output(network, deterministic=False)
 
-    # get prediction cost
+    ################################
+    # get training cost (CTC + L2) #
+    ################################
+    # get prediction cost (CTC)
     train_ctc_cost = ctc_cost(y=target_data.dimshuffle(1, 0),
                               y_mask=target_mask.dimshuffle(1, 0),
                               y_hat=network_output.dimshuffle(1, 0, 2),
                               y_hat_mask=input_mask.dimshuffle(1, 0),
                               skip_softmax=True)
     train_ctc_cost = train_ctc_cost.mean()
-
+    # get prediction cost (char-level), CTC)
     train_cost_per_char = train_ctc_cost/target_mask.sum()
-
-    # get regularizer cost
+    # get regularizer cost (L2)
     train_regularizer_cost = regularize_network_params(network, penalty=l2)
 
-    # get network parameters
+    ##########################
+    # get network parameters #
+    ##########################
     network_params = get_all_params(network, trainable=True)
 
-    # get network gradients with clipping
+    #########################
+    # get network gradients #
+    #########################
+    # get gradient over cost
     network_grads = theano.grad(cost=train_ctc_cost + train_regularizer_cost*l2_lambda,
                                 wrt=network_params)
+    # get gradient norm constraint
     network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
                                                               max_norm=grad_max_norm,
                                                               return_norm=True)
 
-    # set updater
+    #######################
+    # get network updater #
+    #######################
+    # get learning rate variable
     train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
+    # get updater
     train_updates, trainer_params = updater(loss_or_grads=network_grads,
                                             params=network_params,
                                             learning_rate=train_lr,
                                             load_params_dict=load_updater_params)
 
-    # get training (update) function
+    ################################
+    # get network updater function #
+    ################################
     training_fn = theano.function(inputs=[input_data,
                                           input_mask,
                                           target_data,
@@ -119,29 +142,37 @@ def set_network_trainer(input_data,
                                   updates=train_updates)
     return training_fn, trainer_params
 
+###################
+# BUILD PREDICTOR #
+###################
 def set_network_predictor(input_data,
                           input_mask,
                           target_data,
                           target_mask,
                           network):
-
-    # get network output data
+    ###########################
+    # get network output data #
+    ###########################
     network_output = get_output(network, deterministic=True)
 
-    # get prediction cost
+    ##################
+    # get cost (CTC) #
+    ##################
+    # get prediction cost (CTC)
     pred_ctc_cost = ctc_cost(y=target_data.dimshuffle(1, 0),
                              y_mask=target_mask.dimshuffle(1, 0),
                              y_hat=network_output.dimshuffle(1, 0, 2),
                              y_hat_mask=input_mask.dimshuffle(1, 0),
                              skip_softmax=True)
     pred_ctc_cost = pred_ctc_cost.mean()
-
+    # get prediction cost (char-level, CTC)
     pred_cost_per_char = pred_ctc_cost/target_mask.sum()
-
     # get prediction idx
     pred_output_idx = T.argmax(network_output, axis=-1)
 
-    # get prediction function
+    ###########################
+    # get prediction function #
+    ###########################
     predict_fn = theano.function(inputs=[input_data,
                                          input_mask,
                                          target_data,
@@ -152,20 +183,30 @@ def set_network_predictor(input_data,
 
     return predict_fn
 
+#############
+# EVALUATOR #
+#############
 def network_evaluation(predict_fn,
                        data_stream,
                        phoneme_dict,
                        black_list):
-
+    #####################
+    # get data iterator #
+    #####################
     data_iterator = data_stream.get_epoch_iterator()
 
-    # evaluation results
+    #########################
+    # set evaluation result #
+    #########################
     total_ctc = 0.
     total_per = 0.
     total_sample = 0.
     total_batch = 0.
 
-    # for each batch
+    ##############
+    # evaluation #
+    ##############
+    # for each batch iteration
     for i, data in enumerate(data_iterator):
         # get input data
         input_data = data[0]
@@ -184,10 +225,11 @@ def network_evaluation(predict_fn,
         predict_ctc_cost = predict_output[1]
         pred_cost_per_char = predict_output[2]
 
+        # add up ctc cost
         total_ctc += predict_ctc_cost
         total_batch += 1.
 
-        # for each data
+        # for each data, per evaluation
         for j in range(input_data.shape[0]):
             cur_target_data = target_data[j, :numpy.sum(target_mask[j])]
             cur_predict_data = predict_idx[j, :numpy.sum(input_mask[j])]
@@ -229,15 +271,22 @@ def main(options):
                             dropout_ratio=options['dropout_ratio'],
                             use_layer_norm=options['use_layer_norm'],
                             weight_noise=options['weight_noise'],
-                            learn_init=True,
+                            learn_init=options['learn_init'],
                             grad_clipping=options['grad_clipping'])
     network_params = get_all_params(network, trainable=True)
 
     ###################
-    # load parameters #
+    # Load Parameters #
     ###################
-    if options['load_params']:
-        print 'Load parameters into network'
+    if options['reload_model']:
+        print('Loading Parameters...')
+        pretrain_network_params_val,  pretrain_update_params_val, pretrain_total_batch_cnt = pickle.load(open(options['reload_model'], 'rb'))
+
+        print('Applying Parameters...')
+        set_model_param_value(network_params, pretrain_network_params_val)
+    else:
+        pretrain_update_params_val = None
+        pretrain_total_batch_cnt = 0
 
     #########################
     # build network trainer #
@@ -252,7 +301,7 @@ def main(options):
                                                       learning_rate=options['lr'],
                                                       grad_max_norm=options['grad_norm'],
                                                       l2_lambda=options['l2_lambda'],
-                                                      load_updater_params=options['updater_params'])
+                                                      load_updater_params=pretrain_update_params_val)
 
     ###########################
     # build network predictor #
@@ -281,7 +330,6 @@ def main(options):
 
     phone_dict = train_dataset.get_phoneme_dict()
     phoneme_dict = {k: phone_to_phoneme_dict[v] if v in phone_to_phoneme_dict else v for k, v in phone_dict.iteritems()}
-    ind_to_phoneme = {v: k for k, v in phoneme_dict.iteritems()}
     black_list = ['<START>', '<STOP>', 'q', '<END>']
 
 
@@ -298,6 +346,9 @@ def main(options):
         for e_idx in range(options['num_epochs']):
             # for each batch
             for b_idx, data in enumerate(train_datastream.get_epoch_iterator()):
+                total_batch_cnt += 1
+                if pretrain_total_batch_cnt>=total_batch_cnt:
+                    continue
                 # get input, target data
                 train_input = data
 
@@ -307,9 +358,6 @@ def main(options):
                 train_cost_per_char = train_output[1]
                 train_regularizer_cost = train_output[2]
                 network_grads_norm = train_output[3]
-
-                # count batch
-                total_batch_cnt += 1
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
@@ -344,7 +392,7 @@ def main(options):
                 pickle.dump(best_network_params_vals,
                             open(options['save_path'] + '_best_model.pkl', 'wb'))
 
-            if check_early_stop>3:
+            if check_early_stop>10:
                 print('Training Early Stopped')
                 break
 
@@ -367,15 +415,6 @@ def main(options):
         cur_total_batch_cnt = total_batch_cnt
         pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
                     open(options['save_path'] + '_last_model.pkl', 'wb'))
-
-    # test_datastream = timit_datastream(path=options['data_path'],
-    #                                    which_set='test',
-    #                                    batch_size=options['batch_size'],
-    #                                    local_copy=False)
-    # test_nll, test_bpc, test_per = network_evaluation(predict_fn,
-    #                                                   test_datastream)
-    #
-    # print test_nll, test_bpc, test_per
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -405,7 +444,10 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/timit_alignment.h5'
     options['save_path'] = '/home/kimts/scripts/speech/timit_baseline_ctc'
-    options['load_params'] = None
+    options['reload_model'] = None
+
+    options['learn_init'] = True
+    options['grad_clipping'] = 1.0
 
     main(options)
 

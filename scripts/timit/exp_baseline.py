@@ -27,7 +27,7 @@ def build_network(input_data,
                   use_layer_norm=True,
                   weight_noise=0.0,
                   learn_init=True,
-                  grad_clipping=0.0):
+                  grad_clipping=1.0):
     # stacked bi-directional lstm
     network = deep_bidir_lstm_model(input_var=input_data,
                                     mask_var=input_mask,
@@ -72,7 +72,6 @@ def set_network_trainer(input_data,
     train_predict_cost = train_predict_cost.sum()/target_mask.sum()
     # get regularizer cost (L2)
     train_regularizer_cost = regularize_network_params(network, penalty=l2)
-
 
     ##########################
     # get network parameters #
@@ -234,13 +233,12 @@ def main(options):
                             weight_noise=options['weight_noise'],
                             learn_init=options['learn_init'],
                             grad_clipping=options['grad_clipping'])
-
     network_params = get_all_params(network, trainable=True)
 
     ###################
     # Load Parameters #
     ###################
-    if 'reload_model' in options:
+    if options['reload_model']:
         print('Loading Parameters...')
         pretrain_network_params_val,  pretrain_update_params_val, pretrain_total_batch_cnt = pickle.load(open(options['reload_model'], 'rb'))
 
@@ -392,7 +390,7 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/timit_fbank_framewise.h5'
     options['save_path'] = '/home/kimts/scripts/speech/timit_baseline'
-    options['load_params'] = None
+    options['reload_model'] = None
 
     options['learn_init'] = True
     options['grad_clipping'] = 1.0
