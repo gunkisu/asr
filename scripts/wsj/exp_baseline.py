@@ -207,8 +207,11 @@ def main(options):
                             grad_clipping=1.0)
     network_params = get_all_params(network, trainable=True)
 
-    if options['load_params']:
-        print 'Load parameters into network'
+    if options['reload_model']:
+        print('Loading model...')
+        pretrain_network_params_val,  pretrain_update_params_val, pretrain_total_batch_cnt = pickle.load(open(options['reload_model'], 'rb'))
+
+        set_model_param_value(network_params, pretrain_network_params_val)
 
     print 'Build network trainer'
     training_fn, trainer_params = set_network_trainer(input_data=input_data,
@@ -304,22 +307,11 @@ def main(options):
         pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
                     open(options['save_path'] + '_last_model.pkl', 'wb'))
 
-    # test_datastream = timit_datastream(path=options['data_path'],
-    #                                    which_set='test',
-    #                                    batch_size=options['batch_size'],
-    #                                    local_copy=False)
-    # test_nll, test_bpc, test_per = network_evaluation(predict_fn,
-    #                                                   test_datastream)
-    #
-    # print test_nll, test_bpc, test_per
-
 if __name__ == '__main__':
     parser = ArgumentParser()
-    # TODO: parser
 
     options = OrderedDict()
     options['num_units_list'] =  (500, 500, 500, 500, 500)
-    #options['num_units_list'] =  (250, 250)
     options['num_inputs'] = 123
     options['num_outputs'] = 3436
     options['dropout_ratio'] = 0.0
@@ -337,8 +329,8 @@ if __name__ == '__main__':
     options['train_disp_freq'] = 10
     options['train_save_freq'] = 100
 
-    options['data_path'] = '~/data/speech/wsj_fbank123.h5'
-    options['save_path'] = '~/data/exp/wsj_baseline'
+    options['data_path'] = '/u/songinch/data/speech/wsj_fbank123.h5'
+    options['save_path'] = '/u/songinch/data/exp/wsj_baseline'
     options['load_params'] = None
 
     main(options)
