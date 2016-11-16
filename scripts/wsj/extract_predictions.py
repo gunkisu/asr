@@ -17,7 +17,7 @@ import sys
 
 floatX = theano.config.floatX
 
-def get_datastream(path, which_set='test_eval92', batch_size=1):
+def get_feat_stream(path, which_set='test_eval92', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     print path, which_set
     iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
@@ -26,6 +26,15 @@ def get_datastream(path, which_set='test_eval92', batch_size=1):
     fs = FilterSources(data_stream=base_stream, sources=['features'])
     padded_stream = Padding(data_stream=fs)
     return padded_stream
+
+def get_uttid_stream(path, which_set='test_eval92', batch_size=1):
+    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
+    print path, which_set
+    iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
+    base_stream = DataStream(dataset=wsj_dataset,
+                             iteration_scheme=iterator_scheme)
+    fs = FilterSources(data_stream=base_stream, sources=['uttids'])
+    return fs
 
 def build_network(input_data,
                   input_mask,
@@ -82,16 +91,19 @@ def main(options):
         sys.exit(1)
 
     ff_fn = ff(input_data=input_data, input_mask=input_mask, network=network)
-    test_stream = get_datastream(options['data_path'], options['dataset']) 
+    feat_stream = get_feat_stream(options['data_path'], options['dataset'], options['batch_size']) 
+    uttid_stream = get_uttid_stream(options['data_path'], options['dataset'], options['batch_size']) 
+    
     writer = kaldi_io.BaseFloatMatrixWriter(options['save_path'])
 
-    for example in test_stream.get_epoch_iterator():
-        input_data, input_mask = example 
+    for batch_idx, (feat_batch, uttid_batch) in enumerate(zip(feat_stream.get_epoch_iterator(), uttid_stream.get_epoch_iterator())):
+        print 'Processing batch {}'.format(batch_idx)
+        input_data, input_mask = feat_batch 
 
         net_output = ff_fn(input_data, input_mask)
 
-        for output in net_output[0]:
-            writer.write('uttid', output)
+        for output, uttid in zip(net_output[0], uttid_batch[0]):
+            writer.write(uttid.encode('ascii'), output)
 
     writer.close()
 
@@ -112,7 +124,7 @@ if __name__ == '__main__':
     options['l2_lambda'] = 0
     options['updater_params'] = None
 
-    options['batch_size'] = 12
+    options['batch_size'] = 8 
     options['num_epochs'] = 200
 
     options['train_disp_freq'] = 10
@@ -124,9 +136,3 @@ if __name__ == '__main__':
     options['reload_model'] = '/u/songinch/song/asr/test_model.pkl' 
 
     main(options)
-
-
-
-
-
-
