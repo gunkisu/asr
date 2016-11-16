@@ -7,8 +7,10 @@ from lasagne.layers import get_output, get_all_params
 from libs.lasagne.utils import get_model_param_values, get_update_params_values
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
-from fuel.schemes import ShuffledScheme
+from fuel.schemes import SequentialScheme
 from fuel.transformers import Padding, FilterSources
+from libs.lasagne.updates import momentum
+from libs.param_utils import set_model_param_value
 
 import kaldi_io
 import sys
@@ -18,10 +20,10 @@ floatX = theano.config.floatX
 def get_datastream(path, which_set='test_eval92', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     print path, which_set
-    iterator_scheme = ShuffledScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
+    iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
-    fs = FilterSources(data_stream=base_stream, ['features', 'uttids'])
+    fs = FilterSources(data_stream=base_stream, sources=['features'])
     padded_stream = Padding(data_stream=fs)
     return padded_stream
 
@@ -65,10 +67,10 @@ def main(options):
                             num_inputs=options['num_inputs'],
                             num_units_list=options['num_units_list'],
                             num_outputs=options['num_outputs'],
-                            dropout_ratio=0.2,
-                            use_layer_norm=True,
+                            dropout_ratio=options['dropout_ratio'],
+                            use_layer_norm=options['use_layer_norm'],
                             learn_init=True,
-                            grad_clipping=0.0)
+                            grad_clipping=1.0)
     network_params = get_all_params(network, trainable=True)
 
     if options['reload_model']:
@@ -80,15 +82,16 @@ def main(options):
         sys.exit(1)
 
     ff_fn = ff(input_data=input_data, input_mask=input_mask, network=network)
-    test_stream = get_datastream(options['data_path'], options['dataset'], options['batch_size']) 
+    test_stream = get_datastream(options['data_path'], options['dataset']) 
     writer = kaldi_io.BaseFloatMatrixWriter(options['save_path'])
 
     for example in test_stream.get_epoch_iterator():
-        input_data, input_mask, uttids = example 
+        input_data, input_mask = example 
 
         net_output = ff_fn(input_data, input_mask)
-        for uttid, output in zip(uttids, net_output):
-            writer.write(uttid, output)
+
+        for output in net_output[0]:
+            writer.write('uttid', output)
 
     writer.close()
 
@@ -97,16 +100,28 @@ if __name__ == '__main__':
     # TODO: parser
 
     options = OrderedDict()
-    options['num_units_list'] =  (250, 250, 250, 250, 250)
+    options['num_units_list'] =  (100, 100)
     options['num_inputs'] = 123
-    options['num_outputs'] = 63
-    options['dropout_ratio'] = 0.2
-    options['use_layer_norm'] = True
+    options['num_outputs'] = 3436
+    options['dropout_ratio'] = 0.0
+    options['use_layer_norm'] = False
 
+    options['updater'] = momentum
+    options['lr'] = 0.1
+    options['grad_norm'] = 10.0
+    options['l2_lambda'] = 0
+    options['updater_params'] = None
+
+    options['batch_size'] = 12
+    options['num_epochs'] = 200
+
+    options['train_disp_freq'] = 10
+    options['train_save_freq'] = 100
+
+    options['data_path'] = '/u/songinch/song/data/speech/wsj_fbank123.h5'
     options['dataset'] = 'test_dev93'
-    options['data_path'] = '/home/songinch/data/speech/wsj_fbank123.h5'
-    options['save_path'] = 'ark:/home/songinch/data/speech/test_dev93_pred.ark'
-    options['reload_model'] = '/home/songinch/model/speech/' 
+    options['save_path'] = 'ark:/u/songinch/song/data/speech/test_dev93_pred.ark'
+    options['reload_model'] = '/u/songinch/song/asr/test_model.pkl' 
 
     main(options)
 
