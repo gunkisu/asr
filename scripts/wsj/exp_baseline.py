@@ -17,7 +17,7 @@ from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme
 from fuel.transformers import Padding, FilterSources
 
-#from data.schemes import SequentialShuffledScheme
+from libs.param_utils import set_model_param_value
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
@@ -202,8 +202,8 @@ def main(options):
                             num_inputs=options['num_inputs'],
                             num_units_list=options['num_units_list'],
                             num_outputs=options['num_outputs'],
-                            dropout_ratio=0.2,
-                            use_layer_norm=True,
+                            dropout_ratio=options['dropout_ratio'],
+                            use_layer_norm=options['use_layer_norm'],
                             learn_init=True,
                             grad_clipping=1.0)
     network_params = get_all_params(network, trainable=True)
@@ -309,7 +309,8 @@ if __name__ == '__main__':
     parser = ArgumentParser()
 
     options = OrderedDict()
-    options['num_units_list'] =  (500, 500, 500, 500, 500)
+    #options['num_units_list'] =  (500, 500, 500, 500, 500)
+    options['num_units_list'] =  (100, 100)
     options['num_inputs'] = 123
     options['num_outputs'] = 3436
     options['dropout_ratio'] = 0.0
@@ -321,15 +322,15 @@ if __name__ == '__main__':
     options['l2_lambda'] = 0
     options['updater_params'] = None
 
-    options['batch_size'] = 8
+    options['batch_size'] = 12
     options['num_epochs'] = 200
 
     options['train_disp_freq'] = 10
     options['train_save_freq'] = 100
 
-    options['data_path'] = '/home/songinch/data/speech/wsj_fbank123.h5'
-    options['save_path'] = '/home/songinch/data/exp/wsj_baseline'
-    options['load_params'] = None
+    options['data_path'] = '/u/songinch/song/data/speech/wsj_fbank123.h5'
+    options['save_path'] = '/u/songinch/song/data/exp/wsj_baseline'
+    options['reload_model'] = None
 
     main(options)
 
