@@ -29,32 +29,40 @@ targets.dims[0].attach_scale(targets_shapes_labels)
 uttids_ds = f.create_dataset('uttids', (38230,), dtype=h5py.special_dtype(vlen=unicode), maxshape=(None,))
 uttids_ds.dims[0].label = 'batch'
 
+spks_ds = f.create_dataset('spks', (38230,), dtype=h5py.special_dtype(vlen=unicode), maxshape=(None,))
+spks_ds.dims[0].label = 'batch'
+
 # Add target information
 tmp = [l.strip().split(None, 1) for l in open('exp/hyperud/all_targets.txt')]
 tmp_uttid = [(a, b.split()) for a, b in tmp]
-    
+   
 for num_utt, (uttid, value) in enumerate(tmp_uttid):
     int_value = [int(v) for v in value]
     targets_shapes[num_utt,:] = len(int_value) 
     targets[num_utt] = numpy.asarray(int_value).ravel()
 
 # Add uttid information
-uttids = [l.split(None, 1)[0] for l open('exp/hyperud/fbank123.scp')]
+uttids = [l.strip().split(None, 1)[0] for l in open('exp/hyperud/fbank41.scp')]
 for row_idx, uttid in enumerate(uttids):
     uttids_ds[row_idx] = uttid
 
-# Add features
-reader = kaldi_io.SequentialBaseFloatMatrixReader('scp:exp/hyperud/fbank123.scp')
+# Add uttid information
+utt2spk = [l.strip().split(None, 1)[1] for l in open('exp/hyperud/utt2spk')]
+for row_idx, spk in enumerate(utt2spk):
+    spks_ds[row_idx] = spk
+
+# Add features (deltas added and globally normalized on the fly)
+reader = kaldi_io.SequentialBaseFloatMatrixReader('ark:add-detlas scp:exp/hyperud/fbank41.scp ark:- | apply-global-cmvn.py --global-stats=ark:exp/hyperud/cmvn-g.stats ark:- ark:-|')
 for row_idx, (uttid, value) in enumerate(reader):
     features_shapes[row_idx,:] = value.shape
     features[row_idx] = value.ravel()
 
 # Split information
 split_dict = {
-        'train_si284': {'features': (0, 37394), 'targets': (0, 37394), 'uttids': (0, 37394)},
-        'train_si84': {'features': (0, 7138), 'targets': (0, 7138), 'uttids': (0, 7138)},
-        'test_eval92': {'features': (37394, 37394+333), 'targets': (37394, 37394+333), 'uttids': (37394, 37394+333)},
-        'test_dev93': {'features': (37394+333, 37394+333+503), 'targets': (37394+333, 37394+333+503), 'uttids': (37394+333, 37394+333+503)}
+        'train_si284': {'features': (0, 37394), 'targets': (0, 37394), 'uttids': (0, 37394), 'spks': (0, 37394)},
+        'train_si84': {'features': (0, 7138), 'targets': (0, 7138), 'uttids': (0, 7138), 'spks': (0, 7138)},
+        'test_eval92': {'features': (37394, 37394+333), 'targets': (37394, 37394+333), 'uttids': (37394, 37394+333), 'spks': (37394, 37394+333)},
+        'test_dev93': {'features': (37394+333, 37394+333+503), 'targets': (37394+333, 37394+333+503), 'uttids': (37394+333, 37394+333+503), 'spks': (37394+333, 37394+333+503)}
         }
 
 f.attrs['split'] = H5PYDataset.create_split_array(split_dict)
