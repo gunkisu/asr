@@ -4,7 +4,7 @@ import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict
 
-from models.baseline import deep_bidir_lstm_model
+from models.scale_hyper_nets import deep_bidir_scale_hyper_lstm_model
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.objectives import categorical_crossentropy
@@ -35,21 +35,25 @@ def get_datastream(path, which_set='train_si84', batch_size=1):
 def build_network(input_data,
                   input_mask,
                   num_inputs=123,
-                  num_units_list=(128, 128, 128),
+                  num_inner_units_list=(64, 64, 64),
+                  num_factor_units_list=(64, 64, 64),
+                  num_outer_units_list=(128, 128, 128),
                   num_outputs=63,
                   dropout_ratio=0.2,
                   use_layer_norm=True,
                   learn_init=True,
-                  grad_clipping=0.0):
-    network = deep_bidir_lstm_model(input_var=input_data,
-                                    mask_var=input_mask,
-                                    num_inputs=num_inputs,
-                                    num_units_list=num_units_list,
-                                    num_outputs=num_outputs,
-                                    dropout_ratio=dropout_ratio,
-                                    use_layer_norm=use_layer_norm,
-                                    learn_init=learn_init,
-                                    grad_clipping=grad_clipping)
+                  grad_clipping=1.0):
+    network = deep_bidir_scale_hyper_lstm_model(input_var=input_data,
+                                                mask_var=input_mask,
+                                                num_inputs=num_inputs,
+                                                num_inner_units_list=num_inner_units_list,
+                                                num_factor_units_list=num_factor_units_list,
+                                                num_outer_units_list=num_outer_units_list,
+                                                num_outputs=num_outputs,
+                                                dropout_ratio=dropout_ratio,
+                                                use_layer_norm=use_layer_norm,
+                                                learn_init=learn_init,
+                                                grad_clipping=grad_clipping)
     return network
 
 def set_network_trainer(input_data,
@@ -200,12 +204,14 @@ def main(options):
     network = build_network(input_data=input_data,
                             input_mask=input_mask,
                             num_inputs=options['num_inputs'],
-                            num_units_list=options['num_units_list'],
+                            num_inner_units_list=options['num_inner_units_list'],
+                            num_factor_units_list=options['num_factor_units_list'],
+                            num_outer_units_list=options['num_outer_units_list'],
                             num_outputs=options['num_outputs'],
                             dropout_ratio=options['dropout_ratio'],
                             use_layer_norm=options['use_layer_norm'],
-                            learn_init=True,
-                            grad_clipping=1.0)
+                            learn_init=options['learn_init'],
+                            grad_clipping=options['grad_clipping'])
     network_params = get_all_params(network, trainable=True)
 
     if options['reload_model']:
@@ -313,8 +319,10 @@ if __name__ == '__main__':
     parser = ArgumentParser()
 
     options = OrderedDict()
-    #options['num_units_list'] =  (500, 500, 500, 500, 500)
-    options['num_units_list'] =  (100, 100)
+
+    options['num_inner_units_list'] = (50, 50)
+    options['num_factor_units_list'] = (50, 50)
+    options['num_outer_units_list'] =  (100, 100)
     options['num_inputs'] = 123
     options['num_outputs'] = 3436
     options['dropout_ratio'] = 0.0
