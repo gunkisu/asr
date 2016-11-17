@@ -100,11 +100,19 @@ def main(options):
 
     for batch_idx, (feat_batch, uttid_batch) in enumerate(zip(feat_stream.get_epoch_iterator(), uttid_stream.get_epoch_iterator())):
         input_data, input_mask = feat_batch 
+        feat_lens = input_mask.sum(axis=1)
 
+#        import ipdb; ipdb.set_trace()
+
+        print('Feed-forwarding...', file=sys.stderr)
         net_output = ff_fn(input_data, input_mask)
 
-        for output, uttid in zip(net_output[0], uttid_batch[0]):
-            writer.write(uttid.encode('ascii'), output)
+        print('Writing outputs...', file=sys.stderr)
+
+        for out_idx, (output, uttid) in enumerate(zip(net_output[0], uttid_batch[0])):
+            # write log probabilities
+            valid_len = feat_lens[out_idx]
+            writer.write(uttid.encode('ascii'), numpy.log(output[:valid_len]))
 
     writer.close()
 
