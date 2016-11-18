@@ -307,22 +307,25 @@ def main(options):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
+    
+    parser.add_argument('model')
+
+    args = parser.parse_args()
 
     options = OrderedDict()
-    #options['num_units_list'] =  (500, 500, 500, 500, 500)
-    options['num_units_list'] =  (100, 100)
+    options['num_units_list'] =  (500, 500, 500, 500, 500)
     options['num_inputs'] = 123
     options['num_outputs'] = 3436
     options['dropout_ratio'] = 0.0
     options['use_layer_norm'] = False
 
     options['updater'] = momentum
-    options['lr'] = 0.1
+    options['lr'] = 0.01
     options['grad_norm'] = 10.0
     options['l2_lambda'] = 0
     options['updater_params'] = None
 
-    options['batch_size'] = 12
+    options['batch_size'] = 2
     options['num_epochs'] = 200
 
     options['train_disp_freq'] = 10
