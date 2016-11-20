@@ -15,33 +15,30 @@ class ScaleHyperLSTMLayer(MergeLayer):
                  inner_incoming,
                  outer_incoming,
                  num_inner_units,
-                 num_inner_factor_units,
+                 num_factor_units,
                  num_outer_units,
-                 inner_ingate=Gate(),
-                 inner_forgetgate=Gate(b=init.Constant(1.)),
-                 inner_cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
-                 inner_outgate=Gate(),
-                 outer_ingate=Gate(),
-                 outer_forgetgate=Gate(b=init.Constant(1.)),
-                 outer_cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
-                 outer_outgate=Gate(),
+                 ingate=Gate(),
+                 forgetgate=Gate(b=init.Constant(1.)),
+                 cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
+                 outgate=Gate(),
                  nonlinearity=nonlinearities.tanh,
                  inner_cell_init=init.Constant(0.),
                  inner_hid_init=init.Constant(0.),
                  outer_cell_init=init.Constant(0.),
                  outer_hid_init=init.Constant(0.),
                  dropout_ratio=0.2,
-                 use_layer_norm=True,
+                 use_layer_norm=False,
                  weight_noise=0.0,
                  backwards=False,
                  learn_init=False,
                  peepholes=True,
                  gradient_steps=-1,
-                 grad_clipping=0,
+                 grad_clipping=1,
                  unroll_scan=False,
                  precompute_input=True,
                  mask_input=None,
                  only_return_final=False,
+                 output_inner_hid=False,
                  **kwargs):
 
         incomings = [inner_incoming,
@@ -94,7 +91,7 @@ class ScaleHyperLSTMLayer(MergeLayer):
 
         self.learn_init = learn_init
         self.num_inner_units = num_inner_units
-        self.num_inner_factor_units = num_inner_factor_units
+        self.num_factor_units = num_factor_units
         self.num_outer_units = num_outer_units
         self.backwards = backwards
         self.peepholes = peepholes
@@ -103,6 +100,7 @@ class ScaleHyperLSTMLayer(MergeLayer):
         self.unroll_scan = unroll_scan
         self.precompute_input = precompute_input
         self.only_return_final = only_return_final
+        self.output_inner_hid = output_inner_hid
 
         if unroll_scan and gradient_steps != -1:
             raise ValueError("Gradient steps must be -1 when unroll_scan is true.")
@@ -134,57 +132,77 @@ class ScaleHyperLSTMLayer(MergeLayer):
         (self.W_inner_in_to_ingate,
          self.W_inner_hid_to_ingate,
          self.b_inner_ingate,
-         self.nonlinearity_inner_ingate) = add_inner_gate_params(inner_ingate, 'ingate')
+         self.nonlinearity_inner_ingate) = add_inner_gate_params(ingate, 'ingate')
+        if self.use_layer_norm:
+            self.alpha_inner_ingate = self.add_param(init.Constant(1.),
+                                                     shape=(num_inner_units,),
+                                                     name="alpha_inner_ingate")
+            self.beta_inner_ingate = self.add_param(init.Constant(0.),
+                                                    shape=(num_inner_units,),
+                                                    name="beta_inner_ingate")
 
         ####forgetgate#####
         (self.W_inner_in_to_forgetgate,
          self.W_inner_hid_to_forgetgate,
          self.b_inner_forgetgate,
-         self.nonlinearity_inner_forgetgate) = add_inner_gate_params(inner_forgetgate, 'forgetgate')
+         self.nonlinearity_inner_forgetgate) = add_inner_gate_params(forgetgate, 'forgetgate')
+        if self.use_layer_norm:
+            self.alpha_inner_forgetgate = self.add_param(init.Constant(1.),
+                                                         shape=(num_inner_units,),
+                                                         name="alpha_inner_forgetgate")
+            self.beta_inner_forgetgate = self.add_param(init.Constant(0.),
+                                                        shape=(num_inner_units,),
+                                                        name="beta_inner_forgetgate")
 
         ####cell#####
         (self.W_inner_in_to_cell,
          self.W_inner_hid_to_cell,
          self.b_inner_cell,
-         self.nonlinearity_inner_cell) = add_inner_gate_params(inner_cell, 'cell')
+         self.nonlinearity_inner_cell) = add_inner_gate_params(cell, 'cell')
+        if self.use_layer_norm:
+            self.alpha_inner_cell = self.add_param(init.Constant(1.),
+                                                   shape=(num_inner_units,),
+                                                   name="alpha_inner_cell")
+            self.beta_inner_cell = self.add_param(init.Constant(0.),
+                                                  shape=(num_inner_units,),
+                                                  name="beta_inner_cell")
 
         ####outgate#####
         (self.W_inner_in_to_outgate,
          self.W_inner_hid_to_outgate,
          self.b_inner_outgate,
-         self.nonlinearity_inner_outgate) = add_inner_gate_params(inner_outgate, 'outgate')
+         self.nonlinearity_inner_outgate) = add_inner_gate_params(outgate, 'outgate')
+        if self.use_layer_norm:
+            self.alpha_inner_outgate = self.add_param(init.Constant(1.),
+                                                      shape=(num_inner_units,),
+                                                      name="alpha_inner_outgate")
+            self.beta_inner_outgate = self.add_param(init.Constant(0.),
+                                                     shape=(num_inner_units,),
+                                                     name="beta_inner_outgate")
 
         ####peepholes#####
         if self.peepholes:
-            self.W_inner_cell_to_ingate = self.add_param(inner_ingate.W_cell,
+            self.W_inner_cell_to_ingate = self.add_param(ingate.W_cell,
                                                          shape=(num_inner_units, ),
                                                          name="W_inner_cell_to_ingate")
 
-            self.W_inner_cell_to_forgetgate = self.add_param(inner_forgetgate.W_cell,
+            self.W_inner_cell_to_forgetgate = self.add_param(forgetgate.W_cell,
                                                              shape=(num_inner_units, ),
                                                              name="W_inner_cell_to_forgetgate")
 
-            self.W_inner_cell_to_outgate = self.add_param(inner_outgate.W_cell,
+            self.W_inner_cell_to_outgate = self.add_param(outgate.W_cell,
                                                           shape=(num_inner_units, ),
                                                           name="W_inner_cell_to_outgate")
 
         ####layernorm#####
         if self.use_layer_norm:
-            self.alpha_inner_gate = self.add_param(init.Constant(1.),
-                                                   shape=(num_inner_units*4,),
-                                                   name="alpha_inner_gate")
-            self.beta_inner_gate =  self.add_param(init.Constant(0.),
-                                                   shape=(num_inner_units*4,),
-                                                   name="beta_inner_gate",
-                                                   regularizable=False)
-
-            self.alpha_inner_cell = self.add_param(init.Constant(1.),
-                                                   shape=(num_inner_units,),
-                                                   name="alpha_inner_cell")
-            self.beta_inner_cell =  self.add_param(init.Constant(0.),
-                                                   shape=(num_inner_units,),
-                                                   name="beta_inner_cell",
-                                                   regularizable=False)
+            self.alpha_inner_outcell = self.add_param(init.Constant(1.),
+                                                      shape=(num_inner_units,),
+                                                      name="alpha_inner_outcell")
+            self.beta_inner_outcell =  self.add_param(init.Constant(0.),
+                                                      shape=(num_inner_units,),
+                                                      name="beta_inner_outcell",
+                                                      regularizable=False)
 
         ####init_cell####
         if isinstance(inner_cell_init, Layer):
@@ -211,21 +229,21 @@ class ScaleHyperLSTMLayer(MergeLayer):
         ###################
         def add_inner2fact_params(gate, gate_name):
             return (self.add_param(gate.W_hid,
-                                   shape=(num_inner_units, num_inner_factor_units),
+                                   shape=(num_inner_units, num_factor_units),
                                    name="V0_in_to_{}".format(gate_name)),
                     self.add_param(gate.b,
-                                   shape=(num_inner_factor_units,),
+                                   shape=(num_factor_units,),
                                    name="b0_in_to_{}".format(gate_name),
                                    regularizable=False),
                     self.add_param(gate.W_hid,
-                                   shape=(num_inner_units, num_inner_factor_units),
+                                   shape=(num_inner_units, num_factor_units),
                                    name="V0_hid_to_{}".format(gate_name)),
                     self.add_param(gate.b,
-                                   shape=(num_inner_factor_units,),
+                                   shape=(num_factor_units,),
                                    name="b0_hid_to_{}".format(gate_name),
                                    regularizable=False),
                     self.add_param(gate.W_hid,
-                                   shape=(num_inner_units, num_inner_factor_units),
+                                   shape=(num_inner_units, num_factor_units),
                                    name="V0_bias_{}".format(gate_name)))
 
         ####ingate####
@@ -233,62 +251,62 @@ class ScaleHyperLSTMLayer(MergeLayer):
          self.b0_in_to_ingate,
          self.V0_hid_to_ingate,
          self.b0_hid_to_ingate,
-         self.V0_bias_ingate) = add_inner2fact_params(outer_ingate, 'ingate')
+         self.V0_bias_ingate) = add_inner2fact_params(ingate, 'ingate')
 
         ####forgetgate####
         (self.V0_in_to_forgetgate,
          self.b0_in_to_forgetgate,
          self.V0_hid_to_forgetgate,
          self.b0_hid_to_forgetgate,
-         self.V0_bias_forgetgate) = add_inner2fact_params(outer_forgetgate, 'forgetgate')
+         self.V0_bias_forgetgate) = add_inner2fact_params(forgetgate, 'forgetgate')
 
         ####cell####
         (self.V0_in_to_cell,
          self.b0_in_to_cell,
          self.V0_hid_to_cell,
          self.b0_hid_to_cell,
-         self.V0_bias_cell) = add_inner2fact_params(outer_cell, 'cell')
+         self.V0_bias_cell) = add_inner2fact_params(cell, 'cell')
 
         ####outgate####
         (self.V0_in_to_outgate,
          self.b0_in_to_outgate,
          self.V0_hid_to_outgate,
          self.b0_hid_to_outgate,
-         self.V0_bias_outgate) = add_inner2fact_params(outer_outgate, 'outgate')
+         self.V0_bias_outgate) = add_inner2fact_params(outgate, 'outgate')
 
         ###################
         # factor-to-outer #
         ###################
         def add_fact2outer_params(gate, gate_name):
             return (self.add_param(gate.W_hid,
-                                   shape=(num_inner_factor_units, num_outer_units),
+                                   shape=(num_factor_units, num_outer_units),
                                    name="V1_in_to_{}".format(gate_name)),
                     self.add_param(gate.W_hid,
-                                   shape=(num_inner_factor_units, num_outer_units),
+                                   shape=(num_factor_units, num_outer_units),
                                    name="V1_hid_to_{}".format(gate_name)),
                     self.add_param(gate.W_hid,
-                                   shape=(num_inner_factor_units, num_outer_units),
+                                   shape=(num_factor_units, num_outer_units),
                                    name="V1_bias_{}".format(gate_name)))
 
         ####ingate####
         (self.V1_in_to_ingate,
          self.V1_hid_to_ingate,
-         self.V1_bias_ingate) = add_fact2outer_params(outer_ingate, 'ingate')
+         self.V1_bias_ingate) = add_fact2outer_params(ingate, 'ingate')
 
         ####outgate####
         (self.V1_in_to_forgetgate,
          self.V1_hid_to_forgetgate,
-         self.V1_bias_forgetgate) = add_fact2outer_params(outer_forgetgate, 'forgetgate')
+         self.V1_bias_forgetgate) = add_fact2outer_params(forgetgate, 'forgetgate')
 
         ####cell####
         (self.V1_in_to_cell,
          self.V1_hid_to_cell,
-         self.V1_bias_cell) = add_fact2outer_params(outer_cell, 'cell')
+         self.V1_bias_cell) = add_fact2outer_params(cell, 'cell')
 
         ####outgate####
         (self.V1_in_to_outgate,
          self.V1_hid_to_outgate,
-         self.V1_bias_outgate) = add_fact2outer_params(outer_outgate, 'outgate')
+         self.V1_bias_outgate) = add_fact2outer_params(outgate, 'outgate')
 
         ##############
         # outer loop #
@@ -305,54 +323,74 @@ class ScaleHyperLSTMLayer(MergeLayer):
         ####ingate####
         (self.W_outer_in_to_ingate,
          self.W_outer_hid_to_ingate,
-         self.nonlinearity_outer_ingate) = add_outer_gate_params(outer_ingate, 'ingate')
+         self.nonlinearity_outer_ingate) = add_outer_gate_params(ingate, 'ingate')
+        if self.use_layer_norm:
+            self.alpha_outer_ingate = self.add_param(init.Constant(1.),
+                                                     shape=(num_outer_units,),
+                                                     name="alpha_outer_ingate")
+            self.beta_outer_ingate = self.add_param(init.Constant(0.),
+                                                    shape=(num_outer_units,),
+                                                    name="beta_outer_ingate")
 
         ####forgetgate####
         (self.W_outer_in_to_forgetgate,
          self.W_outer_hid_to_forgetgate,
-         self.nonlinearity_outer_forgetgate) = add_outer_gate_params(outer_forgetgate, 'forgetgate')
+         self.nonlinearity_outer_forgetgate) = add_outer_gate_params(forgetgate, 'forgetgate')
+        if self.use_layer_norm:
+            self.alpha_outer_forgetgate = self.add_param(init.Constant(1.),
+                                                         shape=(num_outer_units,),
+                                                         name="alpha_outer_forgetgate")
+            self.beta_outer_forgetgate = self.add_param(init.Constant(0.),
+                                                        shape=(num_outer_units,),
+                                                        name="beta_outer_forgetgate")
 
         ####cell####
         (self.W_outer_in_to_cell,
          self.W_outer_hid_to_cell,
-         self.nonlinearity_outer_cell) = add_outer_gate_params(outer_cell, 'cell')
+         self.nonlinearity_outer_cell) = add_outer_gate_params(cell, 'cell')
+        if self.use_layer_norm:
+            self.alpha_outer_cell = self.add_param(init.Constant(1.),
+                                                   shape=(num_outer_units,),
+                                                   name="alpha_outer_cell")
+            self.beta_outer_cell = self.add_param(init.Constant(0.),
+                                                  shape=(num_outer_units,),
+                                                  name="beta_outer_cell")
 
         ####outgate####
         (self.W_outer_in_to_outgate,
          self.W_outer_hid_to_outgate,
-         self.nonlinearity_outer_outgate) = add_outer_gate_params(outer_outgate, 'outgate')
+         self.nonlinearity_outer_outgate) = add_outer_gate_params(outgate, 'outgate')
+        if self.use_layer_norm:
+            self.alpha_outer_outgate = self.add_param(init.Constant(1.),
+                                                      shape=(num_outer_units,),
+                                                      name="alpha_outer_outgate")
+            self.beta_outer_outgate = self.add_param(init.Constant(0.),
+                                                     shape=(num_outer_units,),
+                                                     name="beta_outer_outgate")
 
         ####peephole####
         if self.peepholes:
-            self.W_outer_cell_to_ingate = self.add_param(outer_ingate.W_cell,
+            self.W_outer_cell_to_ingate = self.add_param(ingate.W_cell,
                                                          shape=(num_outer_units, ),
                                                          name="W_outer_cell_to_ingate")
 
-            self.W_outer_cell_to_forgetgate = self.add_param(outer_forgetgate.W_cell,
+            self.W_outer_cell_to_forgetgate = self.add_param(forgetgate.W_cell,
                                                              shape=(num_outer_units, ),
                                                              name="W_outer_cell_to_forgetgate")
 
-            self.W_outer_cell_to_outgate = self.add_param(outer_outgate.W_cell,
+            self.W_outer_cell_to_outgate = self.add_param(outgate.W_cell,
                                                           shape=(num_outer_units, ),
                                                           name="W_outer_cell_to_outgate")
 
         ####layer_norm####
         if self.use_layer_norm:
-            self.alpha_outer_gate = self.add_param(init.Constant(1.),
-                                                   shape=(num_outer_units*4,),
-                                                   name="alpha_outer_gate")
-            self.beta_outer_gate =  self.add_param(init.Constant(0.),
-                                                   shape=(num_outer_units*4,),
-                                                   name="beta_outer_gate",
-                                                   regularizable=False)
-
-            self.alpha_outer_cell = self.add_param(init.Constant(1.),
-                                                   shape=(num_outer_units,),
-                                                   name="alpha_outer_cell")
-            self.beta_outer_cell =  self.add_param(init.Constant(0.),
-                                                   shape=(num_outer_units,),
-                                                   name="beta_outer_cell",
-                                                   regularizable=False)
+            self.alpha_outer_outcell = self.add_param(init.Constant(1.),
+                                                      shape=(num_outer_units,),
+                                                      name="alpha_outer_outcell")
+            self.beta_outer_outcell =  self.add_param(init.Constant(0.),
+                                                      shape=(num_outer_units,),
+                                                      name="beta_outer_outcell",
+                                                      regularizable=False)
 
         ####init_cell####
         if isinstance(outer_cell_init, Layer):
@@ -381,7 +419,10 @@ class ScaleHyperLSTMLayer(MergeLayer):
 
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
-        num_outputs = self.num_outer_units
+        if self.output_inner_hid:
+            num_outputs = self.num_inner_units + self.num_outer_units
+        else:
+            num_outputs = self.num_outer_units
 
         if self.only_return_final:
             return input_shape[0], num_outputs
@@ -518,7 +559,7 @@ class ScaleHyperLSTMLayer(MergeLayer):
 
         # slice for factor
         def slice_factor(x, n):
-            return x[:, n*self.num_inner_factor_units:(n+1)*self.num_inner_factor_units]
+            return x[:, n*self.num_factor_units:(n+1)*self.num_factor_units]
 
         # if using dropout
         if deterministic:
@@ -549,11 +590,6 @@ class ScaleHyperLSTMLayer(MergeLayer):
             inner_gates = inner_input
             inner_gates += T.dot(inner_hid_previous, W_inner_hid_stacked)
 
-            if self.use_layer_norm:
-                inner_gates = self.layer_norm(input=inner_gates,
-                                              alpha=self.alpha_inner_gate,
-                                              beta=self.beta_inner_gate)
-
             if self.grad_clipping:
                 inner_gates = theano.gradient.grad_clip(inner_gates,
                                                         -self.grad_clipping,
@@ -569,6 +605,20 @@ class ScaleHyperLSTMLayer(MergeLayer):
             if self.peepholes:
                 inner_ingate += inner_cell_previous*self.W_inner_cell_to_ingate
                 inner_forgetgate += inner_cell_previous*self.W_inner_cell_to_forgetgate
+
+            if self.use_layer_norm:
+                inner_ingate = self.layer_norm(input=inner_ingate,
+                                               alpha=self.alpha_inner_ingate,
+                                               beta=self.beta_inner_ingate)
+                inner_forgetgate = self.layer_norm(input=inner_forgetgate,
+                                                   alpha=self.alpha_inner_forgetgate,
+                                                   beta=self.beta_inner_forgetgate)
+                inner_cell_input = self.layer_norm(input=inner_cell_input,
+                                                   alpha=self.alpha_inner_cell,
+                                                   beta=self.beta_inner_cell)
+                inner_outgate = self.layer_norm(input=inner_outgate,
+                                                alpha=self.alpha_inner_outgate,
+                                                beta=self.beta_inner_outgate)
 
             # get gate nonlinear
             inner_ingate = self.nonlinearity_inner_ingate(inner_ingate)
@@ -593,8 +643,8 @@ class ScaleHyperLSTMLayer(MergeLayer):
 
             if self.use_layer_norm:
                 _cell = self.layer_norm(input=inner_cell,
-                                        alpha=self.alpha_inner_cell,
-                                        beta=self.beta_inner_cell)
+                                        alpha=self.alpha_inner_outcell,
+                                        beta=self.beta_inner_outcell)
             else:
                 _cell = inner_cell
 
@@ -608,7 +658,6 @@ class ScaleHyperLSTMLayer(MergeLayer):
             fact_in = T.dot(inner_hid, V0_in_stacked) + b0_in_stacked
             fact_hid = T.dot(inner_hid, V0_hid_stacked) + b0_hid_stacked
             fact_bias = T.dot(inner_hid, V0_bias_stacked)
-
 
             ###################
             # factor to outer #
@@ -639,11 +688,6 @@ class ScaleHyperLSTMLayer(MergeLayer):
             outer_gates += scale_outer_hid*T.dot(outer_hid_previous, W_outer_hid_stacked)
             outer_gates += outer_bias
 
-            if self.use_layer_norm:
-                outer_gates = self.layer_norm(input=outer_gates,
-                                              alpha=self.alpha_outer_gate,
-                                              beta=self.beta_outer_gate)
-
             if self.grad_clipping:
                 outer_gates = theano.gradient.grad_clip(outer_gates,
                                                         -self.grad_clipping,
@@ -659,6 +703,20 @@ class ScaleHyperLSTMLayer(MergeLayer):
             if self.peepholes:
                 outer_ingate += outer_cell_previous*self.W_outer_cell_to_ingate
                 outer_forgetgate += outer_cell_previous*self.W_outer_cell_to_forgetgate
+
+            if self.use_layer_norm:
+                outer_ingate = self.layer_norm(input=outer_ingate,
+                                               alpha=self.alpha_outer_ingate,
+                                               beta=self.beta_outer_ingate)
+                outer_forgetgate = self.layer_norm(input=outer_forgetgate,
+                                                   alpha=self.alpha_outer_forgetgate,
+                                                   beta=self.beta_outer_forgetgate)
+                outer_cell_input = self.layer_norm(input=outer_cell_input,
+                                                   alpha=self.alpha_outer_cell,
+                                                   beta=self.beta_outer_cell)
+                outer_outgate = self.layer_norm(input=outer_outgate,
+                                                alpha=self.alpha_outer_outgate,
+                                                beta=self.beta_outer_outgate)
 
             # get gate nonlinear
             outer_ingate = self.nonlinearity_outer_ingate(outer_ingate)
@@ -683,8 +741,8 @@ class ScaleHyperLSTMLayer(MergeLayer):
 
             if self.use_layer_norm:
                 _cell = self.layer_norm(input=outer_cell,
-                                        alpha=self.alpha_outer_cell,
-                                        beta=self.beta_outer_cell)
+                                        alpha=self.alpha_outer_outcell,
+                                        beta=self.beta_outer_outcell)
             else:
                 _cell = outer_cell
 
@@ -766,15 +824,27 @@ class ScaleHyperLSTMLayer(MergeLayer):
                          self.W_outer_cell_to_outgate]
 
         if self.use_layer_norm:
-            non_seqs +=[self.alpha_inner_gate,
+            non_seqs +=[self.alpha_inner_ingate,
+                        self.alpha_inner_forgetgate,
                         self.alpha_inner_cell,
-                        self.beta_inner_gate,
-                        self.beta_inner_cell]
+                        self.alpha_inner_outgate,
+                        self.alpha_inner_outcell,
+                        self.beta_inner_ingate,
+                        self.beta_inner_forgetgate,
+                        self.beta_inner_cell,
+                        self.beta_inner_outgate,
+                        self.beta_inner_outcell,]
 
-            non_seqs +=[self.alpha_outer_gate,
+            non_seqs +=[self.alpha_outer_ingate,
+                        self.alpha_outer_forgetgate,
                         self.alpha_outer_cell,
-                        self.beta_outer_gate,
-                        self.beta_outer_cell]
+                        self.alpha_outer_outgate,
+                        self.alpha_outer_outcell,
+                        self.beta_outer_ingate,
+                        self.beta_outer_forgetgate,
+                        self.beta_outer_cell,
+                        self.beta_outer_outgate,
+                        self.beta_outer_outcell,]
         if self.unroll_scan:
             # Retrieve the dimensionality of the incoming layer
             input_shape = self.input_shapes[0]
@@ -798,19 +868,31 @@ class ScaleHyperLSTMLayer(MergeLayer):
                 non_sequences=non_seqs,
                 strict=True)[0]
 
-        # When it is requested that we only return the final sequence step,
-        # we need to slice it out immediately after scan is applied
-        if self.only_return_final:
-            outer_hid_out = outer_hid_out[-1]
+        if self.output_inner_hid:
+            if self.only_return_final:
+                inner_hid_out = inner_hid_out[-1]
+                outer_hid_out = outer_hid_out[-1]
+            else:
+                # dimshuffle back to (n_batch, n_time_steps, n_features))
+                inner_hid_out = inner_hid_out.dimshuffle(1, 0, 2)
+                outer_hid_out = outer_hid_out.dimshuffle(1, 0, 2)
+
+                # if scan is backward reverse the output
+                if self.backwards:
+                    inner_hid_out = inner_hid_out[:, ::-1]
+                    outer_hid_out = outer_hid_out[:, ::-1]
+            return T.concatenate([inner_hid_out, outer_hid_out], axis=-1)
         else:
-            # dimshuffle back to (n_batch, n_time_steps, n_features))
-            outer_hid_out = outer_hid_out.dimshuffle(1, 0, 2)
+            if self.only_return_final:
+                outer_hid_out = outer_hid_out[-1]
+            else:
+                # dimshuffle back to (n_batch, n_time_steps, n_features))
+                outer_hid_out = outer_hid_out.dimshuffle(1, 0, 2)
 
-            # if scan is backward reverse the output
-            if self.backwards:
-                outer_hid_out = outer_hid_out[:, ::-1]
-
-        return outer_hid_out
+                # if scan is backward reverse the output
+                if self.backwards:
+                    outer_hid_out = outer_hid_out[:, ::-1]
+            return outer_hid_out
 
 
 # class BiDirScaleHyperLSTMLayer(MergeLayer):

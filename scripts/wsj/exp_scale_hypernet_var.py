@@ -4,7 +4,7 @@ import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict
 
-from models.baseline import deep_bidir_lstm_model
+from models.scale_hyper_nets import deep_bidir_scale_hyper_lstm_model
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.objectives import categorical_crossentropy
@@ -35,37 +35,45 @@ def get_datastream(path, which_set='train_si84', batch_size=1):
 def build_network(input_data,
                   input_mask,
                   num_inputs=123,
-                  num_units_list=(128, 128, 128),
+                  num_inner_units_list=(64, 64, 64),
+                  num_factor_units_list=(64, 64, 64),
+                  num_outer_units_list=(128, 128, 128),
                   num_outputs=63,
                   dropout_ratio=0.2,
                   use_layer_norm=True,
                   learn_init=True,
-                  grad_clipping=0.0):
-    network = deep_bidir_lstm_model(input_var=input_data,
-                                    mask_var=input_mask,
-                                    num_inputs=num_inputs,
-                                    num_units_list=num_units_list,
-                                    num_outputs=num_outputs,
-                                    dropout_ratio=dropout_ratio,
-                                    use_layer_norm=use_layer_norm,
-                                    learn_init=learn_init,
-                                    grad_clipping=grad_clipping)
-    return network
+                  grad_clipping=1.0):
+    network_outputs = deep_bidir_scale_hyper_lstm_model(input_var=input_data,
+                                                        mask_var=input_mask,
+                                                        num_inputs=num_inputs,
+                                                        num_inner_units_list=num_inner_units_list,
+                                                        num_factor_units_list=num_factor_units_list,
+                                                        num_outer_units_list=num_outer_units_list,
+                                                        num_outputs=num_outputs,
+                                                        dropout_ratio=dropout_ratio,
+                                                        use_layer_norm=use_layer_norm,
+                                                        learn_init=learn_init,
+                                                        grad_clipping=grad_clipping,
+                                                        get_inner_hid= True)
+    return network_outputs
 
 def set_network_trainer(input_data,
                         input_mask,
                         target_data,
                         target_mask,
-                        network,
+                        network_outputs,
                         updater,
                         learning_rate,
                         grad_max_norm=10.,
                         l2_lambda=1e-5,
+                        var_lambda=1e-5,
                         load_updater_params=None):
+    network = network_outputs[-1]
 
     # get network output data
-    predict_data = get_output(network, deterministic=False)
+    output_data = get_output(network_outputs, deterministic=False)
 
+    predict_data = output_data[-1]
     predict_idx = T.argmax(predict_data, axis=-1)
 
     # get prediction cost
@@ -77,11 +85,33 @@ def set_network_trainer(input_data,
     # get regularizer cost
     train_regularizer_cost = regularize_network_params(network, penalty=l2)
 
+    # reduce inner loop variance (over time)
+    train_var_cost = 0.
+    inner_hid_list = output_data[-1]
+    num_inners = len(inner_hid_list)
+    for inner_hid in inner_hid_list:
+        # variance over time
+        seq_var = T.var(input=inner_hid, axis=1)
+
+        # mean over sample variance
+        train_var_cost += T.mean(seq_var)
+
+    train_var_cost /= num_inners
+
+    # # increase inner loop mean difference (over time)
+    # train_mean_cost = 0.
+    # for inner_hid in inner_hid_list:
+    #     # mean over time
+    #     seq_mean = T.mean(input=inner_hid, axis=1)
+    #
+    #     # var over sample
+    #     train_mean_cost -= T.mean(T.var(input=seq_mean, axis=0))
+
     # get network parameters
     network_params = get_all_params(network, trainable=True)
 
     # get network gradients with clipping
-    network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost*l2_lambda,
+    network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost*l2_lambda + train_var_cost*var_lambda,
                                 wrt=network_params)
     network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
                                                               max_norm=grad_max_norm,
@@ -103,6 +133,7 @@ def set_network_trainer(input_data,
                                            predict_idx,
                                            train_predict_cost,
                                            train_regularizer_cost,
+                                           train_var_cost,
                                            network_grads_norm],
                                   updates=train_updates, allow_input_downcast=True)
     return training_fn, trainer_params
@@ -197,15 +228,18 @@ def main(options):
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    network = build_network(input_data=input_data,
-                            input_mask=input_mask,
-                            num_inputs=options['num_inputs'],
-                            num_units_list=options['num_units_list'],
-                            num_outputs=options['num_outputs'],
-                            dropout_ratio=options['dropout_ratio'],
-                            use_layer_norm=options['use_layer_norm'],
-                            learn_init=True,
-                            grad_clipping=1.0)
+    network_outputs = build_network(input_data=input_data,
+                                    input_mask=input_mask,
+                                    num_inputs=options['num_inputs'],
+                                    num_inner_units_list=options['num_inner_units_list'],
+                                    num_factor_units_list=options['num_factor_units_list'],
+                                    num_outer_units_list=options['num_outer_units_list'],
+                                    num_outputs=options['num_outputs'],
+                                    dropout_ratio=options['dropout_ratio'],
+                                    use_layer_norm=options['use_layer_norm'],
+                                    learn_init=options['learn_init'],
+                                    grad_clipping=options['grad_clipping'])
+    network = network_outputs[-1]
     network_params = get_all_params(network, trainable=True)
 
     if options['reload_model']:
@@ -223,11 +257,12 @@ def main(options):
                                                       input_mask=input_mask,
                                                       target_data=target_data,
                                                       target_mask=target_mask,
-                                                      network=network,
+                                                      network_outputs=network_outputs,
                                                       updater=options['updater'],
                                                       learning_rate=options['lr'],
                                                       grad_max_norm=options['grad_norm'],
                                                       l2_lambda=options['l2_lambda'],
+                                                      var_lambda=options['var_lambda'],
                                                       load_updater_params=pretrain_update_params_val)
 
     print 'Build network predictor'
@@ -238,7 +273,7 @@ def main(options):
                                        network=network)
 
 
-    evaluation_history =[[[100.0, 100.0, 1.0], [100.0, 100.0 ,1.0]]]
+    evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
     check_early_stop = 0
     total_batch_cnt = 0
 
@@ -258,7 +293,8 @@ def main(options):
                 train_output = training_fn(*train_input)
                 train_predict_cost = train_output[2]
                 train_regularizer_cost = train_output[3]
-                network_grads_norm = train_output[4]
+                train_var_cost = train_output[4]
+                network_grads_norm = train_output[5]
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
@@ -268,6 +304,7 @@ def main(options):
                     print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt)
                     print '--------------------------------------------------------------------------------------------'
                     print 'Prediction Cost: ', str(train_predict_cost)
+                    print 'Variance Cost: ', str(train_var_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
                     print '============================================================================================'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
@@ -316,8 +353,10 @@ if __name__ == '__main__':
     parser = ArgumentParser()
 
     options = OrderedDict()
-    #options['num_units_list'] =  (500, 500, 500, 500, 500)
-    options['num_units_list'] =  (100, 100)
+
+    options['num_inner_units_list'] = (50, 50)
+    options['num_factor_units_list'] = (50, 50)
+    options['num_outer_units_list'] =  (100, 100)
     options['num_inputs'] = 123
     options['num_outputs'] = 3436
     options['dropout_ratio'] = 0.0
@@ -327,8 +366,9 @@ if __name__ == '__main__':
 
     options['updater'] = momentum
     options['lr'] = 0.1
-    options['grad_norm'] = 10.0
+    options['grad_norm'] = 10000.0
     options['l2_lambda'] = 0
+    options['var_lambda'] = 1e-5
     options['updater_params'] = None
 
     options['batch_size'] = 12
