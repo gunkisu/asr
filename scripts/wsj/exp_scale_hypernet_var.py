@@ -87,7 +87,7 @@ def set_network_trainer(input_data,
 
     # reduce inner loop variance (over time)
     train_var_cost = 0.
-    inner_hid_list = output_data[-1]
+    inner_hid_list = output_data[:-1]
     num_inners = len(inner_hid_list)
     for inner_hid in inner_hid_list:
         # variance over time
