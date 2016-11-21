@@ -314,9 +314,9 @@ def main(options):
                     print 'Model Name: ', options['save_path'].split('/')[-1]
                     print '============================================================================================'
                     print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt)
+                    print '--------------------------------------------------------------------------------------------'
                     print 'CTC Cost: ', str(train_ctc_cost)
                     print 'Per Char Cost: ', str(train_cost_per_char)
-                    print 'Regularizer Cost: ', str(train_regularizer_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
                     print '============================================================================================'
                     print 'Train CTC Cost: ', str(evaluation_history[-1][0][0]), ', PER: ', str(evaluation_history[-1][0][-1])

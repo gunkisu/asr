@@ -70,8 +70,6 @@ def ff(input_data, input_mask, network):
 def main(options):
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
-    target_data = T.imatrix('target_data')
-    target_mask = T.fmatrix('target_mask')
 
     network = build_network(input_data=input_data,
                             input_mask=input_mask,
