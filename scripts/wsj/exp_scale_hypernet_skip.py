@@ -3,7 +3,7 @@ import os
 import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict
-from models.scale_hyper_nets import scale_hyper_lstm_model
+from models.scale_hyper_nets import scale_hyper_lstm_skip_model
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.objectives import categorical_crossentropy
@@ -42,18 +42,18 @@ def build_network(input_data,
                   use_layer_norm=True,
                   learn_init=True,
                   grad_clipping=1.0):
-    network = scale_hyper_lstm_model(input_var=input_data,
-                                     mask_var=input_mask,
-                                     num_inputs=num_inputs,
-                                     num_inner_units_list=num_inner_units_list,
-                                     num_factor_units_list=num_factor_units_list,
-                                     num_outer_units_list=num_outer_units_list,
-                                     num_outputs=num_outputs,
-                                     dropout_ratio=dropout_ratio,
-                                     use_layer_norm=use_layer_norm,
-                                     learn_init=learn_init,
-                                     grad_clipping=grad_clipping,
-                                     get_inner_hid=False)
+    network = scale_hyper_lstm_skip_model(input_var=input_data,
+                                          mask_var=input_mask,
+                                          num_inputs=num_inputs,
+                                          num_inner_units_list=num_inner_units_list,
+                                          num_factor_units_list=num_factor_units_list,
+                                          num_outer_units_list=num_outer_units_list,
+                                          num_outputs=num_outputs,
+                                          dropout_ratio=dropout_ratio,
+                                          use_layer_norm=use_layer_norm,
+                                          learn_init=learn_init,
+                                          grad_clipping=grad_clipping,
+                                          get_inner_hid=False)
     return network
 
 def set_network_trainer(input_data,
@@ -345,7 +345,7 @@ if __name__ == '__main__':
     options['train_save_freq'] = 100
 
     options['data_path'] = '/u/songinch/song/data/speech/wsj_fbank123.h5'
-    options['save_path'] = '/u/songinch/song/data/exp/wsj_scale_hypernet'
+    options['save_path'] = '/u/songinch/song/data/exp/wsj_scale_hypernet_skip'
     options['reload_model'] = None
 
     main(options)
