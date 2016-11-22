@@ -163,7 +163,7 @@ def scale_hyper_lstm_skip_model(input_var,
                                           axis=-1)
 
         # backward
-        prev_bwd_input_layer = ScaleHyperLSTMLayer(inner_incoming=input_layer,
+        prev_bwd_input_layer = ScaleHyperLSTMLayer(inner_incoming=skip_input_layer,
                                                    outer_incoming=prev_input_layer,
                                                    mask_input=mask_layer,
                                                    num_inner_units=num_inner_units_list[l],
