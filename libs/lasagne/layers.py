@@ -502,7 +502,7 @@ class BiDirLSTMLayer(MergeLayer):
                  weight_noise=0.0,
                  backwards=False,
                  learn_init=False,
-                 peepholes=True,
+                 peepholes=False,
                  gradient_steps=-1,
                  grad_clipping=0,
                  unroll_scan=False,

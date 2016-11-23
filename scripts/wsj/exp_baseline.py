@@ -238,7 +238,7 @@ def main(options):
                                        network=network)
 
 
-    evaluation_history =[[[100.0, 100.0, 1.0], [100.0, 100.0 ,1.0]]]
+    evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
     check_early_stop = 0
     total_batch_cnt = 0
 
@@ -269,7 +269,7 @@ def main(options):
                     print '--------------------------------------------------------------------------------------------'
                     print 'Prediction Cost: ', str(train_predict_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
-                    print '============================================================================================'
+                    print '--------------------------------------------------------------------------------------------'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
 
@@ -316,8 +316,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
 
     options = OrderedDict()
-    #options['num_units_list'] =  (500, 500, 500, 500, 500)
-    options['num_units_list'] =  (100, 100)
+    options['num_units_list'] =  (500, 500, 500, 500, 500)
     options['num_inputs'] = 123
     options['num_outputs'] = 3436
     options['dropout_ratio'] = 0.0
