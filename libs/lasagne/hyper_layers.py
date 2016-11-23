@@ -28,6 +28,7 @@ class ScaleHyperLSTMLayer(MergeLayer):
                  outer_hid_init=init.Constant(0.),
                  dropout_ratio=0.2,
                  use_layer_norm=False,
+                 use_exp_scale=False,
                  weight_noise=0.0,
                  backwards=False,
                  learn_init=False,
@@ -89,6 +90,7 @@ class ScaleHyperLSTMLayer(MergeLayer):
         else:
             self.nonlinearity = nonlinearity
 
+        self.use_exp_scale = use_exp_scale
         self.learn_init = learn_init
         self.num_inner_units = num_inner_units
         self.num_factor_units = num_factor_units
@@ -678,6 +680,10 @@ class ScaleHyperLSTMLayer(MergeLayer):
                                         T.dot(slice_factor(fact_bias, 2), self.V1_bias_cell),
                                         T.dot(slice_factor(fact_bias, 3), self.V1_bias_outgate)],
                                        axis=1)
+
+            if self.use_exp_scale:
+                scale_outer_in = T.exp(scale_outer_in)
+                scale_outer_hid = T.exp(scale_outer_hid)
 
             ##############
             # outer loop #
