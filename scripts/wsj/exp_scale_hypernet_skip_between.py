@@ -357,6 +357,7 @@ if __name__ == '__main__':
     options['num_outputs'] = 3436
     options['dropout_ratio'] = 0.0
     options['use_layer_norm'] = False
+    options['use_exp_scale']=False
     options['grad_clipping'] = 1.0
     options['learn_init'] = False
 
