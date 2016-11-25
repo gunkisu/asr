@@ -337,7 +337,7 @@ if __name__ == '__main__':
     options['num_outputs'] = 3436
 
     options['dropout_ratio'] = 0.0
-    options['weight_noise'] = 0.7
+    options['weight_noise'] = 0.01
     options['use_layer_norm'] = False
 
     options['peepholes'] = False
