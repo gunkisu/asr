@@ -337,23 +337,22 @@ if __name__ == '__main__':
     options['num_outputs'] = 3436
 
     options['dropout_ratio'] = 0.0
-    options['weight_noise'] = 0.01
+    options['weight_noise'] = 0.0
     options['use_layer_norm'] = False
 
     options['peepholes'] = False
     options['learn_init'] = False
 
-    options['grad_clipping'] = 1.0
-
     options['updater'] = momentum
     options['lr'] = 0.1
     options['grad_norm'] = 10000.0
+    options['grad_clipping'] = 1.0
     options['l2_lambda'] = 1e-5
 
-    options['batch_size'] = 12
+    options['batch_size'] = 32
     options['num_epochs'] = 200
 
-    options['train_disp_freq'] = 10
+    options['train_disp_freq'] = 100
     options['train_save_freq'] = 100
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
