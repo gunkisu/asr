@@ -358,7 +358,7 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
     options['save_path'] = './wsj_deep_lstm'
-    options['reload_model'] = './wsj_deep_lstm_last_model.pkl'
+    options['reload_model'] = None #'./wsj_deep_lstm_last_model.pkl'
 
     main(options)
 
