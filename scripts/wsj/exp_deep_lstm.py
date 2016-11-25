@@ -67,7 +67,6 @@ def set_network_trainer(input_data,
 
     # get network output data
     predict_data = get_output(network, deterministic=False)
-    predict_idx = T.argmax(predict_data, axis=-1)
 
     # get prediction cost
     predict_data = T.reshape(x=predict_data,
@@ -154,12 +153,12 @@ def network_evaluation(predict_fn,
     # for each batch
     for i, data in enumerate(data_iterator):
         # get input data
-        input_data = data[0]
-        input_mask = data[1]
+        input_data = data[0].astype(floatX)
+        input_mask = data[1].astype(floatX)
 
         # get target data
         target_data = data[2]
-        target_mask = data[3]
+        target_mask = data[3].astype(floatX)
 
         # get prediction data
         predict_output = predict_fn(input_data,
@@ -260,10 +259,18 @@ def main(options):
                 if pretrain_total_batch_cnt>=total_batch_cnt:
                     continue
                 # get input, target data
-                train_input = data
+                input_data = data[0].astype(floatX)
+                input_mask = data[1].astype(floatX)
+
+                # get target data
+                target_data = data[2]
+                target_mask = data[3].astype(floatX)
 
                 # get output
-                train_output = training_fn(*train_input)
+                train_output = training_fn(input_data,
+                                           input_mask,
+                                           target_data,
+                                           target_mask)
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
 
@@ -351,7 +358,7 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
     options['save_path'] = './wsj_deep_lstm'
-    options['reload_model'] = None
+    options['reload_model'] = './wsj_deep_lstm_last_model.pkl'
 
     main(options)
 
