@@ -347,7 +347,7 @@ if __name__ == '__main__':
 
     options['updater'] = momentum
     options['lr'] = 0.1
-    options['grad_norm'] = 10000-.0
+    options['grad_norm'] = 10000.0
     options['l2_lambda'] = 1e-5
 
     options['batch_size'] = 12
