@@ -279,7 +279,7 @@ def main(options):
                     print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
                     print '============================================================================================'
-                    print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt-1)
+                    print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt)
                     print '--------------------------------------------------------------------------------------------'
                     print 'Prediction Cost: ', str(train_predict_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
