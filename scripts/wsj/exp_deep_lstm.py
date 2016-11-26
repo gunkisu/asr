@@ -345,11 +345,11 @@ if __name__ == '__main__':
 
     options['updater'] = momentum
     options['lr'] = 0.1
-    options['grad_norm'] = 10000.0
+    options['grad_norm'] = 10.0
     options['grad_clipping'] = 1.0
     options['l2_lambda'] = 1e-5
 
-    options['batch_size'] = 32
+    options['batch_size'] = 16
     options['num_epochs'] = 200
 
     options['train_disp_freq'] = 100
@@ -358,6 +358,9 @@ if __name__ == '__main__':
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
     options['save_path'] = './wsj_deep_lstm'
     options['reload_model'] = None #'./wsj_deep_lstm_last_model.pkl'
+
+    for key, val in options.iteritems():
+        print(str(key), ': ', str(val))
 
     main(options)
 
