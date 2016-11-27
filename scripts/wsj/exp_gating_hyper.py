@@ -1,22 +1,19 @@
 from argparse import ArgumentParser
-import os
 import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict
-from models.gating_hyper_nets import scale_hyper_lstm_skip_model
+from models.gating_hyper_nets import deep_gating_hyper_model
+from libs.lasagne.utils import get_model_param_values, get_update_params_values
+from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.objectives import categorical_crossentropy
 from lasagne.updates import total_norm_constraint
-from libs.lasagne.utils import get_model_param_values, get_update_params_values
-from libs.lasagne.updates import nesterov_momentum, momentum
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme
 from fuel.transformers import Padding, FilterSources
-
-from libs.param_utils import set_model_param_value
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
@@ -33,27 +30,34 @@ def get_datastream(path, which_set='train_si84', batch_size=1):
 
 def build_network(input_data,
                   input_mask,
-                  num_inputs=123,
-                  num_inner_units_list=(64, 64, 64),
-                  num_factor_units_list=(64, 64, 64),
-                  num_outer_units_list=(128, 128, 128),
-                  num_outputs=63,
+                  num_inputs,
+                  num_inner_units_list,
+                  num_factor_units_list,
+                  num_outer_units_list,
+                  num_outputs,
+                  gating_nonlinearity=None,
                   dropout_ratio=0.2,
+                  weight_noise=0.0,
                   use_layer_norm=True,
+                  peepholes=False,
                   learn_init=True,
-                  grad_clipping=1.0):
-    network = scale_hyper_lstm_skip_model(input_var=input_data,
-                                          mask_var=input_mask,
-                                          num_inputs=num_inputs,
-                                          num_inner_units_list=num_inner_units_list,
-                                          num_factor_units_list=num_factor_units_list,
-                                          num_outer_units_list=num_outer_units_list,
-                                          num_outputs=num_outputs,
-                                          dropout_ratio=dropout_ratio,
-                                          use_layer_norm=use_layer_norm,
-                                          learn_init=learn_init,
-                                          grad_clipping=grad_clipping,
-                                          get_inner_hid=False)
+                  grad_clipping=0.0):
+
+    network = deep_gating_hyper_model(input_var=input_data,
+                                      mask_var=input_mask,
+                                      num_inputs=num_inputs,
+                                      num_inner_units_list=num_inner_units_list,
+                                      num_factor_units_list=num_factor_units_list,
+                                      num_outer_units_list=num_outer_units_list,
+                                      num_outputs=num_outputs,
+                                      gating_nonlinearity=gating_nonlinearity,
+                                      dropout_ratio=dropout_ratio,
+                                      weight_noise=weight_noise,
+                                      use_layer_norm=use_layer_norm,
+                                      peepholes=peepholes,
+                                      learn_init=learn_init,
+                                      grad_clipping=grad_clipping,
+                                      use_softmax=True)
     return network
 
 def set_network_trainer(input_data,
@@ -70,22 +74,24 @@ def set_network_trainer(input_data,
     # get network output data
     predict_data = get_output(network, deterministic=False)
 
-    predict_idx = T.argmax(predict_data, axis=-1)
-
     # get prediction cost
-    train_predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1])) + eps,
+    predict_data = T.reshape(x=predict_data,
+                             newshape=(-1, predict_data.shape[-1]),
+                             ndim=2)
+    predict_data = T.clip(predict_data, eps, 1.0 - eps)
+    train_predict_cost = categorical_crossentropy(predictions=predict_data,
                                                   targets=T.flatten(target_data, 1))
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
     train_predict_cost = train_predict_cost.sum()/target_mask.sum()
 
     # get regularizer cost
-    train_regularizer_cost = regularize_network_params(network, penalty=l2)
+    train_regularizer_cost = regularize_network_params(network, penalty=l2)*l2_lambda
 
     # get network parameters
     network_params = get_all_params(network, trainable=True)
 
-    # get network gradients with clipping
-    network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost*l2_lambda,
+    # get network gradients
+    network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost,
                                 wrt=network_params)
     network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
                                                               max_norm=grad_max_norm,
@@ -103,11 +109,9 @@ def set_network_trainer(input_data,
                                           input_mask,
                                           target_data,
                                           target_mask],
-                                  outputs=[predict_data,
-                                           predict_idx,
-                                           train_predict_cost,
+                                  outputs=[train_predict_cost,
                                            network_grads_norm],
-                                  updates=train_updates, allow_input_downcast=True)
+                                  updates=train_updates)
     return training_fn, trainer_params
 
 def set_network_predictor(input_data,
@@ -123,7 +127,11 @@ def set_network_predictor(input_data,
     predict_idx = T.argmax(predict_data, axis=-1)
 
     # get prediction cost
-    predict_cost = categorical_crossentropy(predictions=T.reshape(predict_data, (-1, predict_data.shape[-1]))+eps,
+    predict_data = T.reshape(x=predict_data,
+                             newshape=(-1, predict_data.shape[-1]),
+                             ndim=2)
+    predict_data = T.clip(predict_data, eps, 1.0 - eps)
+    predict_cost = categorical_crossentropy(predictions=predict_data,
                                             targets=T.flatten(target_data, 1))
     predict_cost = predict_cost*T.flatten(target_mask, 1)
     predict_cost = predict_cost.sum()/target_mask.sum()
@@ -134,7 +142,7 @@ def set_network_predictor(input_data,
                                          target_data,
                                          target_mask],
                                  outputs=[predict_idx,
-                                          predict_cost], allow_input_downcast=True)
+                                          predict_cost])
 
     return predict_fn
 
@@ -151,12 +159,12 @@ def network_evaluation(predict_fn,
     # for each batch
     for i, data in enumerate(data_iterator):
         # get input data
-        input_data = data[0]
-        input_mask = data[1]
+        input_data = data[0].astype(floatX)
+        input_mask = data[1].astype(floatX)
 
         # get target data
         target_data = data[2]
-        target_mask = data[3]
+        target_mask = data[3].astype(floatX)
 
         # get prediction data
         predict_output = predict_fn(input_data,
@@ -186,14 +194,6 @@ def network_evaluation(predict_fn,
 
 
 def main(options):
-    print 'Load data stream'
-
-    train_datastream = get_datastream(path=options['data_path'],
-                                                  which_set='train_si84',
-                                                  batch_size=options['batch_size'])
-    valid_datastream = get_datastream(path=options['data_path'],
-                                                  which_set='test_dev93',
-                                                  batch_size=options['batch_size'])
     print 'Build and compile network'
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
@@ -207,10 +207,14 @@ def main(options):
                             num_factor_units_list=options['num_factor_units_list'],
                             num_outer_units_list=options['num_outer_units_list'],
                             num_outputs=options['num_outputs'],
+                            gating_nonlinearity=options['gating_nonlinearity'],
                             dropout_ratio=options['dropout_ratio'],
+                            weight_noise=options['weight_noise'],
                             use_layer_norm=options['use_layer_norm'],
+                            peepholes=options['peepholes'],
                             learn_init=options['learn_init'],
                             grad_clipping=options['grad_clipping'])
+
     network_params = get_all_params(network, trainable=True)
 
     if options['reload_model']:
@@ -243,11 +247,18 @@ def main(options):
                                        network=network)
 
 
+    print 'Load data stream'
+    train_datastream = get_datastream(path=options['data_path'],
+                                                  which_set='train_si84',
+                                                  batch_size=options['batch_size'])
+    valid_datastream = get_datastream(path=options['data_path'],
+                                                  which_set='test_dev93',
+                                                  batch_size=options['batch_size'])
+
+    print 'Start training'
     evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
     check_early_stop = 0
     total_batch_cnt = 0
-
-    print 'Start training'
     try:
         # for each epoch
         for e_idx in range(options['num_epochs']):
@@ -256,14 +267,21 @@ def main(options):
                 total_batch_cnt += 1
                 if pretrain_total_batch_cnt>=total_batch_cnt:
                     continue
-
                 # get input, target data
-                train_input = data
+                input_data = data[0].astype(floatX)
+                input_mask = data[1].astype(floatX)
+
+                # get target data
+                target_data = data[2]
+                target_mask = data[3].astype(floatX)
 
                 # get output
-                train_output = training_fn(*train_input)
-                train_predict_cost = train_output[2]
-                network_grads_norm = train_output[3]
+                train_output = training_fn(input_data,
+                                           input_mask,
+                                           target_data,
+                                           target_mask)
+                train_predict_cost = train_output[0]
+                network_grads_norm = train_output[1]
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
@@ -303,6 +321,7 @@ def main(options):
             numpy.savez(options['save_path'] + '_eval_history',
                         eval_history=evaluation_history)
 
+            # save network
             cur_network_params_val = get_model_param_values(network_params)
             cur_trainer_params_val = get_update_params_values(trainer_params)
             cur_total_batch_cnt = total_batch_cnt
@@ -310,7 +329,7 @@ def main(options):
                         open(options['save_path'] + '_last_model.pkl', 'wb'))
 
     except KeyboardInterrupt:
-        print('Training Interrupted')
+        print 'Training Interrupted'
         cur_network_params_val = get_model_param_values(network_params)
         cur_trainer_params_val = get_update_params_values(trainer_params)
         cur_total_batch_cnt = total_batch_cnt
@@ -318,35 +337,42 @@ def main(options):
                     open(options['save_path'] + '_last_model.pkl', 'wb'))
 
 if __name__ == '__main__':
+    from libs.lasagne.updates import adamax, nesterov_momentum, momentum
     parser = ArgumentParser()
 
     options = OrderedDict()
-
-    options['num_inner_units_list'] = (250, 250, 250)
-    options['num_factor_units_list'] = (125, 125, 125)
-    options['num_outer_units_list'] =  (500, 500, 500)
     options['num_inputs'] = 123
+    options['num_inner_units_list'] = [500]*3
+    options['num_factor_units_list'] = [125]*3
+    options['num_outer_units_list'] = [500]*3
     options['num_outputs'] = 3436
+
     options['dropout_ratio'] = 0.0
+    options['weight_noise'] = 0.0
     options['use_layer_norm'] = False
-    options['grad_clipping'] = 1.0
+    options['gating_nonlinearity'] = None
+
+    options['peepholes'] = False
     options['learn_init'] = False
 
     options['updater'] = momentum
     options['lr'] = 0.1
     options['grad_norm'] = 10.0
-    options['l2_lambda'] = 0
-    options['updater_params'] = None
+    options['grad_clipping'] = 1.0
+    options['l2_lambda'] = 1e-5
 
-    options['batch_size'] = 12
+    options['batch_size'] = 16
     options['num_epochs'] = 200
 
-    options['train_disp_freq'] = 10
+    options['train_disp_freq'] = 100
     options['train_save_freq'] = 100
 
-    options['data_path'] = '/u/songinch/song/data/speech/wsj_fbank123.h5'
-    options['save_path'] = '/u/songinch/song/data/exp/wsj_scale_hypernet_skip'
-    options['reload_model'] = None
+    options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
+    options['save_path'] = './wsj_gating_hyper'
+    options['reload_model'] = None #'./wsj_gating_hyper_last_model.pkl'
+
+    for key, val in options.iteritems():
+        print str(key), ': ', str(val)
 
     main(options)
 

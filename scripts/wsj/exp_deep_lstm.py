@@ -320,7 +320,7 @@ def main(options):
                         open(options['save_path'] + '_last_model.pkl', 'wb'))
 
     except KeyboardInterrupt:
-        print('Training Interrupted')
+        print 'Training Interrupted'
         cur_network_params_val = get_model_param_values(network_params)
         cur_trainer_params_val = get_update_params_values(trainer_params)
         cur_total_batch_cnt = total_batch_cnt
@@ -360,7 +360,7 @@ if __name__ == '__main__':
     options['reload_model'] = None #'./wsj_deep_lstm_last_model.pkl'
 
     for key, val in options.iteritems():
-        print(str(key), ': ', str(val))
+        print str(key), ': ', str(val)
 
     main(options)
 

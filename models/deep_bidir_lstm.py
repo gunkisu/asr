@@ -65,7 +65,8 @@ def deep_bidir_lstm_model(input_var,
     ################
     # output layer #
     ################
-    output_layer = DropoutLayer(incoming=prev_input_layer, p=dropout_ratio)
+    output_layer = DropoutLayer(incoming=prev_input_layer,
+                                p=dropout_ratio)
     output_layer = SequenceDenseLayer(incoming=output_layer,
                                       num_outputs=num_outputs,
                                       mask_input=mask_layer,

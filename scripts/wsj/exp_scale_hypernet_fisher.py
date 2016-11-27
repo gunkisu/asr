@@ -4,7 +4,7 @@ import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict
 
-from models.scale_hyper_nets import scale_hyper_lstm_model
+from models.gating_hyper_nets import scale_hyper_lstm_model
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.objectives import categorical_crossentropy

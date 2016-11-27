@@ -3,7 +3,7 @@ import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict
 from data.timit.timit import framewise_timit_datastream
-from models.scale_hyper_nets import deep_bidir_scale_hyper_lstm_model
+from models.gating_hyper_nets import deep_bidir_scale_hyper_lstm_model
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.objectives import categorical_crossentropy
