@@ -342,9 +342,9 @@ if __name__ == '__main__':
 
     options = OrderedDict()
     options['num_inputs'] = 123
-    options['num_inner_units_list'] = [250]*3
-    options['num_factor_units_list'] = [125]*3
-    options['num_outer_units_list'] = [500]*3
+    options['num_inner_units_list'] = [250]*2
+    options['num_factor_units_list'] = [125]*2
+    options['num_outer_units_list'] = [500]*2
     options['num_outputs'] = 3436
 
     options['dropout_ratio'] = 0.0
