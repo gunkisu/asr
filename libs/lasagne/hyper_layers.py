@@ -29,7 +29,6 @@ class GatingHyperLSTMLayer(MergeLayer):
                  outer_hid_init=init.Constant(0.),
                  dropout_ratio=0.2,
                  use_layer_norm=False,
-                 use_exp_scale=False,
                  weight_noise=0.0,
                  backwards=False,
                  learn_init=False,
@@ -95,7 +94,6 @@ class GatingHyperLSTMLayer(MergeLayer):
         else:
             self.gating_nonlinearity = gating_nonlinearity
 
-        self.use_exp_scale = use_exp_scale
         self.learn_init = learn_init
         self.num_inner_units = num_inner_units
         self.num_factor_units = num_factor_units
