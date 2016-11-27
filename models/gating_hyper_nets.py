@@ -82,12 +82,12 @@ def deep_gating_hyper_model(input_var,
                                               output_inner_hid=True)
         # inner loop hidden
         prev_bwd_inner_layer = SliceLayer(incoming=prev_bwd_layer,
-                                          indices=slice(0, num_inner_units_list[l]),
+                                          indices=slice(0, num_inner_units),
                                           axis=-1)
 
         # outer loop hidden
         prev_bwd_outer_layer = SliceLayer(incoming=prev_bwd_layer,
-                                          indices=slice(num_inner_units_list[l], None),
+                                          indices=slice(num_inner_units, None),
                                           axis=-1)
 
         # concatenate bidirectional
@@ -193,12 +193,12 @@ def deep_gating_skip_hyper_model(input_var,
                                               output_inner_hid=True)
         # inner loop hidden
         prev_bwd_inner_layer = SliceLayer(incoming=prev_bwd_layer,
-                                          indices=slice(0, num_inner_units_list[l]),
+                                          indices=slice(0, num_inner_units),
                                           axis=-1)
 
         # outer loop hidden
         prev_bwd_outer_layer = SliceLayer(incoming=prev_bwd_layer,
-                                          indices=slice(num_inner_units_list[l], None),
+                                          indices=slice(num_inner_units, None),
                                           axis=-1)
 
         # concatenate bidirectional
