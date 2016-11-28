@@ -77,7 +77,7 @@ def set_network_trainer(input_data,
     train_predict_cost = categorical_crossentropy(predictions=predict_data,
                                                   targets=T.flatten(target_data, 1))
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
-    train_predict_cost = train_predict_cost.sum()/num_seqs
+    train_model_cost = train_predict_cost.sum()/num_seqs
     train_frame_cost = train_predict_cost.sum()/target_mask.sum()
 
     # get regularizer cost
@@ -87,7 +87,7 @@ def set_network_trainer(input_data,
     network_params = get_all_params(network, trainable=True)
 
     # get network gradients
-    network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost,
+    network_grads = theano.grad(cost=train_model_cost + train_regularizer_cost,
                                 wrt=network_params)
     network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
                                                               max_norm=grad_max_norm,
