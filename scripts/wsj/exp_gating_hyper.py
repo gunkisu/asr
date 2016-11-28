@@ -73,6 +73,7 @@ def set_network_trainer(input_data,
 
     # get network output data
     predict_data = get_output(network, deterministic=False)
+    num_seqs = predict_data.shape[0]
 
     # get prediction cost
     predict_data = T.reshape(x=predict_data,
@@ -82,7 +83,8 @@ def set_network_trainer(input_data,
     train_predict_cost = categorical_crossentropy(predictions=predict_data,
                                                   targets=T.flatten(target_data, 1))
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
-    train_predict_cost = train_predict_cost.sum()/target_mask.sum()
+    train_predict_cost = train_predict_cost.sum()/num_seqs
+    train_frame_cost = train_predict_cost.sum()/target_mask.sum()
 
     # get regularizer cost
     train_regularizer_cost = regularize_network_params(network, penalty=l2)*l2_lambda
@@ -109,7 +111,7 @@ def set_network_trainer(input_data,
                                           input_mask,
                                           target_data,
                                           target_mask],
-                                  outputs=[train_predict_cost,
+                                  outputs=[train_frame_cost,
                                            network_grads_norm],
                                   updates=train_updates)
     return training_fn, trainer_params
@@ -119,7 +121,6 @@ def set_network_predictor(input_data,
                           target_data,
                           target_mask,
                           network):
-
     # get network output data
     predict_data = get_output(network, deterministic=True)
 
@@ -375,7 +376,7 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
     options['save_path'] = './wsj_gating_hyper'
-    options['reload_model'] = './wsj_gating_hyper_last_model.pkl'
+    options['reload_model'] = None#'./wsj_gating_hyper_last_model.pkl'
 
     for key, val in options.iteritems():
         print str(key), ': ', str(val)

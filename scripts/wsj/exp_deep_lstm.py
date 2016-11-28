@@ -67,6 +67,7 @@ def set_network_trainer(input_data,
 
     # get network output data
     predict_data = get_output(network, deterministic=False)
+    num_seqs = predict_data.shape[0]
 
     # get prediction cost
     predict_data = T.reshape(x=predict_data,
@@ -76,7 +77,8 @@ def set_network_trainer(input_data,
     train_predict_cost = categorical_crossentropy(predictions=predict_data,
                                                   targets=T.flatten(target_data, 1))
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
-    train_predict_cost = train_predict_cost.sum()/target_mask.sum()
+    train_predict_cost = train_predict_cost.sum()/num_seqs
+    train_frame_cost = train_predict_cost.sum()/target_mask.sum()
 
     # get regularizer cost
     train_regularizer_cost = regularize_network_params(network, penalty=l2)*l2_lambda
@@ -103,7 +105,7 @@ def set_network_trainer(input_data,
                                           input_mask,
                                           target_data,
                                           target_mask],
-                                  outputs=[train_predict_cost,
+                                  outputs=[train_frame_cost,
                                            network_grads_norm],
                                   updates=train_updates)
     return training_fn, trainer_params
