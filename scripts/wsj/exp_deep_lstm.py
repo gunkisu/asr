@@ -250,6 +250,7 @@ def main(options):
     evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
     check_early_stop = 0
     total_batch_cnt = 0
+    train_flag = False
     try:
         # for each epoch
         for e_idx in range(options['num_epochs']):
@@ -257,7 +258,9 @@ def main(options):
             for b_idx, data in enumerate(train_datastream.get_epoch_iterator()):
                 total_batch_cnt += 1
                 if pretrain_total_batch_cnt>=total_batch_cnt:
+                    train_flag = False
                     continue
+                train_flag = True
                 # get input, target data
                 input_data = data[0].astype(floatX)
                 input_mask = data[1].astype(floatX)
@@ -286,6 +289,9 @@ def main(options):
                     print '--------------------------------------------------------------------------------------------'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
+
+            if train_flag is False:
+                continue
 
             # evaluation
             train_nll, train_bpc, train_per = network_evaluation(predict_fn,
