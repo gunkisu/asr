@@ -3,14 +3,13 @@ import os
 import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict
-
-from models.scale_hyper_nets import deep_bidir_scale_hyper_lstm_model
+from models.gating_hyper_nets import scale_hyper_lstm_model
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.objectives import categorical_crossentropy
 from lasagne.updates import total_norm_constraint
 from libs.lasagne.utils import get_model_param_values, get_update_params_values
-from libs.lasagne.updates import adamax, nesterov_momentum, momentum
+from libs.lasagne.updates import nesterov_momentum, momentum
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
@@ -43,17 +42,18 @@ def build_network(input_data,
                   use_layer_norm=True,
                   learn_init=True,
                   grad_clipping=1.0):
-    network = deep_bidir_scale_hyper_lstm_model(input_var=input_data,
-                                                mask_var=input_mask,
-                                                num_inputs=num_inputs,
-                                                num_inner_units_list=num_inner_units_list,
-                                                num_factor_units_list=num_factor_units_list,
-                                                num_outer_units_list=num_outer_units_list,
-                                                num_outputs=num_outputs,
-                                                dropout_ratio=dropout_ratio,
-                                                use_layer_norm=use_layer_norm,
-                                                learn_init=learn_init,
-                                                grad_clipping=grad_clipping)
+    network = scale_hyper_lstm_model(input_var=input_data,
+                                     mask_var=input_mask,
+                                     num_inputs=num_inputs,
+                                     num_inner_units_list=num_inner_units_list,
+                                     num_factor_units_list=num_factor_units_list,
+                                     num_outer_units_list=num_outer_units_list,
+                                     num_outputs=num_outputs,
+                                     dropout_ratio=dropout_ratio,
+                                     use_layer_norm=use_layer_norm,
+                                     learn_init=learn_init,
+                                     grad_clipping=grad_clipping,
+                                     get_inner_hid=False)
     return network
 
 def set_network_trainer(input_data,
@@ -106,7 +106,6 @@ def set_network_trainer(input_data,
                                   outputs=[predict_data,
                                            predict_idx,
                                            train_predict_cost,
-                                           train_regularizer_cost,
                                            network_grads_norm],
                                   updates=train_updates, allow_input_downcast=True)
     return training_fn, trainer_params
@@ -244,7 +243,7 @@ def main(options):
                                        network=network)
 
 
-    evaluation_history =[[[1000.0, 1000.0, 1.0], [1000.0, 1000.0 ,1.0]]]
+    evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
     check_early_stop = 0
     total_batch_cnt = 0
 
@@ -257,22 +256,25 @@ def main(options):
                 total_batch_cnt += 1
                 if pretrain_total_batch_cnt>=total_batch_cnt:
                     continue
+
                 # get input, target data
                 train_input = data
 
                 # get output
                 train_output = training_fn(*train_input)
                 train_predict_cost = train_output[2]
-                train_regularizer_cost = train_output[3]
-                network_grads_norm = train_output[4]
+                network_grads_norm = train_output[3]
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
+                    print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
+                    print '============================================================================================'
                     print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt)
+                    print '--------------------------------------------------------------------------------------------'
                     print 'Prediction Cost: ', str(train_predict_cost)
-                    print 'Regularizer Cost: ', str(train_regularizer_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
+                    print '--------------------------------------------------------------------------------------------'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
 
@@ -320,9 +322,9 @@ if __name__ == '__main__':
 
     options = OrderedDict()
 
-    options['num_inner_units_list'] = (50, 50)
-    options['num_factor_units_list'] = (50, 50)
-    options['num_outer_units_list'] =  (100, 100)
+    options['num_inner_units_list'] = (250, 250, 250)
+    options['num_factor_units_list'] = (125, 125, 125)
+    options['num_outer_units_list'] =  (500, 500, 500)
     options['num_inputs'] = 123
     options['num_outputs'] = 3436
     options['dropout_ratio'] = 0.0
@@ -343,7 +345,7 @@ if __name__ == '__main__':
     options['train_save_freq'] = 100
 
     options['data_path'] = '/u/songinch/song/data/speech/wsj_fbank123.h5'
-    options['save_path'] = '/u/songinch/song/data/exp/wsj_baseline'
+    options['save_path'] = '/u/songinch/song/data/exp/wsj_scale_hypernet'
     options['reload_model'] = None
 
     main(options)
