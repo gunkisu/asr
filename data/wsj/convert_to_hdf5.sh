@@ -3,14 +3,11 @@
 # Assumes that Kaldi is installed in $KALDI_ROOT and 
 # this script is run in $KALDI_ROOT/egs/wsj/s5. 
 # You can also create links to the files and directories in $KALDI_ROOT/egs/wsj/s5 instead.
-# Required file: path.sh
-# Required directories: utils, data-fmllr-tri4b/train_si284_tr90,
-# data-fmllr-tri4b/train_si284_cv10, and exp/tri4b_ali_si284.
 # It uses kaldi2fuel.py from attention-lvcsr to convert features and targets into a hdf5 file readable by fuel.
 
 . ./path.sh ## Source the tools and utils
 
-datasets=(train_si84, train_si284, test_eval92, test_dev93)
+datasets=(train_si284, test_eval92, test_dev93)
 
 data=data-fmllr-tri4b
 dir=exp/hyperud

@@ -60,7 +60,7 @@ def set_network_trainer(input_data,
                         updater,
                         learning_rate,
                         grad_max_norm=10.,
-                        l2_lambda=1e-5,
+#                        l2_lambda=1e-5,
                         load_updater_params=None):
 
     # get network output data
@@ -75,17 +75,20 @@ def set_network_trainer(input_data,
     train_predict_cost = train_predict_cost.sum()/target_mask.sum()
 
     # get regularizer cost
-    train_regularizer_cost = regularize_network_params(network, penalty=l2)
+#    train_regularizer_cost = regularize_network_params(network, penalty=l2)
 
     # get network parameters
     network_params = get_all_params(network, trainable=True)
 
     # get network gradients with clipping
-    network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost*l2_lambda,
+#    network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost*l2_lambda,
+#                                wrt=network_params)
+    network_grads = theano.grad(cost=train_predict_cost,
                                 wrt=network_params)
     network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
                                                               max_norm=grad_max_norm,
                                                               return_norm=True)
+
 
     # set updater
     train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
@@ -102,7 +105,7 @@ def set_network_trainer(input_data,
                                   outputs=[predict_data,
                                            predict_idx,
                                            train_predict_cost,
-                                           train_regularizer_cost,
+#                                           train_regularizer_cost],
                                            network_grads_norm],
                                   updates=train_updates, allow_input_downcast=True)
     return training_fn, trainer_params
@@ -204,8 +207,8 @@ def main(options):
                             num_outputs=options['num_outputs'],
                             dropout_ratio=options['dropout_ratio'],
                             use_layer_norm=options['use_layer_norm'],
-                            learn_init=True,
-                            grad_clipping=1.0)
+                            learn_init=options['learn_init'],
+                            grad_clipping=options['grad_clipping'])
     network_params = get_all_params(network, trainable=True)
 
     if options['reload_model']:
@@ -226,8 +229,8 @@ def main(options):
                                                       network=network,
                                                       updater=options['updater'],
                                                       learning_rate=options['lr'],
-                                                      grad_max_norm=options['grad_norm'],
-                                                      l2_lambda=options['l2_lambda'],
+                                                      grad_max_norm=options['grad_max_norm'],
+#                                                      l2_lambda=options['l2_lambda'],
                                                       load_updater_params=pretrain_update_params_val)
 
     print 'Build network predictor'
@@ -257,8 +260,8 @@ def main(options):
                 # get output
                 train_output = training_fn(*train_input)
                 train_predict_cost = train_output[2]
-                train_regularizer_cost = train_output[3]
-                network_grads_norm = train_output[4]
+#                train_regularizer_cost = train_output[3]
+                network_grads_norm = train_output[3]
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
@@ -268,6 +271,7 @@ def main(options):
                     print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt)
                     print '--------------------------------------------------------------------------------------------'
                     print 'Prediction Cost: ', str(train_predict_cost)
+#                    print 'Regularizer Cost: ', str(train_regularizer_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
                     print '--------------------------------------------------------------------------------------------'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
@@ -314,6 +318,10 @@ def main(options):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
+    
+    parser.add_argument('model')
+
+    args = parser.parse_args()
 
     options = OrderedDict()
     options['num_units_list'] =  (500, 500, 500, 500, 500)
@@ -326,11 +334,11 @@ if __name__ == '__main__':
 
     options['updater'] = momentum
     options['lr'] = 0.1
-    options['grad_norm'] = 10.0
-    options['l2_lambda'] = 0
+    options['grad_max_norm'] = 10.0
+#    options['l2_lambda'] = 0
     options['updater_params'] = None
 
-    options['batch_size'] = 12
+    options['batch_size'] = 2
     options['num_epochs'] = 200
 
     options['train_disp_freq'] = 10
@@ -341,10 +349,6 @@ if __name__ == '__main__':
     options['reload_model'] = None
 
     main(options)
-
-
-
-
 
 
 
