@@ -75,14 +75,14 @@ def set_network_trainer(input_data,
     train_predict_cost = train_predict_cost.sum()/target_mask.sum()
 
     # get regularizer cost
-#    train_regularizer_cost = regularize_network_params(network, penalty=l2)
+    train_regularizer_cost = regularize_network_params(network, penalty=l2)
 
     # get network parameters
     network_params = get_all_params(network, trainable=True)
 
     # get network gradients with clipping
-#    network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost*l2_lambda,
-#                                wrt=network_params)
+    network_grads = theano.grad(cost=train_predict_cost + train_regularizer_cost*l2_lambda,
+                                wrt=network_params)
     network_grads = theano.grad(cost=train_predict_cost,
                                 wrt=network_params)
     network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
@@ -105,7 +105,7 @@ def set_network_trainer(input_data,
                                   outputs=[predict_data,
                                            predict_idx,
                                            train_predict_cost,
-#                                           train_regularizer_cost],
+                                           train_regularizer_cost],
                                            network_grads_norm],
                                   updates=train_updates, allow_input_downcast=True)
     return training_fn, trainer_params
@@ -230,7 +230,7 @@ def main(options):
                                                       updater=options['updater'],
                                                       learning_rate=options['lr'],
                                                       grad_max_norm=options['grad_max_norm'],
-#                                                      l2_lambda=options['l2_lambda'],
+                                                      l2_lambda=options['l2_lambda'],
                                                       load_updater_params=pretrain_update_params_val)
 
     print 'Build network predictor'
@@ -260,7 +260,7 @@ def main(options):
                 # get output
                 train_output = training_fn(*train_input)
                 train_predict_cost = train_output[2]
-#                train_regularizer_cost = train_output[3]
+                train_regularizer_cost = train_output[3]
                 network_grads_norm = train_output[3]
 
                 # show intermediate result
@@ -271,7 +271,7 @@ def main(options):
                     print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt)
                     print '--------------------------------------------------------------------------------------------'
                     print 'Prediction Cost: ', str(train_predict_cost)
-#                    print 'Regularizer Cost: ', str(train_regularizer_cost)
+                    print 'Regularizer Cost: ', str(train_regularizer_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
                     print '--------------------------------------------------------------------------------------------'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
@@ -317,11 +317,9 @@ def main(options):
                     open(options['save_path'] + '_last_model.pkl', 'wb'))
 
 if __name__ == '__main__':
-    parser = ArgumentParser()
-    
-    parser.add_argument('model')
-
-    args = parser.parse_args()
+#    parser = ArgumentParser()
+#    parser.add_argument('model')
+#    args = parser.parse_args()
 
     options = OrderedDict()
     options['num_units_list'] =  (500, 500, 500, 500, 500)
@@ -335,7 +333,7 @@ if __name__ == '__main__':
     options['updater'] = momentum
     options['lr'] = 0.1
     options['grad_max_norm'] = 10.0
-#    options['l2_lambda'] = 0
+    options['l2_lambda'] = 0
     options['updater_params'] = None
 
     options['batch_size'] = 2
