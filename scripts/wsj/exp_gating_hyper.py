@@ -363,8 +363,8 @@ if __name__ == '__main__':
     options['learn_init'] = False
 
     options['updater'] = momentum
-    options['lr'] = 0.1
-    options['grad_norm'] = 10.0
+    options['lr'] = 0.001
+    options['grad_norm'] = 1000000000.0
     options['grad_clipping'] = 1.0
     options['l2_lambda'] = 1e-5
 
