@@ -81,17 +81,21 @@ def set_network_trainer(input_data,
     train_frame_cost = train_predict_cost.sum()/target_mask.sum()
 
     # get regularizer cost
-    train_regularizer_cost = regularize_network_params(network, penalty=l2)*l2_lambda
+    train_regularizer_cost = regularize_network_params(network, penalty=l2)
 
     # get network parameters
     network_params = get_all_params(network, trainable=True)
 
     # get network gradients
-    network_grads = theano.grad(cost=train_model_cost + train_regularizer_cost,
+    network_grads = theano.grad(cost=train_model_cost + train_regularizer_cost*l2_lambda,
                                 wrt=network_params)
-    network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
-                                                              max_norm=grad_max_norm,
-                                                              return_norm=True)
+
+    if grad_max_norm>0.:
+        network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
+                                                                  max_norm=grad_max_norm,
+                                                                  return_norm=True)
+    else:
+        network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
 
     # set updater
     train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
@@ -242,17 +246,15 @@ def main(options):
 
     print 'Load data stream'
     train_datastream = get_datastream(path=options['data_path'],
-                                                  which_set='train_si84',
-                                                  batch_size=options['batch_size'])
-    valid_datastream = get_datastream(path=options['data_path'],
-                                                  which_set='test_dev93',
-                                                  batch_size=options['batch_size'])
+                                      which_set='train_si84',
+                                      batch_size=options['batch_size'])
 
     print 'Start training'
     evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
-    check_early_stop = 0
+    early_stop_flag = False
+    early_stop_cnt = 0
     total_batch_cnt = 0
-    train_flag = False
+
     try:
         # for each epoch
         for e_idx in range(options['num_epochs']):
@@ -260,9 +262,8 @@ def main(options):
             for b_idx, data in enumerate(train_datastream.get_epoch_iterator()):
                 total_batch_cnt += 1
                 if pretrain_total_batch_cnt>=total_batch_cnt:
-                    train_flag = False
                     continue
-                train_flag = True
+
                 # get input, target data
                 input_data = data[0].astype(floatX)
                 input_mask = data[1].astype(floatX)
@@ -292,40 +293,48 @@ def main(options):
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
 
-            if train_flag is False:
-                continue
+                # evaluation
+                if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
+                    train_eval_datastream = get_datastream(path=options['data_path'],
+                                                           which_set='train_si84',
+                                                           batch_size=options['batch_size'])
+                    valid_eval_datastream = get_datastream(path=options['data_path'],
+                                                           which_set='test_dev93',
+                                                           batch_size=options['batch_size'])
+                    train_nll, train_bpc, train_per = network_evaluation(predict_fn,
+                                                                         train_eval_datastream)
+                    valid_nll, valid_bpc, valid_per = network_evaluation(predict_fn,
+                                                                         valid_eval_datastream)
 
-            # evaluation
-            train_nll, train_bpc, train_per = network_evaluation(predict_fn,
-                                                                 train_datastream)
-            valid_nll, valid_bpc, valid_per = network_evaluation(predict_fn,
-                                                                 valid_datastream)
+                    # check over-fitting
+                    if valid_per>evaluation_history[-1][1][2]:
+                        early_stop_cnt += 1.
+                    else:
+                        early_stop_cnt = 0.
+                        best_network_params_vals = get_model_param_values(network_params)
+                        pickle.dump(best_network_params_vals,
+                                    open(options['save_path'] + '_best_model.pkl', 'wb'))
 
-            # check over-fitting
-            if valid_per>evaluation_history[-1][1][2]:
-                check_early_stop += 1.
-            else:
-                check_early_stop = 0.
-                best_network_params_vals = get_model_param_values(network_params)
-                pickle.dump(best_network_params_vals,
-                            open(options['save_path'] + '_best_model.pkl', 'wb'))
+                    if early_stop_cnt>10:
+                        early_stop_flag = True
+                        break
 
-            if check_early_stop>10:
-                print('Training Early Stopped')
+                    # save results
+                    evaluation_history.append([[train_nll, train_bpc, train_per],
+                                               [valid_nll, valid_bpc, valid_per]])
+                    numpy.savez(options['save_path'] + '_eval_history',
+                                eval_history=evaluation_history)
+
+                # save network
+                if total_batch_cnt%options['train_save_freq'] == 0 and total_batch_cnt!=0:
+                    cur_network_params_val = get_model_param_values(network_params)
+                    cur_trainer_params_val = get_update_params_values(trainer_params)
+                    cur_total_batch_cnt = total_batch_cnt
+                    pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
+                                open(options['save_path'] + '_last_model.pkl', 'wb'))
+
+            if early_stop_flag:
                 break
-
-            # save results
-            evaluation_history.append([[train_nll, train_bpc, train_per],
-                                       [valid_nll, valid_bpc, valid_per]])
-            numpy.savez(options['save_path'] + '_eval_history',
-                        eval_history=evaluation_history)
-
-            # save network
-            cur_network_params_val = get_model_param_values(network_params)
-            cur_trainer_params_val = get_update_params_values(trainer_params)
-            cur_total_batch_cnt = total_batch_cnt
-            pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
-                        open(options['save_path'] + '_last_model.pkl', 'wb'))
 
     except KeyboardInterrupt:
         print 'Training Interrupted'
@@ -336,7 +345,7 @@ def main(options):
                     open(options['save_path'] + '_last_model.pkl', 'wb'))
 
 if __name__ == '__main__':
-    from libs.lasagne.updates import adamax, nesterov_momentum, momentum
+    from libs.lasagne.updates import momentum
     parser = ArgumentParser()
 
     options = OrderedDict()
@@ -360,7 +369,8 @@ if __name__ == '__main__':
     options['batch_size'] = 16
     options['num_epochs'] = 200
 
-    options['train_disp_freq'] = 100
+    options['train_disp_freq'] = 50
+    options['train_eval_freq'] = 500
     options['train_save_freq'] = 100
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
