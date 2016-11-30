@@ -297,10 +297,10 @@ def main(options):
                 if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
                     train_eval_datastream = get_datastream(path=options['data_path'],
                                                            which_set='train_si84',
-                                                           batch_size=options['batch_size'])
+                                                           batch_size=options['eval_batch_size'])
                     valid_eval_datastream = get_datastream(path=options['data_path'],
                                                            which_set='test_dev93',
-                                                           batch_size=options['batch_size'])
+                                                           batch_size=options['eval_batch_size'])
                     train_nll, train_bpc, train_per = network_evaluation(predict_fn,
                                                                          train_eval_datastream)
                     valid_nll, valid_bpc, valid_per = network_evaluation(predict_fn,
@@ -367,6 +367,7 @@ if __name__ == '__main__':
     options['l2_lambda'] = 1e-5
 
     options['batch_size'] = 16
+    options['eval_batch_size'] = 64
     options['num_epochs'] = 200
 
     options['train_disp_freq'] = 50
