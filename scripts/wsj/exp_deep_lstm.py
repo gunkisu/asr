@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-import numpy, theano, lasagne, pickle
+import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
 from models.deep_bidir_lstm import deep_bidir_lstm_model
@@ -7,7 +7,6 @@ from libs.lasagne.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
-from lasagne.objectives import categorical_crossentropy
 from lasagne.updates import total_norm_constraint
 
 from fuel.datasets.hdf5 import H5PYDataset
@@ -357,6 +356,16 @@ if __name__ == '__main__':
     from libs.lasagne.updates import momentum
     parser = ArgumentParser()
 
+    parser.add_argument('-l', '--learn_rate', action='store', help='learning rate', default=1)
+    parser.add_argument('-g', '--grad_norm', action='store', help='gradient norm', default=0.0)
+    parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
+
+    args = parser.parse_args()
+    learn_rate= args.learn_rate
+    grad_norm = args.grad_norm
+    reload_path = args.reload_path
+    grad_clipping = args.grad_clipping
+
     options = OrderedDict()
     options['num_inputs'] = 123
     options['num_units_list'] = [500]*5
@@ -370,9 +379,9 @@ if __name__ == '__main__':
     options['learn_init'] = False
 
     options['updater'] = momentum
-    options['lr'] = 0.1
-    options['grad_norm'] = 10.0
-    options['grad_clipping'] = 1.0
+    options['lr'] = 10**(-learn_rate)
+    options['grad_norm'] = grad_norm
+    options['grad_clipping'] = grad_clipping
     options['l2_lambda'] = 1e-5
 
     options['batch_size'] = 16
@@ -384,8 +393,15 @@ if __name__ == '__main__':
     options['train_save_freq'] = 100
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
-    options['save_path'] = './wsj_deep_lstm'
-    options['reload_model'] = None #'./wsj_deep_lstm_last_model.pkl'
+
+    options['save_path'] = './wsj_deep_lstm' + '_lr' + str(learn_rate) + '_gn' + str(grad_norm) + '_gc' + str(grad_clipping)
+
+    reload_path = options['model_name'] + '_last_model.pkl'
+
+    if os.path.exists(reload_path):
+        options['reload_model'] = reload_path
+    else:
+        options['reload_model'] = None
 
     for key, val in options.iteritems():
         print str(key), ': ', str(val)
