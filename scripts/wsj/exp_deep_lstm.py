@@ -51,19 +51,22 @@ def build_network(input_data,
                                     peepholes=peepholes,
                                     learn_init=learn_init,
                                     grad_clipping=grad_clipping,
-                                    use_softmax=True)
+                                    use_softmax=False)
     return network
 
 def set_network_trainer(input_data,
                         input_mask,
                         target_data,
                         target_mask,
+                        num_outputs,
                         network,
                         updater,
                         learning_rate,
                         grad_max_norm=10.,
                         l2_lambda=1e-5,
                         load_updater_params=None):
+    # get one hot target
+    one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1), nb_class= num_outputs)
 
     # get network output data
     predict_data = get_output(network, deterministic=False)
@@ -73,9 +76,9 @@ def set_network_trainer(input_data,
     predict_data = T.reshape(x=predict_data,
                              newshape=(-1, predict_data.shape[-1]),
                              ndim=2)
-    predict_data = T.clip(predict_data, eps, 1.0 - eps)
-    train_predict_cost = categorical_crossentropy(predictions=predict_data,
-                                                  targets=T.flatten(target_data, 1))
+    predict_data = predict_data - T.max(predict_data, axis=1, keepdims=True)
+    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=1, keepdims=True))
+    train_predict_cost = -T.sum(one_hot_target_data*predict_data, axis=1)
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
     train_model_cost = train_predict_cost.sum()/num_seqs
     train_frame_cost = train_predict_cost.sum()/target_mask.sum()
@@ -118,7 +121,10 @@ def set_network_predictor(input_data,
                           input_mask,
                           target_data,
                           target_mask,
+                          num_outputs,
                           network):
+    # get one hot target
+    one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1), nb_class= num_outputs)
 
     # get network output data
     predict_data = get_output(network, deterministic=True)
@@ -130,9 +136,10 @@ def set_network_predictor(input_data,
     predict_data = T.reshape(x=predict_data,
                              newshape=(-1, predict_data.shape[-1]),
                              ndim=2)
-    predict_data = T.clip(predict_data, eps, 1.0 - eps)
-    predict_cost = categorical_crossentropy(predictions=predict_data,
-                                            targets=T.flatten(target_data, 1))
+
+    predict_data = predict_data - T.max(predict_data, axis=1, keepdims=True)
+    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=1, keepdims=True))
+    predict_cost = -T.sum(one_hot_target_data*predict_data, axis=1)
     predict_cost = predict_cost*T.flatten(target_mask, 1)
     predict_cost = predict_cost.sum()/target_mask.sum()
 
@@ -229,6 +236,7 @@ def main(options):
                                                       input_mask=input_mask,
                                                       target_data=target_data,
                                                       target_mask=target_mask,
+                                                      num_outputs=options['num_outputs'],
                                                       network=network,
                                                       updater=options['updater'],
                                                       learning_rate=options['lr'],
@@ -241,6 +249,7 @@ def main(options):
                                        input_mask=input_mask,
                                        target_data=target_data,
                                        target_mask=target_mask,
+                                       num_outputs=options['num_outputs'],
                                        network=network)
 
 
