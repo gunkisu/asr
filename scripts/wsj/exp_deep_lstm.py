@@ -363,7 +363,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     learn_rate= args.learn_rate
     grad_norm = args.grad_norm
-    reload_path = args.reload_path
     grad_clipping = args.grad_clipping
 
     options = OrderedDict()
