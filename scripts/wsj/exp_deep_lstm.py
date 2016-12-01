@@ -66,7 +66,7 @@ def set_network_trainer(input_data,
                         load_updater_params=None):
     # get one hot target
     one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
-                                                 nb_class= num_outputs,
+                                                 nb_class=num_outputs,
                                                  dtype=floatX)
 
     # get network output data
@@ -77,9 +77,9 @@ def set_network_trainer(input_data,
     predict_data = T.reshape(x=predict_data,
                              newshape=(-1, predict_data.shape[-1]),
                              ndim=2)
-    predict_data = predict_data - T.max(predict_data, axis=1, keepdims=True)
-    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=1, keepdims=True))
-    train_predict_cost = -T.sum(one_hot_target_data*predict_data, axis=1)
+    predict_data = predict_data - T.max(predict_data, axis=-1, keepdims=True)
+    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=-1, keepdims=True))
+    train_predict_cost = -T.sum(T.mul(one_hot_target_data, predict_data), axis=-1)
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
     train_model_cost = train_predict_cost.sum()/num_seqs
     train_frame_cost = train_predict_cost.sum()/target_mask.sum()
@@ -140,9 +140,9 @@ def set_network_predictor(input_data,
                              newshape=(-1, predict_data.shape[-1]),
                              ndim=2)
 
-    predict_data = predict_data - T.max(predict_data, axis=1, keepdims=True)
-    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=1, keepdims=True))
-    predict_cost = -T.sum(one_hot_target_data*predict_data, axis=1)
+    predict_data = predict_data - T.max(predict_data, axis=-1, keepdims=True)
+    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=-1, keepdims=True))
+    predict_cost = -T.sum(T.mul(one_hot_target_data, predict_data), axis=-1)
     predict_cost = predict_cost*T.flatten(target_mask, 1)
     predict_cost = predict_cost.sum()/target_mask.sum()
 
@@ -163,7 +163,7 @@ def network_evaluation(predict_fn,
 
     # evaluation results
     total_nll = 0.
-    total_per = 0.
+    total_fer = 0.
     total_cnt = 0.
 
     # for each batch
@@ -193,14 +193,14 @@ def network_evaluation(predict_fn,
 
         # add up cost
         total_nll += predict_cost
-        total_per += (1.0 - match_avg)
+        total_fer += (1.0 - match_avg)
         total_cnt += 1.
 
     total_nll /= total_cnt
     total_bpc = total_nll/numpy.log(2.0)
-    total_per /= total_cnt
+    total_fer /= total_cnt
 
-    return total_nll, total_bpc, total_per
+    return total_nll, total_bpc, total_fer
 
 
 def main(options):
@@ -313,13 +313,13 @@ def main(options):
                     valid_eval_datastream = get_datastream(path=options['data_path'],
                                                            which_set='test_dev93',
                                                            batch_size=options['eval_batch_size'])
-                    train_nll, train_bpc, train_per = network_evaluation(predict_fn,
+                    train_nll, train_bpc, train_fer = network_evaluation(predict_fn,
                                                                          train_eval_datastream)
-                    valid_nll, valid_bpc, valid_per = network_evaluation(predict_fn,
+                    valid_nll, valid_bpc, valid_fer = network_evaluation(predict_fn,
                                                                          valid_eval_datastream)
 
                     # check over-fitting
-                    if valid_per>evaluation_history[-1][1][2]:
+                    if valid_fer>evaluation_history[-1][1][2]:
                         early_stop_cnt += 1.
                     else:
                         early_stop_cnt = 0.
@@ -332,8 +332,8 @@ def main(options):
                         break
 
                     # save results
-                    evaluation_history.append([[train_nll, train_bpc, train_per],
-                                               [valid_nll, valid_bpc, valid_per]])
+                    evaluation_history.append([[train_nll, train_bpc, train_fer],
+                                               [valid_nll, valid_bpc, valid_fer]])
                     numpy.savez(options['save_path'] + '_eval_history',
                                 eval_history=evaluation_history)
 
