@@ -361,9 +361,9 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
 
     args = parser.parse_args()
-    learn_rate= args.learn_rate
-    grad_norm = args.grad_norm
-    grad_clipping = args.grad_clipping
+    learn_rate= int(args.learn_rate)
+    grad_norm = float(args.grad_norm)
+    grad_clipping = float(args.grad_clipping)
 
     options = OrderedDict()
     options['num_inputs'] = 123
