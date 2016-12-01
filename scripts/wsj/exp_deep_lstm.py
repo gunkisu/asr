@@ -395,7 +395,7 @@ if __name__ == '__main__':
 
     options['save_path'] = './wsj_deep_lstm' + '_lr' + str(learn_rate) + '_gn' + str(grad_norm) + '_gc' + str(grad_clipping)
 
-    reload_path = options['model_name'] + '_last_model.pkl'
+    reload_path = options['save_path'] + '_last_model.pkl'
 
     if os.path.exists(reload_path):
         options['reload_model'] = reload_path
