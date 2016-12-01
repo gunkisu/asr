@@ -360,18 +360,20 @@ if __name__ == '__main__':
     from libs.lasagne.updates import momentum
     parser = ArgumentParser()
 
+    parser.add_argument('-n', '--num_layers', action='store',help='num of layers', default=5)
     parser.add_argument('-l', '--learn_rate', action='store', help='learning rate', default=1)
     parser.add_argument('-g', '--grad_norm', action='store', help='gradient norm', default=0.0)
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
 
     args = parser.parse_args()
+    num_layers = int(args.num_layers)
     learn_rate= int(args.learn_rate)
     grad_norm = float(args.grad_norm)
     grad_clipping = float(args.grad_clipping)
 
     options = OrderedDict()
     options['num_inputs'] = 123
-    options['num_units_list'] = [500]*5
+    options['num_units_list'] = [500]*num_layers
     options['num_outputs'] = 3436
 
     options['dropout_ratio'] = 0.0
@@ -397,7 +399,12 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
 
-    options['save_path'] = './wsj_deep_lstm' + '_lr' + str(int(learn_rate)) + '_gn' + str(int(grad_norm)) + '_gc' + str(int(grad_clipping))
+    options['save_path'] = './wsj_deep_lstm' + \
+                           '_lr' + str(int(learn_rate)) + \
+                           '_gn' + str(int(grad_norm)) + \
+                           '_gc' + str(int(grad_clipping)) + \
+                           '_nl' + str(int(num_layers))
+
 
     reload_path = options['save_path'] + '_last_model.pkl'
 
