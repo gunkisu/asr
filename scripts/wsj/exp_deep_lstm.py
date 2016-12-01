@@ -65,7 +65,9 @@ def set_network_trainer(input_data,
                         l2_lambda=1e-5,
                         load_updater_params=None):
     # get one hot target
-    one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1), nb_class= num_outputs)
+    one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
+                                                 nb_class= num_outputs,
+                                                 dtype=floatX)
 
     # get network output data
     predict_data = get_output(network, deterministic=False)
@@ -123,7 +125,9 @@ def set_network_predictor(input_data,
                           num_outputs,
                           network):
     # get one hot target
-    one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1), nb_class= num_outputs)
+    one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
+                                                 nb_class= num_outputs,
+                                                 dtype=floatX)
 
     # get network output data
     predict_data = get_output(network, deterministic=True)
@@ -393,7 +397,7 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
 
-    options['save_path'] = './wsj_deep_lstm' + '_lr' + str(learn_rate) + '_gn' + str(grad_norm) + '_gc' + str(grad_clipping)
+    options['save_path'] = './wsj_deep_lstm' + '_lr' + str(int(learn_rate)) + '_gn' + str(int(grad_norm)) + '_gc' + str(int(grad_clipping))
 
     reload_path = options['save_path'] + '_last_model.pkl'
 
