@@ -75,7 +75,7 @@ def set_network_trainer(input_data,
 
     # get prediction cost
     predict_data = T.reshape(x=predict_data,
-                             newshape=(-1, predict_data.shape[-1]),
+                             newshape=(-1, num_outputs),
                              ndim=2)
     predict_data = predict_data - T.max(predict_data, axis=-1, keepdims=True)
     predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=-1, keepdims=True))
@@ -133,7 +133,7 @@ def set_network_predictor(input_data,
     predict_data = get_output(network, deterministic=True)
 
     # get prediction index
-    predict_idx = T.argmax(predict_data, axis=-1)
+    predict_idx = T.argmax(T.exp(predict_data), axis=-1)
 
     # get prediction cost
     predict_data = T.reshape(x=predict_data,
@@ -188,8 +188,7 @@ def network_evaluation(predict_fn,
         match_data = (target_data == predict_idx)*target_mask
 
         # average over sequence
-        match_avg = numpy.sum(match_data, axis=-1)/numpy.sum(target_mask, axis=-1)
-        match_avg = match_avg.mean()
+        match_avg = numpy.sum(match_data)/numpy.sum(target_mask)
 
         # add up cost
         total_nll += predict_cost
