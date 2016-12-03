@@ -362,6 +362,7 @@ if __name__ == '__main__':
     from libs.lasagne.updates import momentum
     parser = ArgumentParser()
 
+    parser.add_argument('-b', '--batch_size', action='store',help='batch size', default=1)
     parser.add_argument('-n', '--num_layers', action='store',help='num of layers', default=5)
     parser.add_argument('-l', '--learn_rate', action='store', help='learning rate', default=1)
     parser.add_argument('-g', '--grad_norm', action='store', help='gradient norm', default=0.0)
@@ -369,6 +370,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
 
     args = parser.parse_args()
+    batch_size = int(args.batch_size)
     num_layers = int(args.num_layers)
     learn_rate= int(args.learn_rate)
     grad_norm = float(args.grad_norm)
@@ -394,7 +396,7 @@ if __name__ == '__main__':
     options['gradient_steps'] = gradient_steps
     options['l2_lambda'] = 1e-5
 
-    options['batch_size'] = 1
+    options['batch_size'] = batch_size
     options['eval_batch_size'] = 64
     options['num_epochs'] = 200
 
@@ -409,7 +411,8 @@ if __name__ == '__main__':
                            '_gn' + str(int(grad_norm)) + \
                            '_gc' + str(int(grad_clipping)) + \
                            '_gs' + str(int(gradient_steps)) + \
-                           '_nl' + str(int(num_layers))
+                           '_nl' + str(int(num_layers)) + \
+                           '_b' + str(int(batch_size))
 
 
     reload_path = options['save_path'] + '_last_model.pkl'
