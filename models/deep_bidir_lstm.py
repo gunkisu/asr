@@ -16,6 +16,7 @@ def deep_bidir_lstm_model(input_var,
                           peepholes=False,
                           learn_init=False,
                           grad_clipping=0.0,
+                          gradient_steps=-1,
                           use_softmax=True):
     ###############
     # input layer #
@@ -44,6 +45,7 @@ def deep_bidir_lstm_model(input_var,
                                    weight_noise=weight_noise,
                                    peepholes=peepholes,
                                    grad_clipping=grad_clipping,
+                                   gradient_steps=gradient_steps,
                                    backwards=False)
 
         # backward lstm
@@ -55,6 +57,7 @@ def deep_bidir_lstm_model(input_var,
                                    weight_noise=weight_noise,
                                    peepholes=peepholes,
                                    grad_clipping=grad_clipping,
+                                   gradient_steps=gradient_steps,
                                    backwards=True)
 
         # concatenate forward/backward
