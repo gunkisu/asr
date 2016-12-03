@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-import numpy, theano, lasagne, pickle
+import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
 from models.gating_hyper_nets import deep_gating_hyper_model
