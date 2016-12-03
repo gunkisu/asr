@@ -7,7 +7,6 @@ from libs.lasagne.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
-from lasagne.objectives import categorical_crossentropy
 from lasagne.updates import total_norm_constraint
 
 from fuel.datasets.hdf5 import H5PYDataset
