@@ -371,7 +371,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
 
     parser.add_argument('-b', '--batch_size', action='store',help='batch size', default=1)
-    parser.add_argument('-n', '--num_layers', action='store',help='num of layers', default=5)
+    parser.add_argument('-n', '--num_layers', action='store',help='num of layers', default=2)
     parser.add_argument('-l', '--learn_rate', action='store', help='learning rate', default=1)
     parser.add_argument('-g', '--grad_norm', action='store', help='gradient norm', default=0.0)
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
