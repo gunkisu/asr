@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-import numpy, theano, lasagne, pickle
+import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
 from models.gating_hyper_nets import deep_gating_skip_hyper_model
@@ -7,7 +7,6 @@ from libs.lasagne.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
-from lasagne.objectives import categorical_crossentropy
 from lasagne.updates import total_norm_constraint
 
 from fuel.datasets.hdf5 import H5PYDataset
@@ -57,19 +56,24 @@ def build_network(input_data,
                                            peepholes=peepholes,
                                            learn_init=learn_init,
                                            grad_clipping=grad_clipping,
-                                           use_softmax=True)
+                                           use_softmax=False)
     return network
 
 def set_network_trainer(input_data,
                         input_mask,
                         target_data,
                         target_mask,
+                        num_outputs,
                         network,
                         updater,
                         learning_rate,
                         grad_max_norm=10.,
                         l2_lambda=1e-5,
                         load_updater_params=None):
+    # get one hot target
+    one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
+                                                 nb_class=num_outputs,
+                                                 dtype=floatX)
 
     # get network output data
     predict_data = get_output(network, deterministic=False)
@@ -77,11 +81,11 @@ def set_network_trainer(input_data,
 
     # get prediction cost
     predict_data = T.reshape(x=predict_data,
-                             newshape=(-1, predict_data.shape[-1]),
+                             newshape=(-1, num_outputs),
                              ndim=2)
-    predict_data = T.clip(predict_data, eps, 1.0 - eps)
-    train_predict_cost = categorical_crossentropy(predictions=predict_data,
-                                                  targets=T.flatten(target_data, 1))
+    predict_data = predict_data - T.max(predict_data, axis=-1, keepdims=True)
+    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=-1, keepdims=True))
+    train_predict_cost = -T.sum(T.mul(one_hot_target_data, predict_data), axis=-1)
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
     train_model_cost = train_predict_cost.sum()/num_seqs
     train_frame_cost = train_predict_cost.sum()/target_mask.sum()
@@ -95,9 +99,13 @@ def set_network_trainer(input_data,
     # get network gradients
     network_grads = theano.grad(cost=train_model_cost + train_regularizer_cost,
                                 wrt=network_params)
-    network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
-                                                              max_norm=grad_max_norm,
-                                                              return_norm=True)
+
+    if grad_max_norm>0.:
+        network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
+                                                                  max_norm=grad_max_norm,
+                                                                  return_norm=True)
+    else:
+        network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
 
     # set updater
     train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
@@ -120,7 +128,12 @@ def set_network_predictor(input_data,
                           input_mask,
                           target_data,
                           target_mask,
+                          num_outputs,
                           network):
+    # get one hot target
+    one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
+                                                 nb_class= num_outputs,
+                                                 dtype=floatX)
 
     # get network output data
     predict_data = get_output(network, deterministic=True)
@@ -132,9 +145,10 @@ def set_network_predictor(input_data,
     predict_data = T.reshape(x=predict_data,
                              newshape=(-1, predict_data.shape[-1]),
                              ndim=2)
-    predict_data = T.clip(predict_data, eps, 1.0 - eps)
-    predict_cost = categorical_crossentropy(predictions=predict_data,
-                                            targets=T.flatten(target_data, 1))
+
+    predict_data = predict_data - T.max(predict_data, axis=-1, keepdims=True)
+    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=-1, keepdims=True))
+    predict_cost = -T.sum(T.mul(one_hot_target_data, predict_data), axis=-1)
     predict_cost = predict_cost*T.flatten(target_mask, 1)
     predict_cost = predict_cost.sum()/target_mask.sum()
 
@@ -234,6 +248,7 @@ def main(options):
                                                       input_mask=input_mask,
                                                       target_data=target_data,
                                                       target_mask=target_mask,
+                                                      num_outputs=options['num_outputs'],
                                                       network=network,
                                                       updater=options['updater'],
                                                       learning_rate=options['lr'],
@@ -246,22 +261,21 @@ def main(options):
                                        input_mask=input_mask,
                                        target_data=target_data,
                                        target_mask=target_mask,
+                                       num_outputs=options['num_outputs'],
                                        network=network)
 
 
     print 'Load data stream'
     train_datastream = get_datastream(path=options['data_path'],
-                                      which_set='train_si84',
-                                      batch_size=options['batch_size'])
-    valid_datastream = get_datastream(path=options['data_path'],
-                                      which_set='test_dev93',
-                                      batch_size=options['batch_size'])
+                                                  which_set='train_si84',
+                                                  batch_size=options['batch_size'])
 
     print 'Start training'
     evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
-    check_early_stop = 0
+    early_stop_flag = False
+    early_stop_cnt = 0
     total_batch_cnt = 0
-    train_flag = False
+
     try:
         # for each epoch
         for e_idx in range(options['num_epochs']):
@@ -269,9 +283,8 @@ def main(options):
             for b_idx, data in enumerate(train_datastream.get_epoch_iterator()):
                 total_batch_cnt += 1
                 if pretrain_total_batch_cnt>=total_batch_cnt:
-                    train_flag = False
                     continue
-                train_flag = True
+
                 # get input, target data
                 input_data = data[0].astype(floatX)
                 input_mask = data[1].astype(floatX)
@@ -301,40 +314,48 @@ def main(options):
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
 
-            if train_flag is False:
-                continue
+                # evaluation
+                if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
+                    train_eval_datastream = get_datastream(path=options['data_path'],
+                                                           which_set='train_si84',
+                                                           batch_size=options['eval_batch_size'])
+                    valid_eval_datastream = get_datastream(path=options['data_path'],
+                                                           which_set='test_dev93',
+                                                           batch_size=options['eval_batch_size'])
+                    train_nll, train_bpc, train_fer = network_evaluation(predict_fn,
+                                                                         train_eval_datastream)
+                    valid_nll, valid_bpc, valid_fer = network_evaluation(predict_fn,
+                                                                         valid_eval_datastream)
 
-            # evaluation
-            train_nll, train_bpc, train_per = network_evaluation(predict_fn,
-                                                                 train_datastream)
-            valid_nll, valid_bpc, valid_per = network_evaluation(predict_fn,
-                                                                 valid_datastream)
+                    # check over-fitting
+                    if valid_fer>evaluation_history[-1][1][2]:
+                        early_stop_cnt += 1.
+                    else:
+                        early_stop_cnt = 0.
+                        best_network_params_vals = get_model_param_values(network_params)
+                        pickle.dump(best_network_params_vals,
+                                    open(options['save_path'] + '_best_model.pkl', 'wb'))
 
-            # check over-fitting
-            if valid_per>evaluation_history[-1][1][2]:
-                check_early_stop += 1.
-            else:
-                check_early_stop = 0.
-                best_network_params_vals = get_model_param_values(network_params)
-                pickle.dump(best_network_params_vals,
-                            open(options['save_path'] + '_best_model.pkl', 'wb'))
+                    if early_stop_cnt>10:
+                        early_stop_flag = True
+                        break
 
-            if check_early_stop>10:
-                print('Training Early Stopped')
+                    # save results
+                    evaluation_history.append([[train_nll, train_bpc, train_fer],
+                                               [valid_nll, valid_bpc, valid_fer]])
+                    numpy.savez(options['save_path'] + '_eval_history',
+                                eval_history=evaluation_history)
+
+                # save network
+                if total_batch_cnt%options['train_save_freq'] == 0 and total_batch_cnt!=0:
+                    cur_network_params_val = get_model_param_values(network_params)
+                    cur_trainer_params_val = get_update_params_values(trainer_params)
+                    cur_total_batch_cnt = total_batch_cnt
+                    pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
+                                open(options['save_path'] + '_last_model.pkl', 'wb'))
+
+            if early_stop_flag:
                 break
-
-            # save results
-            evaluation_history.append([[train_nll, train_bpc, train_per],
-                                       [valid_nll, valid_bpc, valid_per]])
-            numpy.savez(options['save_path'] + '_eval_history',
-                        eval_history=evaluation_history)
-
-            # save network
-            cur_network_params_val = get_model_param_values(network_params)
-            cur_trainer_params_val = get_update_params_values(trainer_params)
-            cur_total_batch_cnt = total_batch_cnt
-            pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
-                        open(options['save_path'] + '_last_model.pkl', 'wb'))
 
     except KeyboardInterrupt:
         print 'Training Interrupted'
@@ -348,11 +369,26 @@ if __name__ == '__main__':
     from libs.lasagne.updates import adamax, nesterov_momentum, momentum
     parser = ArgumentParser()
 
+    parser.add_argument('-b', '--batch_size', action='store',help='batch size', default=1)
+    parser.add_argument('-n', '--num_layers', action='store',help='num of layers', default=2)
+    parser.add_argument('-l', '--learn_rate', action='store', help='learning rate', default=1)
+    parser.add_argument('-g', '--grad_norm', action='store', help='gradient norm', default=0.0)
+    parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
+    parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
+
+    args = parser.parse_args()
+    batch_size = int(args.batch_size)
+    num_layers = int(args.num_layers)
+    learn_rate= int(args.learn_rate)
+    grad_norm = float(args.grad_norm)
+    grad_clipping = float(args.grad_clipping)
+    gradient_steps = int(args.grad_steps)
+
     options = OrderedDict()
     options['num_inputs'] = 123
-    options['num_inner_units_list'] = [250]*2
-    options['num_factor_units_list'] = [125]*2
-    options['num_outer_units_list'] = [500]*2
+    options['num_inner_units_list'] = [250]*num_layers
+    options['num_factor_units_list'] = [125]*num_layers
+    options['num_outer_units_list'] = [500]*num_layers
     options['num_outputs'] = 3436
 
     options['dropout_ratio'] = 0.0
@@ -364,25 +400,43 @@ if __name__ == '__main__':
     options['learn_init'] = False
 
     options['updater'] = momentum
-    options['lr'] = 0.001
-    options['grad_norm'] = 1000000000.0
-    options['grad_clipping'] = 1.0
+    options['lr'] = 10**(-learn_rate)
+    options['grad_norm'] = grad_norm
+    options['grad_clipping'] = grad_clipping
+    options['gradient_steps'] = gradient_steps
     options['l2_lambda'] = 1e-5
 
-    options['batch_size'] = 16
+    options['batch_size'] = batch_size
+    options['eval_batch_size'] = 64
     options['num_epochs'] = 200
 
-    options['train_disp_freq'] = 100
+    options['train_disp_freq'] = 50
+    options['train_eval_freq'] = 500
     options['train_save_freq'] = 100
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
-    options['save_path'] = './wsj_gating_hyper_skip'
-    options['reload_model'] = None#'./wsj_gating_hyper_skip_last_model.pkl'
+
+    options['save_path'] = './wsj_gating_hyper_skip' + \
+                           '_lr' + str(int(learn_rate)) + \
+                           '_gn' + str(int(grad_norm)) + \
+                           '_gc' + str(int(grad_clipping)) + \
+                           '_gs' + str(int(gradient_steps)) + \
+                           '_nl' + str(int(num_layers)) + \
+                           '_b' + str(int(batch_size))
+
+
+    reload_path = options['save_path'] + '_last_model.pkl'
+
+    if os.path.exists(reload_path):
+        options['reload_model'] = reload_path
+    else:
+        options['reload_model'] = None
 
     for key, val in options.iteritems():
         print str(key), ': ', str(val)
 
     main(options)
+
 
 
 

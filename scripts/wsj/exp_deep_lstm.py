@@ -37,7 +37,8 @@ def build_network(input_data,
                   use_layer_norm=True,
                   peepholes=False,
                   learn_init=True,
-                  grad_clipping=0.0):
+                  grad_clipping=0.0,
+                  gradient_steps=-1):
 
     network = deep_bidir_lstm_model(input_var=input_data,
                                     mask_var=input_mask,
@@ -50,6 +51,7 @@ def build_network(input_data,
                                     peepholes=peepholes,
                                     learn_init=learn_init,
                                     grad_clipping=grad_clipping,
+                                    gradient_steps=gradient_steps,
                                     use_softmax=False)
     return network
 
@@ -219,7 +221,8 @@ def main(options):
                             use_layer_norm=options['use_layer_norm'],
                             peepholes=options['peepholes'],
                             learn_init=options['learn_init'],
-                            grad_clipping=options['grad_clipping'])
+                            grad_clipping=options['grad_clipping'],
+                            gradient_steps=options['gradient_steps'])
 
     network_params = get_all_params(network, trainable=True)
 
@@ -359,16 +362,20 @@ if __name__ == '__main__':
     from libs.lasagne.updates import momentum
     parser = ArgumentParser()
 
+    parser.add_argument('-b', '--batch_size', action='store',help='batch size', default=1)
     parser.add_argument('-n', '--num_layers', action='store',help='num of layers', default=5)
     parser.add_argument('-l', '--learn_rate', action='store', help='learning rate', default=1)
     parser.add_argument('-g', '--grad_norm', action='store', help='gradient norm', default=0.0)
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
+    parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
 
     args = parser.parse_args()
+    batch_size = int(args.batch_size)
     num_layers = int(args.num_layers)
     learn_rate= int(args.learn_rate)
     grad_norm = float(args.grad_norm)
     grad_clipping = float(args.grad_clipping)
+    gradient_steps = int(args.grad_steps)
 
     options = OrderedDict()
     options['num_inputs'] = 123
@@ -386,9 +393,10 @@ if __name__ == '__main__':
     options['lr'] = 10**(-learn_rate)
     options['grad_norm'] = grad_norm
     options['grad_clipping'] = grad_clipping
+    options['gradient_steps'] = gradient_steps
     options['l2_lambda'] = 1e-5
 
-    options['batch_size'] = 16
+    options['batch_size'] = batch_size
     options['eval_batch_size'] = 64
     options['num_epochs'] = 200
 
@@ -402,7 +410,9 @@ if __name__ == '__main__':
                            '_lr' + str(int(learn_rate)) + \
                            '_gn' + str(int(grad_norm)) + \
                            '_gc' + str(int(grad_clipping)) + \
-                           '_nl' + str(int(num_layers))
+                           '_gs' + str(int(gradient_steps)) + \
+                           '_nl' + str(int(num_layers)) + \
+                           '_b' + str(int(batch_size))
 
 
     reload_path = options['save_path'] + '_last_model.pkl'
