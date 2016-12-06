@@ -1,6 +1,7 @@
 import kaldi_io
 import numpy
 import h5py
+from fuel.datasets.hdf5 import H5PYDataset
 
 f = h5py.File('/u/songinch/song/data/speech/wsj_fbank123.h5', 'a')
 
@@ -11,7 +12,6 @@ features_shapes = f.create_dataset('features_shapes', (38230,2), dtype='int32', 
 features_shapes_labels = f.create_dataset('features_shapes_labels', (2,), dtype='S7')
 features.dims.create_scale(features_shapes, 'shapes')
 features.dims[0].attach_scale(features_shapes)
-features_shapes_labels
 features_shapes_labels[...] = ['frame'.encode('utf8'), 'feature'.encode('utf8')]
 features.dims.create_scale(features_shapes_labels, 'shape_labels')
 features.dims[0].attach_scale(features_shapes_labels)
@@ -32,6 +32,16 @@ uttids_ds.dims[0].label = 'batch'
 spks_ds = f.create_dataset('spks', (38230,), dtype=h5py.special_dtype(vlen=unicode), maxshape=(None,))
 spks_ds.dims[0].label = 'batch'
 
+ivectors = f.create_dataset('ivectors', (38230,), dtype=h5py.special_dtype(vlen=numpy.float32), maxshape=(None,))
+ivectors.dims[0].label = 'batch'
+ivectors_shapes = f.create_dataset('ivectors_shapes', (38230,2), dtype='int32', maxshape=(None,2))
+ivectors_shapes_labels = f.create_dataset('ivectors_shapes_labels', (2,), dtype='S7')
+ivectors.dims.create_scale(ivectors_shapes, 'shapes')
+ivectors.dims[0].attach_scale(ivectors_shapes)
+ivectors_shapes_labels[...] = ['frame'.encode('utf8'), 'feature'.encode('utf8')]
+ivectors.dims.create_scale(ivectors_shapes_labels, 'shape_labels')
+ivectors.dims[0].attach_scale(ivectors_shapes_labels)
+
 # Add target information
 tmp = [l.strip().split(None, 1) for l in open('exp/hyperud/all_targets.txt')]
 tmp_uttid = [(a, b.split()) for a, b in tmp]
@@ -46,7 +56,7 @@ uttids = [l.strip().split(None, 1)[0] for l in open('exp/hyperud/fbank41.scp')]
 for row_idx, uttid in enumerate(uttids):
     uttids_ds[row_idx] = uttid
 
-# Add uttid information
+# Add spk information
 utt2spk = [l.strip().split(None, 1)[1] for l in open('exp/hyperud/utt2spk')]
 for row_idx, spk in enumerate(utt2spk):
     spks_ds[row_idx] = spk
@@ -57,12 +67,18 @@ for row_idx, (uttid, value) in enumerate(reader):
     features_shapes[row_idx,:] = value.shape
     features[row_idx] = value.ravel()
 
+# Add ivectors
+reader = kaldi_io.SequentialBaseFloatMatrixReader('scp:exp/hyperud/ivectors_all.scp')
+for row_idx, (uttid, value) in enumerate(reader):
+    ivectors_shapes[row_idx,:] = value.shape
+    ivectors[row_idx] = value.ravel()
+
 # Split information
 split_dict = {
-        'train_si284': {'features': (0, 37394), 'targets': (0, 37394), 'uttids': (0, 37394), 'spks': (0, 37394)},
-        'train_si84': {'features': (0, 7138), 'targets': (0, 7138), 'uttids': (0, 7138), 'spks': (0, 7138)},
-        'test_eval92': {'features': (37394, 37394+333), 'targets': (37394, 37394+333), 'uttids': (37394, 37394+333), 'spks': (37394, 37394+333)},
-        'test_dev93': {'features': (37394+333, 37394+333+503), 'targets': (37394+333, 37394+333+503), 'uttids': (37394+333, 37394+333+503), 'spks': (37394+333, 37394+333+503)}
+        'train_si284': {'features': (0, 37394), 'targets': (0, 37394), 'ivectors': (0, 37394), 'uttids': (0, 37394), 'spks': (0, 37394)},
+        'train_si84': {'features': (0, 7138), 'targets': (0, 7138), 'ivectors': (0, 7138), 'uttids': (0, 7138), 'spks': (0, 7138)},
+        'test_eval92': {'features': (37394, 37394+333), 'targets': (37394, 37394+333), 'ivectors': (37394, 37394+333), 'uttids': (37394, 37394+333), 'spks': (37394, 37394+333)},
+        'test_dev93': {'features': (37394+333, 37394+333+503), 'targets': (37394+333, 37394+333+503), 'ivectors': (37394+333, 37394+333+503), 'uttids': (37394+333, 37394+333+503), 'spks': (37394+333, 37394+333+503)}
         }
 
 f.attrs['split'] = H5PYDataset.create_split_array(split_dict)
