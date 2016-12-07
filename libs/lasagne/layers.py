@@ -35,7 +35,7 @@ class SequenceDenseLayer(MergeLayer):
     def __init__(self,
                  incoming,
                  num_outputs,
-                 W=init.Normal(0.1),
+                 W=init.GlorotUniform(),
                  b=init.Constant(0.),
                  mask_input=None,
                  nonlinearity=nonlinearities.rectify,
