@@ -103,39 +103,34 @@ def main(options):
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0: 
                     show_status(options['save_path'], e_idx, total_batch_cnt, train_predict_cost, network_grads_norm, evaluation_history)
 
-                # evaluation
-                if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
-#                    train_nll, train_bpc, train_fer = network_evaluation(predict_fn,
-#                                                                         train_eval_datastream)
-                    valid_nll, valid_bpc, valid_fer = network_evaluation(predict_fn,
-                                                                         valid_eval_datastream)
+#            train_nll, train_bpc, train_fer = network_evaluation(predict_fn,
+#                                                                 train_eval_datastream)
+            valid_nll, valid_bpc, valid_fer = network_evaluation(predict_fn,
+                                                                 valid_eval_datastream)
 
-                    # check over-fitting
-                    if valid_fer>evaluation_history[-1][1][2]:
-                        early_stop_cnt += 1.
-                    else:
-                        early_stop_cnt = 0.
-                        best_network_params_vals = get_model_param_values(network_params)
-                        pickle.dump(best_network_params_vals,
-                                    open(options['save_path'] + '_best_model.pkl', 'wb'))
+            # check over-fitting
+            if valid_fer>evaluation_history[-1][1][2]:
+                early_stop_cnt += 1.
+            else:
+                early_stop_cnt = 0.
+                best_network_params_vals = get_model_param_values(network_params)
+                pickle.dump(best_network_params_vals,
+                            open(options['save_path'] + '_best_model.pkl', 'wb'))
 
-                    if early_stop_cnt>10:
-                        early_stop_flag = True
-                        break
-
-                    # save results
-                    evaluation_history.append([[None, None, None],
-                                               [valid_nll, valid_bpc, valid_fer]])
-                    numpy.savez(options['save_path'] + '_eval_history',
-                                eval_history=evaluation_history)
-
-                # save network
-                if total_batch_cnt%options['train_save_freq'] == 0 and total_batch_cnt!=0:
-                    print 'Saving the network'
-                    save_network(network_params, trainer_params, total_batch_cnt, options['save_path'])
-
-            if early_stop_flag:
+            if early_stop_cnt>10:
+                print('Training Early Stopped')
                 break
+
+            # save results
+            evaluation_history.append([[None, None, None],
+                                       [valid_nll, valid_bpc, valid_fer]])
+            numpy.savez(options['save_path'] + '_eval_history',
+                        eval_history=evaluation_history)
+
+            # save network
+            if total_batch_cnt%options['train_save_freq'] == 0 and total_batch_cnt!=0:
+                print 'Saving the network'
+                save_network(network_params, trainer_params, total_batch_cnt, options['save_path'])
  
     except KeyboardInterrupt:
         print 'Training Interrupted -- Saving the network and Finishing...'
@@ -158,8 +153,10 @@ if __name__ == '__main__':
     grad_clipping = float(args.grad_clipping)
     gradient_steps = int(args.grad_steps)
 
+    ivector_dim = 100
+
     options = OrderedDict()
-    options['num_inputs'] = 123
+    options['num_inputs'] = 123 + ivector_dim
     options['num_units_list'] = [args.num_nodes]*args.num_layers
     options['num_outputs'] = 3436
 
@@ -175,10 +172,11 @@ if __name__ == '__main__':
     options['grad_norm'] = grad_norm
     options['grad_clipping'] = grad_clipping
     options['gradient_steps'] = gradient_steps
-    options['l2_lambda'] = 1e-5
+    #options['l2_lambda'] = 1e-5
+    options['l2_lambda'] = 0.0
 
     options['batch_size'] = args.batch_size
-    options['eval_batch_size'] = 64
+    #options['eval_batch_size'] = 64
     options['num_epochs'] = 200
 
     options['train_disp_freq'] = 50

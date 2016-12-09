@@ -13,8 +13,6 @@ from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme
 from fuel.transformers import Padding, FilterSources
 
-from blocks.extensions.monitoring import DataStreamMonitoring
-
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
@@ -214,7 +212,7 @@ def network_evaluation(predict_fn,
 
     return total_nll, total_bpc, total_fer
 
-def save_network(network_params, trainer_parans, total_batch_cnt, save_path):
+def save_network(network_params, trainer_params, total_batch_cnt, save_path):
     cur_network_params_val = get_model_param_values(network_params)
     cur_trainer_params_val = get_update_params_values(trainer_params)
     cur_total_batch_cnt = total_batch_cnt
