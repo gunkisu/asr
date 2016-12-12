@@ -63,10 +63,11 @@ def main(options):
     print 'Load data stream'
     train_datastream = get_datastream(path=options['data_path'],
                                       which_set='train_si84',
-                                      batch_size=options['batch_size'])
-    valid_eval_datastream = get_datastream(path=options['data_path'],
+                                      batch_size=options['batch_size'], use_ivectors=options['use_ivectors'])
+    valid_eval_datastream = get_datastream_with_ivectors(path=options['data_path'],
                                       which_set='test_dev93',
-                                      batch_size=options['batch_size'])
+                                      batch_size=options['batch_size'], use_ivectors=options['use_ivectors'])
+
 
     print 'Start training'
     evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
@@ -147,6 +148,8 @@ if __name__ == '__main__':
     parser.add_argument('--grad-norm', action='store', help='gradient norm', default=0.0)
     parser.add_argument('--grad-clipping', action='store', help='gradient clipping', default=1.0)
     parser.add_argument('--grad-steps', action='store', help='gradient steps', default=-1)
+    parser.add_argument('--use-ivectors', action='store', help='use ivectors', default=True, type=bool)
+    parser.add_argument('--data-path', action='store', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
 
     args = parser.parse_args()
     grad_norm = float(args.grad_norm)
@@ -154,9 +157,11 @@ if __name__ == '__main__':
     gradient_steps = int(args.grad_steps)
 
     ivector_dim = 100
+    input_dim = 123
 
     options = OrderedDict()
-    options['num_inputs'] = 123 + ivector_dim
+    options['use_ivectors'] = args.use_ivectors
+    options['num_inputs'] = input_dim+ivector_dim if args.use_ivectors else input_dim
     options['num_units_list'] = [args.num_nodes]*args.num_layers
     options['num_outputs'] = 3436
 
@@ -183,11 +188,11 @@ if __name__ == '__main__':
     options['train_eval_freq'] = 500
     options['train_save_freq'] = 100
 
-    options['data_path'] = '/u/songinch/song/data/speech/wsj_fbank123.h5'
+    options['data_path'] = args.data_path
 
-    options['save_path'] = './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}'.format(
+    options['save_path'] = './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
             args.learn_rate, grad_norm, grad_clipping, gradient_steps, args.num_layers, args.num_nodes, 
-            args.batch_size)
+            args.batch_size, ivector_dim if args.use_ivectors else 0)
 
     reload_path = options['save_path'] + '_last_model.pkl'
 

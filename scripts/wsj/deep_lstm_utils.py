@@ -11,28 +11,49 @@ from lasagne.updates import total_norm_constraint
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme
-from fuel.transformers import Padding, FilterSources
+from fuel.transformers import Padding, FilterSources, AgnosticTransformer
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
-def get_datastream(path, which_set='train_si84', batch_size=1):
-    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    print path, which_set
-    iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
-    base_stream = DataStream(dataset=wsj_dataset,
-                             iteration_scheme=iterator_scheme)
-    fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
-    padded_stream = Padding(data_stream=fs)
-    return padded_stream
+from fuel.transformers import AgnosticTransformer
 
-def get_datastream_with_ivectors(path, which_set='train_si84', batch_size=1):
+class ConcatenateTransformer(AgnosticTransformer):
+    def __init__(self, data_stream, sources, new_source='concatenated', **kwargs):
+        if any(source not in data_stream.sources for source in sources):
+            raise ValueError("sources must all be contained in "
+                             "data_stream.sources")
+        self.new_source = '_'.join(sources)
+        if data_stream.axis_labels:
+            axis_labels = dict((source, labels) for (source, labels)
+                    in iteritems(data_stream.axis_labels)
+                        if source not in sources) 
+            axis_labels[self.new_source] = new_source
+            kwargs.setdefault('axis_labels', axis_labels)
+        
+        super(AgnosticTransformer, self).__init__(
+            data_stream=data_stream,
+            produces_examples=data_stream.produces_examples,
+            **kwargs)
+
+        new_sources = [s for s in data_stream.sources if s not in sources]
+        new_sources.append(self.new_source)
+        self.sources = tuple(new_sources)
+       
+    def transform_any(self, data):
+        raise NotImplementedError()
+
+def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=True):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     print path, which_set
     iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
-    fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
+    if use_ivectors:
+        fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
+        fs = ConcatenatedTransformer(fs, ['features', 'ivectors'])
+    else:
+        fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
     padded_stream = Padding(data_stream=fs)
     return padded_stream
 
@@ -167,7 +188,7 @@ def set_network_predictor(input_data,
 
     return predict_fn
 
-def network_evaluation(predict_fn,
+def eval_nete(predict_fn,
                        data_stream):
 
     data_iterator = data_stream.get_epoch_iterator()
@@ -222,14 +243,17 @@ def save_network(network_params, trainer_params, total_batch_cnt, save_path):
 
 def show_status(save_path, e_idx, total_batch_cnt, train_predict_cost, network_grads_norm, evaluation_history):
     model = save_path.split('/')[-1]
-    print '============================================================================================'
+#    print '============================================================================================'
+    print '--'
     print 'Model Name: {}'.format(model)
-    print '============================================================================================'
+#    print '============================================================================================'
     print 'Epoch: {}, Update: {}'.format(e_idx, total_batch_cnt)
-    print '--------------------------------------------------------------------------------------------'
+#    print '--------------------------------------------------------------------------------------------'
     print 'Prediction Cost: {}'.format(train_predict_cost)
     print 'Gradient Norm: {}'.format(network_grads_norm)
-    print '--------------------------------------------------------------------------------------------'
-    print '--------------------------------------------------------------------------------------------'
+#    print '--------------------------------------------------------------------------------------------'
+#    print '--------------------------------------------------------------------------------------------'
 #    print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
+    print '--'
+
