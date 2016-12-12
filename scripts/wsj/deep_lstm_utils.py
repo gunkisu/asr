@@ -14,38 +14,57 @@ from fuel.schemes import ShuffledScheme
 from fuel.transformers import Padding, FilterSources, AgnosticTransformer
 
 from six import iteritems
+import itertools
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
-from fuel.transformers import AgnosticTransformer
+from fuel.transformers import Transformer
 
-class ConcatenateTransformer(AgnosticTransformer):
+class ConcatenateTransformer(Transformer):
     def __init__(self, data_stream, concat_sources, new_source=None, **kwargs):
         if any(source not in data_stream.sources for source in concat_sources):
             raise ValueError("sources must all be contained in "
                              "data_stream.sources")
 
-        self.new_source = new_source if not new_source else '_'.join(concat_sources)
+        self.new_source = new_source if new_source else '_'.join(concat_sources)
         if data_stream.axis_labels:
             axis_labels = dict((source, labels) for (source, labels)
                     in iteritems(data_stream.axis_labels)
                         if source not in concat_sources) 
-            axis_labels[self.new_source] = 'concatenated source'
+            axis_labels[self.new_source] = 'concatenated source: {}'.format(concat_sources)
             kwargs.setdefault('axis_labels', axis_labels)
         
-        super(AgnosticTransformer, self).__init__(
+        super(ConcatenateTransformer, self).__init__(
             data_stream=data_stream,
             produces_examples=data_stream.produces_examples,
             **kwargs)
 
+        insert_pos = self.data_stream.sources.index(concat_sources[0])
         new_sources = [s for s in data_stream.sources if s not in concat_sources]
-        new_sources.append(self.new_source)
+        new_sources.insert(insert_pos, self.new_source)
         self.sources = tuple(new_sources)
         self.concat_sources = concat_sources
        
-    def transform_any(self, data):
-        raise NotImplementedError()
+    def transform_batch(self, batch):
+        trans_data = []
+        src_indices = [self.data_stream.sources.index(s) for s in self.concat_sources]
+        data_from_concat_sources = [batch[i] for i in src_indices]
+        for examples in itertools.izip(*data_from_concat_sources):
+            trans_data.append(numpy.concatenate(examples, axis=1))
+        insert_pos = self.data_stream.sources.index(self.concat_sources[0])
+        batch = [d for i, d in enumerate(batch) if i not in src_indices]
+        batch.insert(insert_pos, trans_data)
+        return numpy.asarray(batch)
+    
+    def transform_example(self, example):
+        src_indices = [self.data_stream.sources.index(s) for s in self.concat_sources]
+        data_from_concat_sources = tuple(example[i] for i in src_indices)
+        concat_data = numpy.concatenate(data_from_concat_sources, axis=1)
+        insert_pos = self.data_stream.sources.index(self.concat_sources[0])
+        example = [d for i, d in enumerate(example) if i not in src_indices]
+        example.insert(insert_pos, concat_data)
+        return example 
 
 def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=True):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
@@ -192,7 +211,7 @@ def set_network_predictor(input_data,
 
     return predict_fn
 
-def eval_nete(predict_fn,
+def eval_net(predict_fn,
                        data_stream):
 
     data_iterator = data_stream.get_epoch_iterator()

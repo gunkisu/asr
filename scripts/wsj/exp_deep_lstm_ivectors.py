@@ -104,9 +104,9 @@ def main(options):
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0: 
                     show_status(options['save_path'], e_idx, total_batch_cnt, train_predict_cost, network_grads_norm, evaluation_history)
 
-#            train_nll, train_bpc, train_fer = network_evaluation(predict_fn,
+#            train_nll, train_bpc, train_fer = eval_net(predict_fn,
 #                                                                 train_eval_datastream)
-            valid_nll, valid_bpc, valid_fer = network_evaluation(predict_fn,
+            valid_nll, valid_bpc, valid_fer = eval_net(predict_fn,
                                                                  valid_eval_datastream)
 
             # check over-fitting
