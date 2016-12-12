@@ -13,22 +13,25 @@ from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme
 from fuel.transformers import Padding, FilterSources, AgnosticTransformer
 
+from six import iteritems
+
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
 from fuel.transformers import AgnosticTransformer
 
 class ConcatenateTransformer(AgnosticTransformer):
-    def __init__(self, data_stream, sources, new_source='concatenated', **kwargs):
-        if any(source not in data_stream.sources for source in sources):
+    def __init__(self, data_stream, concat_sources, new_source=None, **kwargs):
+        if any(source not in data_stream.sources for source in concat_sources):
             raise ValueError("sources must all be contained in "
                              "data_stream.sources")
-        self.new_source = '_'.join(sources)
+
+        self.new_source = new_source if not new_source else '_'.join(concat_sources)
         if data_stream.axis_labels:
             axis_labels = dict((source, labels) for (source, labels)
                     in iteritems(data_stream.axis_labels)
-                        if source not in sources) 
-            axis_labels[self.new_source] = new_source
+                        if source not in concat_sources) 
+            axis_labels[self.new_source] = 'concatenated source'
             kwargs.setdefault('axis_labels', axis_labels)
         
         super(AgnosticTransformer, self).__init__(
@@ -36,9 +39,10 @@ class ConcatenateTransformer(AgnosticTransformer):
             produces_examples=data_stream.produces_examples,
             **kwargs)
 
-        new_sources = [s for s in data_stream.sources if s not in sources]
+        new_sources = [s for s in data_stream.sources if s not in concat_sources]
         new_sources.append(self.new_source)
         self.sources = tuple(new_sources)
+        self.concat_sources = concat_sources
        
     def transform_any(self, data):
         raise NotImplementedError()
@@ -51,7 +55,7 @@ def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=True
                              iteration_scheme=iterator_scheme)
     if use_ivectors:
         fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
-        fs = ConcatenatedTransformer(fs, ['features', 'ivectors'])
+        fs = ConcatenateTransformer(fs, ['features', 'ivectors'])
     else:
         fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
     padded_stream = Padding(data_stream=fs)
