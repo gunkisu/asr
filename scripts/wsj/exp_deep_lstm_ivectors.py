@@ -64,7 +64,7 @@ def main(options):
     train_datastream = get_datastream(path=options['data_path'],
                                       which_set='train_si84',
                                       batch_size=options['batch_size'], use_ivectors=options['use_ivectors'])
-    valid_eval_datastream = get_datastreams(path=options['data_path'],
+    valid_eval_datastream = get_datastream(path=options['data_path'],
                                       which_set='test_dev93',
                                       batch_size=options['batch_size'], use_ivectors=options['use_ivectors'])
 
@@ -148,7 +148,7 @@ if __name__ == '__main__':
     parser.add_argument('--grad-norm', action='store', help='gradient norm', default=0.0)
     parser.add_argument('--grad-clipping', action='store', help='gradient clipping', default=1.0)
     parser.add_argument('--grad-steps', action='store', help='gradient steps', default=-1)
-    parser.add_argument('--use-ivectors', action='store', help='use ivectors', default=True, type=bool)
+    parser.add_argument('--use-ivectors', action='store_true', help='use ivectors')
     parser.add_argument('--data-path', action='store', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
 
     args = parser.parse_args()

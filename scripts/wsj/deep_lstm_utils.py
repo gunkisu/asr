@@ -55,7 +55,7 @@ def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=True
                              iteration_scheme=iterator_scheme)
     if use_ivectors:
         fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
-        fs = ConcatenateTransformer(fs, ['features', 'ivectors'])
+        fs = ConcatenateTransformer(fs, ['features', 'ivectors'], 'features')
     else:
         fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
     padded_stream = Padding(data_stream=fs)
