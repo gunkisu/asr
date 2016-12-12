@@ -64,7 +64,7 @@ def main(options):
     train_datastream = get_datastream(path=options['data_path'],
                                       which_set='train_si84',
                                       batch_size=options['batch_size'], use_ivectors=options['use_ivectors'])
-    valid_eval_datastream = get_datastream_with_ivectors(path=options['data_path'],
+    valid_eval_datastream = get_datastreams(path=options['data_path'],
                                       which_set='test_dev93',
                                       batch_size=options['batch_size'], use_ivectors=options['use_ivectors'])
 
