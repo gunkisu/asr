@@ -138,7 +138,7 @@ def set_network_predictor(input_data,
     predict_data = get_output(network, deterministic=True)
 
     # get prediction index
-    predict_idx = T.argmax(T.exp(predict_data), axis=-1)
+    predict_idx = T.argmax(predict_data, axis=-1)
 
     # get prediction cost
     predict_data = T.reshape(x=predict_data,
@@ -268,7 +268,7 @@ def main(options):
 
     print 'Start training'
     if os.path.exists(options['save_path'] + '_eval_history.npz'):
-        evaluation_history = numpy.load(options['save_path'] + '_eval_history.npz')['eval_history']
+        evaluation_history = numpy.load(options['save_path'] + '_eval_history.npz')['eval_history'].tolist()
     else:
         evaluation_history = [[[10.0, 10.0, 1.0], [10.0, 10.0, 1.0]]]
     early_stop_flag = False
@@ -302,7 +302,7 @@ def main(options):
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
-                    best_idx = evaluation_history[:, 1, 2].argmin()
+                    best_idx = numpy.asarray(evaluation_history[:, 1, 2]).argmin()
                     print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
                     print '============================================================================================'
@@ -330,7 +330,7 @@ def main(options):
                                                                          valid_eval_datastream)
 
                     # check over-fitting
-                    if valid_fer>evaluation_history[:, 1, 2].min():
+                    if valid_fer>numpy.asarray(evaluation_history[:, 1, 2]).min():
                         early_stop_cnt += 1.
                     else:
                         early_stop_cnt = 0.
