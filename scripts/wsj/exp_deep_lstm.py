@@ -267,7 +267,10 @@ def main(options):
                                       batch_size=options['batch_size'])
 
     print 'Start training'
-    evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
+    if os.path.exists(options['save_path'] + '_eval_history.npz'):
+        evaluation_history = numpy.load(options['save_path'] + '_eval_history.npz')['eval_history']
+    else:
+        evaluation_history = [[[10.0, 10.0, 1.0], [10.0, 10.0, 1.0]]]
     early_stop_flag = False
     early_stop_cnt = 0
     total_batch_cnt = 0
@@ -309,6 +312,8 @@ def main(options):
                     print '--------------------------------------------------------------------------------------------'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
+                    print '--------------------------------------------------------------------------------------------'
+                    print 'Best NLL: ', str(evaluation_history[:, 1, 0].min()), ', BPC: ', str(evaluation_history[:, 1, 1].min()), ', FER: ', str(evaluation_history[:, 1, 2].min())
 
                 # evaluation
                 if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
@@ -324,7 +329,7 @@ def main(options):
                                                                          valid_eval_datastream)
 
                     # check over-fitting
-                    if valid_fer>evaluation_history[-1][1][2]:
+                    if valid_fer>evaluation_history[:, 1, 2].min():
                         early_stop_cnt += 1.
                     else:
                         early_stop_cnt = 0.
