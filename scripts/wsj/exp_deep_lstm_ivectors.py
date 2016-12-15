@@ -4,7 +4,7 @@ import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
 
-from deep_lstm_utils import *
+from libs.deep_lstm_utils import *
 
 def main(options):
     print 'Build and compile network'
