@@ -8,6 +8,7 @@ from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.updates import total_norm_constraint
+from lasagne.random import set_rng
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
@@ -16,6 +17,8 @@ from fuel.transformers import Padding, FilterSources
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
+
+set_rng(numpy.random.RandomState(111))
 
 def get_datastream(path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
@@ -368,6 +371,7 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--grad_norm', action='store', help='gradient norm', default=0.0)
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
     parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
+    parser.add_argument('-w', '--weight_noise', action='store', help='weight noise', default=0.0)
 
     args = parser.parse_args()
     batch_size = int(args.batch_size)
@@ -376,6 +380,7 @@ if __name__ == '__main__':
     grad_norm = float(args.grad_norm)
     grad_clipping = float(args.grad_clipping)
     gradient_steps = int(args.grad_steps)
+    weight_noise = float(args.weight_noise)
 
     options = OrderedDict()
     options['num_inputs'] = 123
@@ -383,7 +388,7 @@ if __name__ == '__main__':
     options['num_outputs'] = 3436
 
     options['dropout_ratio'] = 0.0
-    options['weight_noise'] = 0.0
+    options['weight_noise'] = weight_noise
     options['use_layer_norm'] = False
 
     options['peepholes'] = False
