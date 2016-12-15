@@ -261,7 +261,7 @@ def save_network(network_params, trainer_params, total_batch_cnt, save_path):
     cur_trainer_params_val = get_update_params_values(trainer_params)
     cur_total_batch_cnt = total_batch_cnt
     pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
-                open(save_path + '_last_model.pkl', 'wb'))
+                open(save_path, 'wb'))
 
 
 def show_status(save_path, e_idx, total_batch_cnt, train_predict_cost, network_grads_norm, evaluation_history):
