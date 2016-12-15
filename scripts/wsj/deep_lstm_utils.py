@@ -2,7 +2,7 @@ import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
 from models.deep_bidir_lstm import deep_bidir_lstm_model
-from libs.lasagne.utils import get_model_param_values, get_update_params_values
+from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2

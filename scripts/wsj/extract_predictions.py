@@ -4,12 +4,12 @@ from theano import tensor as T
 from collections import OrderedDict
 from models.baseline import deep_bidir_lstm_model
 from lasagne.layers import get_output, get_all_params
-from libs.lasagne.utils import get_model_param_values, get_update_params_values
+from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
 from fuel.schemes import SequentialScheme
 from fuel.transformers import Padding, FilterSources
-from libs.lasagne.updates import momentum
+from libs.lasagne_libs.updates import momentum
 from libs.param_utils import set_model_param_value
 
 import kaldi_io

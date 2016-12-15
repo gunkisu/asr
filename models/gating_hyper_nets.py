@@ -1,7 +1,7 @@
 from lasagne import nonlinearities
-from libs.lasagne.layers import SequenceDenseLayer
+from libs.lasagne_libs.layers import SequenceDenseLayer
 from lasagne.layers import InputLayer, DropoutLayer, ConcatLayer, SliceLayer
-from libs.lasagne.hyper_layers import GatingHyperLSTMLayer
+from libs.lasagne_libs.hyper_layers import GatingHyperLSTMLayer
 
 def deep_gating_hyper_model(input_var,
                             mask_var,

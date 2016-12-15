@@ -1,7 +1,7 @@
 import numpy
 from lasagne import init, nonlinearities
 from lasagne.layers import Gate, ConcatLayer
-from libs.lasagne.layers import LSTMLayer
+from libs.lasagne_libs.layers import LSTMLayer
 
 
 def BidirLSTMBlock(data_layer,

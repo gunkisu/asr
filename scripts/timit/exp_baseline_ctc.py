@@ -8,8 +8,8 @@ from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from picklable_itertools import groupby
 from lasagne.updates import total_norm_constraint
-from libs.lasagne.utils import get_model_param_values, get_update_params_values
-from libs.lasagne.updates import adamax, nesterov_momentum, adam
+from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
+from libs.lasagne_libs.updates import adamax, nesterov_momentum, adam
 from libs.ctc_utils import pseudo_cost as ctc_cost
 from libs.ctc_utils import ctc_strip
 from libs.eval_utils import Evaluation

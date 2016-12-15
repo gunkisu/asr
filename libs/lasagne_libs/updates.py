@@ -51,7 +51,7 @@ def get_or_compute_grads(loss_or_grads, params):
     if any(not isinstance(p, theano.compile.SharedVariable) for p in params):
         raise ValueError("params must contain shared variables only. If it "
                          "contains arbitrary parameter expressions, then "
-                         "lasagne.utils.collect_shared_vars() may help you.")
+                         "lasagne_libs.utils.collect_shared_vars() may help you.")
     if isinstance(loss_or_grads, list):
         if not len(loss_or_grads) == len(params):
             raise ValueError("Got %d gradient expressions for %d parameters" %
@@ -740,7 +740,7 @@ def norm_constraint(tensor_var, max_norm, norm_axes=None, epsilon=1e-7):
     >>> func = theano.function([], [], updates=[(param, update)])
     >>> # Apply constrained update
     >>> _ = func()
-    >>> from lasagne.utils import compute_norms
+    >>> from lasagne_libs.utils import compute_norms
     >>> norms = compute_norms(param.get_value())
     >>> np.isclose(np.max(norms), 10)
     True
@@ -810,16 +810,16 @@ def total_norm_constraint(tensor_vars, max_norm, epsilon=1e-7,
 
     Examples
     --------
-    >>> from lasagne.layers import InputLayer, DenseLayer
-    >>> import lasagne
-    >>> from lasagne.updates import sgd, total_norm_constraint
+    >>> from lasagne_libs.layers import InputLayer, DenseLayer
+    >>> import lasagne_libs
+    >>> from lasagne_libs.updates import sgd, total_norm_constraint
     >>> x = T.matrix()
     >>> y = T.ivector()
     >>> l_in = InputLayer((5, 10))
     >>> l1 = DenseLayer(l_in, num_units=7, nonlinearity=T.nnet.softmax)
-    >>> output = lasagne.layers.get_output(l1, x)
+    >>> output = lasagne_libs.layers.get_output(l1, x)
     >>> cost = T.mean(T.nnet.categorical_crossentropy(output, y))
-    >>> all_params = lasagne.layers.get_all_params(l1)
+    >>> all_params = lasagne_libs.layers.get_all_params(l1)
     >>> all_grads = T.grad(cost, all_params)
     >>> scaled_grads = total_norm_constraint(all_grads, 5)
     >>> updates = sgd(scaled_grads, all_params, learning_rate=0.1)

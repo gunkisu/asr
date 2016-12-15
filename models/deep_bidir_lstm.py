@@ -2,8 +2,8 @@ from lasagne import nonlinearities
 from lasagne.layers import (InputLayer,
                             DropoutLayer,
                             ConcatLayer)
-from libs.lasagne.layers import SequenceDenseLayer
-from libs.lasagne.layers import LSTMLayer
+from libs.lasagne_libs.layers import SequenceDenseLayer
+from libs.lasagne_libs.layers import LSTMLayer
 
 def deep_bidir_lstm_model(input_var,
                           mask_var,

@@ -133,7 +133,7 @@ def main(options):
         save_network(network_params, trainer_params, total_batch_cnt, options['save_path'])
 
 if __name__ == '__main__':
-    from libs.lasagne.updates import momentum
+    from libs.lasagne_libs.updates import momentum
     parser = ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--batch-size', action='store',help='batch size', default=1, type=int)
