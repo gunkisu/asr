@@ -302,6 +302,7 @@ def main(options):
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
+                    best_idx = evaluation_history[:, 1, 2].argmin()
                     print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
                     print '============================================================================================'
@@ -313,7 +314,7 @@ def main(options):
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
                     print '--------------------------------------------------------------------------------------------'
-                    print 'Best NLL: ', str(evaluation_history[:, 1, 0].min()), ', BPC: ', str(evaluation_history[:, 1, 1].min()), ', FER: ', str(evaluation_history[:, 1, 2].min())
+                    print 'Best NLL: ', str(evaluation_history[best_idx, 1, 0]), ', BPC: ', str(evaluation_history[best_idx, 1, 1]), ', FER: ', str(evaluation_history[best_idx, 1, 2])
 
                 # evaluation
                 if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
@@ -372,7 +373,7 @@ if __name__ == '__main__':
 
     parser.add_argument('-b', '--batch_size', action='store',help='batch size', default=1)
     parser.add_argument('-n', '--num_layers', action='store',help='num of layers', default=5)
-    parser.add_argument('-l', '--learn_rate', action='store', help='learning rate', default=1)
+    parser.add_argument('-l', '--learn_rate', action='store', help='learning rate', default=4)
     parser.add_argument('-g', '--grad_norm', action='store', help='gradient norm', default=0.0)
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
     parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
