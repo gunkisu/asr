@@ -302,7 +302,7 @@ def main(options):
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
-                    best_idx = numpy.asarray(evaluation_history[:, 1, 2]).argmin()
+                    best_idx = numpy.asarray(evaluation_history)[:, 1, 2].argmin()
                     print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
                     print '============================================================================================'
@@ -314,7 +314,7 @@ def main(options):
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
                     print '--------------------------------------------------------------------------------------------'
-                    print 'Best NLL: ', str(evaluation_history[best_idx, 1, 0]), ', BPC: ', str(evaluation_history[best_idx, 1, 1]), ', FER: ', str(evaluation_history[best_idx, 1, 2])
+                    print 'Best NLL: ', str(evaluation_history[best_idx][1][0]), ', BPC: ', str(evaluation_history[best_idx][1][1]), ', FER: ', str(evaluation_history[best_idx][1][2])
 
                 # evaluation
                 if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
@@ -330,7 +330,7 @@ def main(options):
                                                                          valid_eval_datastream)
 
                     # check over-fitting
-                    if valid_fer>numpy.asarray(evaluation_history[:, 1, 2]).min():
+                    if valid_fer>numpy.asarray(evaluation_history)[:, 1, 2].min():
                         early_stop_cnt += 1.
                     else:
                         early_stop_cnt = 0.
