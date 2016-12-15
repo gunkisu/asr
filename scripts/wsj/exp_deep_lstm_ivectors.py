@@ -114,9 +114,7 @@ def main(options):
                 early_stop_cnt += 1.
             else:
                 early_stop_cnt = 0.
-                best_network_params_vals = get_model_param_values(network_params)
-                pickle.dump(best_network_params_vals,
-                            open(options['save_path'] + '_best_model.pkl', 'wb'))
+                save_network(network_params, trainer_params, total_batch_cnt, options['save_path']+'_best_model.pkl') 
 
             if early_stop_cnt>10:
                 print('Training Early Stopped')
@@ -128,10 +126,7 @@ def main(options):
             numpy.savez(options['save_path'] + '_eval_history',
                         eval_history=evaluation_history)
 
-            # save network
-            if total_batch_cnt%options['train_save_freq'] == 0 and total_batch_cnt!=0:
-                print 'Saving the network'
-                save_network(network_params, trainer_params, total_batch_cnt, options['save_path'])
+            save_network(network_params, trainer_params, total_batch_cnt, options['save_path'] + '_last_model.pkl')
  
     except KeyboardInterrupt:
         print 'Training Interrupted -- Saving the network and Finishing...'
@@ -184,9 +179,9 @@ if __name__ == '__main__':
     #options['eval_batch_size'] = 64
     options['num_epochs'] = 200
 
-    options['train_disp_freq'] = 50
-    options['train_eval_freq'] = 500
-    options['train_save_freq'] = 100
+    options['train_disp_freq'] = 100
+    #options['train_eval_freq'] = 500
+    #options['train_save_freq'] = 100
 
     options['data_path'] = args.data_path
 
