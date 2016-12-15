@@ -391,7 +391,7 @@ if __name__ == '__main__':
     options['weight_noise'] = weight_noise
     options['use_layer_norm'] = False
 
-    options['peepholes'] = False
+    options['peepholes'] = True
     options['learn_init'] = False
 
     options['updater'] = momentum
