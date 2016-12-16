@@ -378,6 +378,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
     parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
     parser.add_argument('-w', '--weight_noise', action='store', help='weight noise', default=0.0)
+    parser.add_argument('-p', '--peepholes', action='store', help='peepholes', default=1)
 
     args = parser.parse_args()
     batch_size = int(args.batch_size)
@@ -387,6 +388,7 @@ if __name__ == '__main__':
     grad_clipping = float(args.grad_clipping)
     gradient_steps = int(args.grad_steps)
     weight_noise = float(args.weight_noise)
+    peepholes = int(args.peepholes)
 
     options = OrderedDict()
     options['num_inputs'] = 123
@@ -397,7 +399,7 @@ if __name__ == '__main__':
     options['weight_noise'] = weight_noise
     options['use_layer_norm'] = False
 
-    options['peepholes'] = True
+    options['peepholes'] = True if peepholes==1 else False
     options['learn_init'] = False
 
     options['updater'] = momentum
@@ -423,6 +425,7 @@ if __name__ == '__main__':
                            '_gc' + str(int(grad_clipping)) + \
                            '_gs' + str(int(gradient_steps)) + \
                            '_nl' + str(int(num_layers)) + \
+                           '_p' + str(int(peepholes)) + \
                            '_b' + str(int(batch_size))
 
 
