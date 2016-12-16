@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
-from models.gating_hyper_nets import deep_gating_hyper_model
+from models.gating_hyper_nets import deep_gating_external_hyper_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
@@ -33,7 +33,7 @@ def get_datastream(path, which_set='train_si84', batch_size=1):
 def build_network(input_data,
                   input_mask,
                   num_inputs,
-                  num_inner_units_list,
+                  num_hyper_units,
                   num_factor_units_list,
                   num_outer_units_list,
                   num_outputs,
@@ -45,21 +45,21 @@ def build_network(input_data,
                   learn_init=True,
                   grad_clipping=0.0):
 
-    network = deep_gating_hyper_model(input_var=input_data,
-                                      mask_var=input_mask,
-                                      num_inputs=num_inputs,
-                                      num_inner_units_list=num_inner_units_list,
-                                      num_factor_units_list=num_factor_units_list,
-                                      num_outer_units_list=num_outer_units_list,
-                                      num_outputs=num_outputs,
-                                      gating_nonlinearity=gating_nonlinearity,
-                                      dropout_ratio=dropout_ratio,
-                                      weight_noise=weight_noise,
-                                      use_layer_norm=use_layer_norm,
-                                      peepholes=peepholes,
-                                      learn_init=learn_init,
-                                      grad_clipping=grad_clipping,
-                                      use_softmax=False)
+    network = deep_gating_external_hyper_model(input_var=input_data,
+                                               mask_var=input_mask,
+                                               num_inputs=num_inputs,
+                                               num_hyper_units=num_hyper_units,
+                                               num_factor_units_list=num_factor_units_list,
+                                               num_outer_units_list=num_outer_units_list,
+                                               num_outputs=num_outputs,
+                                               gating_nonlinearity=gating_nonlinearity,
+                                               dropout_ratio=dropout_ratio,
+                                               weight_noise=weight_noise,
+                                               use_layer_norm=use_layer_norm,
+                                               peepholes=peepholes,
+                                               learn_init=learn_init,
+                                               grad_clipping=grad_clipping,
+                                               use_softmax=False)
     return network
 
 def set_network_trainer(input_data,
@@ -222,7 +222,7 @@ def main(options):
     network = build_network(input_data=input_data,
                             input_mask=input_mask,
                             num_inputs=options['num_inputs'],
-                            num_inner_units_list=options['num_inner_units_list'],
+                            num_hyper_units=options['num_hyper_units'],
                             num_factor_units_list=options['num_factor_units_list'],
                             num_outer_units_list=options['num_outer_units_list'],
                             num_outputs=options['num_outputs'],
@@ -399,7 +399,7 @@ if __name__ == '__main__':
 
     options = OrderedDict()
     options['num_inputs'] = 123
-    options['num_inner_units_list'] = [500]*num_layers
+    options['num_hyper_units'] = 125
     options['num_factor_units_list'] = [125]*num_layers
     options['num_outer_units_list'] = [500]*num_layers
     options['num_outputs'] = 3436
@@ -429,7 +429,7 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
 
-    options['save_path'] = './wsj_gating_hyper' + \
+    options['save_path'] = './wsj_gating_hyper_external' + \
                            '_lr' + str(int(learn_rate)) + \
                            '_gn' + str(int(grad_norm)) + \
                            '_gc' + str(int(grad_clipping)) + \
