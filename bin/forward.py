@@ -39,7 +39,7 @@ def main(args):
                             peepholes=not args.no_peepholes,
                             learn_init=args.learn_init,
                             grad_clipping=args.grad_clipping,
-                            gradient_steps=args.grad_steps)
+                            gradient_steps=args.grad_steps, use_softmax=True)
     network_params = get_all_params(network, trainable=True)
 
     print('Loading Parameters...')

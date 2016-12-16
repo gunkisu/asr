@@ -143,7 +143,7 @@ def build_network(input_data,
                   peepholes,
                   learn_init,
                   grad_clipping,
-                  gradient_steps):
+                  gradient_steps, use_softmax=False):
 
     network = deep_bidir_lstm_model(input_var=input_data,
                                     mask_var=input_mask,
@@ -157,7 +157,7 @@ def build_network(input_data,
                                     learn_init=learn_init,
                                     grad_clipping=grad_clipping,
                                     gradient_steps=gradient_steps,
-                                    use_softmax=True)
+                                    use_softmax=use_softmax)
     return network
 
 def set_network_trainer(input_data,
