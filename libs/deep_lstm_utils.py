@@ -1,9 +1,7 @@
+import argparse
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
-from models.deep_bidir_lstm import deep_bidir_lstm_model
-from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
-from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.updates import total_norm_constraint
@@ -15,6 +13,10 @@ from fuel.transformers import Padding, FilterSources, AgnosticTransformer
 
 from six import iteritems
 import itertools
+
+from models.deep_bidir_lstm import deep_bidir_lstm_model
+from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
+from libs.param_utils import set_model_param_value
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
@@ -65,6 +67,21 @@ class ConcatenateTransformer(Transformer):
         example = [d for i, d in enumerate(example) if i not in src_indices]
         example.insert(insert_pos, concat_data)
         return example 
+
+def get_arg_parser():
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument('--batch-size', action='store',help='batch size', default=1, type=int)
+    parser.add_argument('--num-nodes', action='store',help='num of nodes', default=500, type=int)
+    parser.add_argument('--num-layers', action='store',help='num of layers', default=5, type=int)
+    parser.add_argument('--learn-rate', action='store', help='learning rate', default=0.0001, type=float)
+    parser.add_argument('--grad-norm', action='store', help='gradient norm', default=0.0)
+    parser.add_argument('--grad-clipping', action='store', help='gradient clipping', default=1.0)
+    parser.add_argument('--grad-steps', action='store', help='gradient steps', default=-1)
+    parser.add_argument('--use-ivectors', action='store_true', help='use ivectors')
+    parser.add_argument('--data-path', action='store', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
+
+    return parser
 
 def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=True):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))

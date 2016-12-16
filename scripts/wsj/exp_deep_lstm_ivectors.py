@@ -1,10 +1,9 @@
-from argparse import ArgumentParser
-import argparse
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
 
 from libs.deep_lstm_utils import *
+from libs.lasagne_libs.updates import momentum
 
 def main(options):
     print 'Build and compile network'
@@ -133,18 +132,7 @@ def main(options):
         save_network(network_params, trainer_params, total_batch_cnt, options['save_path'])
 
 if __name__ == '__main__':
-    from libs.lasagne_libs.updates import momentum
-    parser = ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    parser.add_argument('--batch-size', action='store',help='batch size', default=1, type=int)
-    parser.add_argument('--num-nodes', action='store',help='num of nodes', default=500, type=int)
-    parser.add_argument('--num-layers', action='store',help='num of layers', default=5, type=int)
-    parser.add_argument('--learn-rate', action='store', help='learning rate', default=0.0001, type=float)
-    parser.add_argument('--grad-norm', action='store', help='gradient norm', default=0.0)
-    parser.add_argument('--grad-clipping', action='store', help='gradient clipping', default=1.0)
-    parser.add_argument('--grad-steps', action='store', help='gradient steps', default=-1)
-    parser.add_argument('--use-ivectors', action='store_true', help='use ivectors')
-    parser.add_argument('--data-path', action='store', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
+    parser = get_arg_parser()
 
     args = parser.parse_args()
     grad_norm = float(args.grad_norm)
