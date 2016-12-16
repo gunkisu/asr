@@ -302,7 +302,7 @@ def main(options):
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
-                    best_idx = numpy.asarray(evaluation_history[:, 1, 2]).argmin()
+                    best_idx = numpy.asarray(evaluation_history)[:, 1, 2].argmin()
                     print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
                     print '============================================================================================'
@@ -314,7 +314,7 @@ def main(options):
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
                     print '--------------------------------------------------------------------------------------------'
-                    print 'Best NLL: ', str(evaluation_history[best_idx, 1, 0]), ', BPC: ', str(evaluation_history[best_idx, 1, 1]), ', FER: ', str(evaluation_history[best_idx, 1, 2])
+                    print 'Best NLL: ', str(evaluation_history[best_idx][1][0]), ', BPC: ', str(evaluation_history[best_idx][1][1]), ', FER: ', str(evaluation_history[best_idx][1][2])
 
                 # evaluation
                 if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
@@ -330,7 +330,7 @@ def main(options):
                                                                          valid_eval_datastream)
 
                     # check over-fitting
-                    if valid_fer>numpy.asarray(evaluation_history[:, 1, 2]).min():
+                    if valid_fer>numpy.asarray(evaluation_history)[:, 1, 2].min():
                         early_stop_cnt += 1.
                     else:
                         early_stop_cnt = 0.
@@ -378,6 +378,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
     parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
     parser.add_argument('-w', '--weight_noise', action='store', help='weight noise', default=0.0)
+    parser.add_argument('-p', '--peepholes', action='store', help='peepholes', default=1)
 
     args = parser.parse_args()
     batch_size = int(args.batch_size)
@@ -387,6 +388,7 @@ if __name__ == '__main__':
     grad_clipping = float(args.grad_clipping)
     gradient_steps = int(args.grad_steps)
     weight_noise = float(args.weight_noise)
+    peepholes = int(args.peepholes)
 
     options = OrderedDict()
     options['num_inputs'] = 123
@@ -397,7 +399,7 @@ if __name__ == '__main__':
     options['weight_noise'] = weight_noise
     options['use_layer_norm'] = False
 
-    options['peepholes'] = True
+    options['peepholes'] = True if peepholes==1 else False
     options['learn_init'] = False
 
     options['updater'] = momentum
@@ -423,6 +425,7 @@ if __name__ == '__main__':
                            '_gc' + str(int(grad_clipping)) + \
                            '_gs' + str(int(gradient_steps)) + \
                            '_nl' + str(int(num_layers)) + \
+                           '_p' + str(int(peepholes)) + \
                            '_b' + str(int(batch_size))
 
 
