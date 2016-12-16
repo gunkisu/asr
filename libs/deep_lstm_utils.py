@@ -8,7 +8,7 @@ from lasagne.updates import total_norm_constraint
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
-from fuel.schemes import ShuffledScheme
+from fuel.schemes import ShuffledScheme, SequentialScheme
 from fuel.transformers import Padding, FilterSources, AgnosticTransformer
 
 from six import iteritems
@@ -83,7 +83,7 @@ def get_arg_parser():
     parser.add_argument('--input-dim', help='input dimension', default=123, type=int)
     parser.add_argument('--output-dim', help='output dimension', default=3436, type=int)
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
-    parser.add_argument('--no-peepholes', help='do not use peephole connections', action='store_false')
+    parser.add_argument('--no-peepholes', help='do not use peephole connections', action='store_true')
     parser.add_argument('--dropout-ratio', help='dropout ratio', default=0.0, type=float)
     parser.add_argument('--weight-noise', help='weight noise', default=0.0, type=float)
     parser.add_argument('--l2-lambda', help='l2 regularizer', default=0.0, type=float)
@@ -95,13 +95,17 @@ def get_arg_parser():
 
     return parser
 
-def get_feat_stream(path, which_set='test_eval92', batch_size=1):
+def get_feat_stream(path, which_set='test_eval92', batch_size=1, use_ivectors=False):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     print(path, which_set)
     iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
-    fs = FilterSources(data_stream=base_stream, sources=['features'])
+    if use_ivectors:
+        fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors'])
+        fs = ConcatenateTransformer(fs, ['features', 'ivectors'], 'features')
+    else:
+        fs = FilterSources(data_stream=base_stream, sources=['features'])
     padded_stream = Padding(data_stream=fs)
     return padded_stream
 
@@ -114,7 +118,7 @@ def get_uttid_stream(path, which_set='test_eval92', batch_size=1):
     fs = FilterSources(data_stream=base_stream, sources=['uttids'])
     return fs
 
-def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=True):
+def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=False):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     print path, which_set
     iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
@@ -133,13 +137,13 @@ def build_network(input_data,
                   num_inputs,
                   num_units_list,
                   num_outputs,
-                  dropout_ratio=0.2,
-                  weight_noise=0.0,
-                  use_layer_norm=True,
-                  peepholes=False,
-                  learn_init=True,
-                  grad_clipping=0.0,
-                  gradient_steps=-1):
+                  dropout_ratio,
+                  weight_noise,
+                  use_layer_norm,
+                  peepholes,
+                  learn_init,
+                  grad_clipping,
+                  gradient_steps):
 
     network = deep_bidir_lstm_model(input_var=input_data,
                                     mask_var=input_mask,
@@ -153,7 +157,7 @@ def build_network(input_data,
                                     learn_init=learn_init,
                                     grad_clipping=grad_clipping,
                                     gradient_steps=gradient_steps,
-                                    use_softmax=False)
+                                    use_softmax=True)
     return network
 
 def set_network_trainer(input_data,

@@ -36,7 +36,7 @@ def main(args):
                             dropout_ratio=args.dropout_ratio,
                             weight_noise=args.weight_noise,
                             use_layer_norm=args.use_layer_norm,
-                            peepholes=args.peepholes,
+                            peepholes=not args.no_peepholes,
                             learn_init=args.learn_init,
                             grad_clipping=args.grad_clipping,
                             gradient_steps=args.grad_steps)
