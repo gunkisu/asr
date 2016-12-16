@@ -71,17 +71,48 @@ class ConcatenateTransformer(Transformer):
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--batch-size', action='store',help='batch size', default=1, type=int)
-    parser.add_argument('--num-nodes', action='store',help='num of nodes', default=500, type=int)
-    parser.add_argument('--num-layers', action='store',help='num of layers', default=5, type=int)
-    parser.add_argument('--learn-rate', action='store', help='learning rate', default=0.0001, type=float)
-    parser.add_argument('--grad-norm', action='store', help='gradient norm', default=0.0)
-    parser.add_argument('--grad-clipping', action='store', help='gradient clipping', default=1.0)
-    parser.add_argument('--grad-steps', action='store', help='gradient steps', default=-1)
-    parser.add_argument('--use-ivectors', action='store_true', help='use ivectors')
-    parser.add_argument('--data-path', action='store', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
+    parser.add_argument('--batch-size', default=1, type=int)
+    parser.add_argument('--num-nodes', default=500, type=int)
+    parser.add_argument('--num-layers', default=5, type=int)
+    parser.add_argument('--learn-rate', default=0.0001, type=float)
+    parser.add_argument('--grad-norm', default=0.0, type=float)
+    parser.add_argument('--grad-clipping', default=1.0, type=float)
+    parser.add_argument('--grad-steps', default=-1, type=int)
+    parser.add_argument('--use-ivectors', action='store_true')
+    parser.add_argument('--data-path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
+    parser.add_argument('--input-dim', default=123, type=int)
+    parser.add_argument('--output-dim', default=3436, type=int)
+    parser.add_argument('--ivector-dim', default=100, type=int)
+    parser.add_argument('--peepholes', action='store_true')
+    parser.add_argument('--dropout-ratio', default=0.0, type=float)
+    parser.add_argument('--weight-noise', default=0.0, type=float)
+    parser.add_argument('--l2-lambda', default=0.0, type=float)
+    parser.add_argument('--use-layer-norm', action='store_true')
+    parser.add_argument('--learn-init', action='store_true')
+    parser.add_argument('--num-epochs', default=50, type=int)
+    parser.add_argument('--train-disp-freq', default=100, type=int)
+    parser.add_argument('--updater', default='momentum')
 
     return parser
+
+def get_feat_stream(path, which_set='test_eval92', batch_size=1):
+    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
+    print(path, which_set)
+    iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
+    base_stream = DataStream(dataset=wsj_dataset,
+                             iteration_scheme=iterator_scheme)
+    fs = FilterSources(data_stream=base_stream, sources=['features'])
+    padded_stream = Padding(data_stream=fs)
+    return padded_stream
+
+def get_uttid_stream(path, which_set='test_eval92', batch_size=1):
+    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
+    print(path, which_set)
+    iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
+    base_stream = DataStream(dataset=wsj_dataset,
+                             iteration_scheme=iterator_scheme)
+    fs = FilterSources(data_stream=base_stream, sources=['uttids'])
+    return fs
 
 def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=True):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))

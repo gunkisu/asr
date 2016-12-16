@@ -5,7 +5,23 @@ from collections import OrderedDict
 from libs.deep_lstm_utils import *
 from libs.lasagne_libs.updates import momentum
 
-def main(options):
+def main(args):
+    args.save_path = './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
+            args.learn_rate, args.grad_norm, args.grad_clipping, args.grad_steps, args.num_layers, args.num_nodes, 
+            args.batch_size, args.ivector_dim if args.use_ivectors else 0)
+    
+    reload_path = args.save_path + '_last_model.pkl'
+
+    if os.path.exists(reload_path):
+        args.reload_model = reload_path
+    else:
+        args.reload_model = None
+
+    if args.use_ivectors:
+        args.input_dim = args.input_dim + args.ivector_dim
+
+    print(args)
+
     print 'Build and compile network'
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
@@ -14,24 +30,25 @@ def main(options):
 
     network = build_network(input_data=input_data,
                             input_mask=input_mask,
-                            num_inputs=options['num_inputs'],
-                            num_units_list=options['num_units_list'],
-                            num_outputs=options['num_outputs'],
-                            dropout_ratio=options['dropout_ratio'],
-                            weight_noise=options['weight_noise'],
-                            use_layer_norm=options['use_layer_norm'],
-                            peepholes=options['peepholes'],
-                            learn_init=options['learn_init'],
-                            grad_clipping=options['grad_clipping'],
-                            gradient_steps=options['gradient_steps'])
+                            num_inputs=args.input_dim,
+                            num_units_list=[args.num_nodes]*args.num_layers,
+                            num_outputs=args.output_dim,
+                            dropout_ratio=args.dropout_ratio,
+                            weight_noise=args.weight_noise,
+                            use_layer_norm=args.use_layer_norm,
+                            peepholes=args.peepholes,
+                            learn_init=args.learn_init,
+                            grad_clipping=args.grad_clipping,
+                            gradient_steps=args.grad_steps)
 
     network_params = get_all_params(network, trainable=True)
 
-    if options['reload_model']:
+    if args.reload_model:
         print('Loading Parameters...')
-        pretrain_network_params_val,  pretrain_update_params_val, pretrain_total_batch_cnt = pickle.load(open(options['reload_model'], 'rb'))
+        with open(args.reload_model, 'rb') as f:
+            pretrain_network_params_val,  pretrain_update_params_val, \
+                    pretrain_total_batch_cnt = pickle.load(f)
 
-        print('Applying Parameters...')
         set_model_param_value(network_params, pretrain_network_params_val)
     else:
         pretrain_update_params_val = None
@@ -42,12 +59,12 @@ def main(options):
                                                       input_mask=input_mask,
                                                       target_data=target_data,
                                                       target_mask=target_mask,
-                                                      num_outputs=options['num_outputs'],
+                                                      num_outputs=args.output_dim,
                                                       network=network,
-                                                      updater=options['updater'],
-                                                      learning_rate=options['lr'],
-                                                      grad_max_norm=options['grad_norm'],
-                                                      l2_lambda=options['l2_lambda'],
+                                                      updater=eval(args.updater),
+                                                      learning_rate=args.learn_rate,
+                                                      grad_max_norm=args.grad_norm,
+                                                      l2_lambda=args.l2_lambda,
                                                       load_updater_params=pretrain_update_params_val)
 
     print 'Build network predictor'
@@ -55,17 +72,17 @@ def main(options):
                                        input_mask=input_mask,
                                        target_data=target_data,
                                        target_mask=target_mask,
-                                       num_outputs=options['num_outputs'],
+                                       num_outputs=args.output_dim,
                                        network=network)
 
 
     print 'Load data stream'
-    train_datastream = get_datastream(path=options['data_path'],
+    train_datastream = get_datastream(path=args.data_path,
                                       which_set='train_si84',
-                                      batch_size=options['batch_size'], use_ivectors=options['use_ivectors'])
-    valid_eval_datastream = get_datastream(path=options['data_path'],
+                                      batch_size=args.batch_size, use_ivectors=args.use_ivectors)
+    valid_eval_datastream = get_datastream(path=args.data_path,
                                       which_set='test_dev93',
-                                      batch_size=options['batch_size'], use_ivectors=options['use_ivectors'])
+                                      batch_size=args.batch_size, use_ivectors=args.use_ivectors)
 
 
     print 'Start training'
@@ -76,7 +93,7 @@ def main(options):
 
     try:
         # for each epoch
-        for e_idx in range(options['num_epochs']):
+        for e_idx in range(args.num_epochs):
             # for each batch
             for b_idx, data in enumerate(train_datastream.get_epoch_iterator()):
                 total_batch_cnt += 1
@@ -100,8 +117,8 @@ def main(options):
                 network_grads_norm = train_output[1]
 
                 # show intermediate result
-                if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0: 
-                    show_status(options['save_path'], e_idx, total_batch_cnt, train_predict_cost, network_grads_norm, evaluation_history)
+                if total_batch_cnt%args.train_disp_freq== 0 and total_batch_cnt!=0: 
+                    show_status(args.save_path, e_idx, total_batch_cnt, train_predict_cost, network_grads_norm, evaluation_history)
 
 #            train_nll, train_bpc, train_fer = eval_net(predict_fn,
 #                                                                 train_eval_datastream)
@@ -113,7 +130,7 @@ def main(options):
                 early_stop_cnt += 1.
             else:
                 early_stop_cnt = 0.
-                save_network(network_params, trainer_params, total_batch_cnt, options['save_path']+'_best_model.pkl') 
+                save_network(network_params, trainer_params, total_batch_cnt, args.save_path+'_best_model.pkl') 
 
             if early_stop_cnt>10:
                 print('Training Early Stopped')
@@ -125,68 +142,15 @@ def main(options):
             numpy.savez(options['save_path'] + '_eval_history',
                         eval_history=evaluation_history)
 
-            save_network(network_params, trainer_params, total_batch_cnt, options['save_path'] + '_last_model.pkl')
+            save_network(network_params, trainer_params, total_batch_cnt, args.save_path + '_last_model.pkl')
  
     except KeyboardInterrupt:
         print 'Training Interrupted -- Saving the network and Finishing...'
-        save_network(network_params, trainer_params, total_batch_cnt, options['save_path'])
+        save_network(network_params, trainer_params, total_batch_cnt, args.save_path)
 
 if __name__ == '__main__':
     parser = get_arg_parser()
-
     args = parser.parse_args()
-    grad_norm = float(args.grad_norm)
-    grad_clipping = float(args.grad_clipping)
-    gradient_steps = int(args.grad_steps)
-
-    ivector_dim = 100
-    input_dim = 123
-
-    options = OrderedDict()
-    options['use_ivectors'] = args.use_ivectors
-    options['num_inputs'] = input_dim+ivector_dim if args.use_ivectors else input_dim
-    options['num_units_list'] = [args.num_nodes]*args.num_layers
-    options['num_outputs'] = 3436
-
-    options['dropout_ratio'] = 0.0
-    options['weight_noise'] = 0.0
-    options['use_layer_norm'] = False
-
-    options['peepholes'] = False
-    options['learn_init'] = False
-
-    options['updater'] = momentum
-    options['lr'] = args.learn_rate
-    options['grad_norm'] = grad_norm
-    options['grad_clipping'] = grad_clipping
-    options['gradient_steps'] = gradient_steps
-    #options['l2_lambda'] = 1e-5
-    options['l2_lambda'] = 0.0
-
-    options['batch_size'] = args.batch_size
-    #options['eval_batch_size'] = 64
-    options['num_epochs'] = 200
-
-    options['train_disp_freq'] = 100
-    #options['train_eval_freq'] = 500
-    #options['train_save_freq'] = 100
-
-    options['data_path'] = args.data_path
-
-    options['save_path'] = './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
-            args.learn_rate, grad_norm, grad_clipping, gradient_steps, args.num_layers, args.num_nodes, 
-            args.batch_size, ivector_dim if args.use_ivectors else 0)
-
-    reload_path = options['save_path'] + '_last_model.pkl'
-
-    if os.path.exists(reload_path):
-        options['reload_model'] = reload_path
-    else:
-        options['reload_model'] = None
-
-    for key, val in options.iteritems():
-        print str(key), ': ', str(val)
-
-    main(options)
+    main(args)
 
 
