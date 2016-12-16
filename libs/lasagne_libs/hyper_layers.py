@@ -1529,7 +1529,7 @@ class ExternalHyperLSTMLayer(MergeLayer):
             # Retrieve the dimensionality of the incoming layer
             input_shape = self.input_shapes[0]
             # Explicitly unroll the recurrence instead of using scan
-            inner_cell_out, inner_hid_out, outer_cell_out, outer_hid_out = unroll_scan(
+            outer_cell_out, outer_hid_out = unroll_scan(
                 fn=step_fun,
                 sequences=sequences,
                 outputs_info=[outer_cell_init, outer_hid_init],
@@ -1539,7 +1539,7 @@ class ExternalHyperLSTMLayer(MergeLayer):
         else:
             # Scan op iterates over first dimension of input and repeatedly
             # applies the step function
-            inner_cell_out, inner_hid_out, outer_cell_out, outer_hid_out = theano.scan(
+            outer_cell_out, outer_hid_out = theano.scan(
                 fn=step_fun,
                 sequences=sequences,
                 outputs_info=[outer_cell_init, outer_hid_init],
