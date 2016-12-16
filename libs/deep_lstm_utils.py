@@ -83,7 +83,7 @@ def get_arg_parser():
     parser.add_argument('--input-dim', default=123, type=int)
     parser.add_argument('--output-dim', default=3436, type=int)
     parser.add_argument('--ivector-dim', default=100, type=int)
-    parser.add_argument('--peepholes', action='store_true')
+    parser.add_argument('--peepholes', action='store_false')
     parser.add_argument('--dropout-ratio', default=0.0, type=float)
     parser.add_argument('--weight-noise', default=0.0, type=float)
     parser.add_argument('--l2-lambda', default=0.0, type=float)
