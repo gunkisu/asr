@@ -8,6 +8,7 @@ from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.updates import total_norm_constraint
+from lasagne.random import set_rng
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
@@ -16,6 +17,8 @@ from fuel.transformers import Padding, FilterSources
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
+
+set_rng(numpy.random.RandomState(111))
 
 def get_datastream(path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
@@ -271,7 +274,10 @@ def main(options):
                                                   batch_size=options['batch_size'])
 
     print 'Start training'
-    evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
+    if os.path.exists(options['save_path'] + '_eval_history.npz'):
+        evaluation_history = numpy.load(options['save_path'] + '_eval_history.npz')['eval_history'].tolist()
+    else:
+        evaluation_history = [[[10.0, 10.0, 1.0], [10.0, 10.0, 1.0]]]
     early_stop_flag = False
     early_stop_cnt = 0
     total_batch_cnt = 0
@@ -303,6 +309,7 @@ def main(options):
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
+                    best_idx = numpy.asarray(evaluation_history)[:, 1, 2].argmin()
                     print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
                     print '============================================================================================'
@@ -313,6 +320,8 @@ def main(options):
                     print '--------------------------------------------------------------------------------------------'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
+                    print '--------------------------------------------------------------------------------------------'
+                    print 'Best NLL: ', str(evaluation_history[best_idx][1][0]), ', BPC: ', str(evaluation_history[best_idx][1][1]), ', FER: ', str(evaluation_history[best_idx][1][2])
 
                 # evaluation
                 if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
@@ -328,7 +337,7 @@ def main(options):
                                                                          valid_eval_datastream)
 
                     # check over-fitting
-                    if valid_fer>evaluation_history[-1][1][2]:
+                    if valid_fer>numpy.asarray(evaluation_history)[:, 1, 2].min():
                         early_stop_cnt += 1.
                     else:
                         early_stop_cnt = 0.
@@ -375,6 +384,8 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--grad_norm', action='store', help='gradient norm', default=0.0)
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
     parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
+    parser.add_argument('-w', '--weight_noise', action='store', help='weight noise', default=0.0)
+    parser.add_argument('-p', '--peepholes', action='store', help='peepholes', default=1)
 
     args = parser.parse_args()
     batch_size = int(args.batch_size)
@@ -383,6 +394,8 @@ if __name__ == '__main__':
     grad_norm = float(args.grad_norm)
     grad_clipping = float(args.grad_clipping)
     gradient_steps = int(args.grad_steps)
+    weight_noise = float(args.weight_noise)
+    peepholes = int(args.peepholes)
 
     options = OrderedDict()
     options['num_inputs'] = 123
@@ -392,11 +405,11 @@ if __name__ == '__main__':
     options['num_outputs'] = 3436
 
     options['dropout_ratio'] = 0.0
-    options['weight_noise'] = 0.0
+    options['weight_noise'] = weight_noise
     options['use_layer_norm'] = False
     options['gating_nonlinearity'] = None
 
-    options['peepholes'] = False
+    options['peepholes'] = True if peepholes==1 else False
     options['learn_init'] = False
 
     options['updater'] = momentum
@@ -422,6 +435,7 @@ if __name__ == '__main__':
                            '_gc' + str(int(grad_clipping)) + \
                            '_gs' + str(int(gradient_steps)) + \
                            '_nl' + str(int(num_layers)) + \
+                           '_p' + str(int(peepholes)) + \
                            '_b' + str(int(batch_size))
 
 
