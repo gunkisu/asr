@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
