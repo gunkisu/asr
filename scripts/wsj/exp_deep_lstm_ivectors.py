@@ -139,7 +139,7 @@ def main(args):
             # save results
             evaluation_history.append([[None, None, None],
                                        [valid_nll, valid_bpc, valid_fer]])
-            numpy.savez(options['save_path'] + '_eval_history',
+            numpy.savez(args.save_path + '_eval_history',
                         eval_history=evaluation_history)
 
             save_network(network_params, trainer_params, total_batch_cnt, args.save_path + '_last_model.pkl')
