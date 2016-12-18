@@ -25,6 +25,8 @@ def ff(input_data, input_mask, network):
     return predict_fn
 
 def main(args):
+    if args.use_ivectors:
+        args.input_dim = args.input_dim + args.ivector_dim
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
 
@@ -42,7 +44,7 @@ def main(args):
                             gradient_steps=args.grad_steps, use_softmax=True)
     network_params = get_all_params(network, trainable=True)
 
-    print('Loading Parameters...')
+    print('Loading Parameters...', file=sys.stderr)
     if args.model:
         with open(args.model, 'rb') as f:
             pretrain_network_params_val,  pretrain_update_params_val, \
@@ -50,11 +52,11 @@ def main(args):
 
             set_model_param_value(network_params, pretrain_network_params_val)
     else:
-        print('Must specfiy network to load')
+        print('Must specfiy network to load', file=sys.stderr)
         sys.exit(1)
 
     ff_fn = ff(input_data=input_data, input_mask=input_mask, network=network)
-    feat_stream = get_feat_stream(args.data_path, args.dataset, args.batch_size) 
+    feat_stream = get_feat_stream(args.data_path, args.dataset, args.batch_size, use_ivectors=args.use_ivectors) 
     uttid_stream = get_uttid_stream(args.data_path, args.dataset, args.batch_size) 
     
     writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
@@ -64,10 +66,10 @@ def main(args):
         input_data, input_mask = feat_batch 
         feat_lens = input_mask.sum(axis=1)
 
-        print('Feed-forwarding...')
+        print('Feed-forwarding...', file=sys.stderr)
         net_output = ff_fn(input_data, input_mask)
 
-        print('Writing outputs...')
+        print('Writing outputs...', file=sys.stderr)
         for out_idx, (output, uttid) in enumerate(zip(net_output[0], uttid_batch[0])):
             valid_len = feat_lens[out_idx]
             writer.write(uttid.encode('ascii'), numpy.log(output[:valid_len]))
@@ -81,6 +83,6 @@ if __name__ == '__main__':
     parser.add_argument('wxfilename')
 
     args = parser.parse_args()
-    print(args)
+    print(args, file=sys.stderr)
 
     main(args)

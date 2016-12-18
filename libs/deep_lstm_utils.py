@@ -1,4 +1,6 @@
+from __future__ import print_function
 import argparse
+import sys
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
@@ -97,7 +99,7 @@ def get_arg_parser():
 
 def get_feat_stream(path, which_set='test_eval92', batch_size=1, use_ivectors=False):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    print(path, which_set)
+    print(path, which_set, file=sys.stderr)
     iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
@@ -111,7 +113,7 @@ def get_feat_stream(path, which_set='test_eval92', batch_size=1, use_ivectors=Fa
 
 def get_uttid_stream(path, which_set='test_eval92', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    print(path, which_set)
+    print(path, which_set, file=sys.stderr)
     iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
@@ -120,7 +122,7 @@ def get_uttid_stream(path, which_set='test_eval92', batch_size=1):
 
 def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=False):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    print path, which_set
+    print(path, which_set, file=sys.stderr)
     iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
@@ -319,16 +321,15 @@ def save_network(network_params, trainer_params, total_batch_cnt, save_path):
 def show_status(save_path, e_idx, total_batch_cnt, train_predict_cost, network_grads_norm, evaluation_history):
     model = save_path.split('/')[-1]
 #    print '============================================================================================'
-    print '--'
-    print 'Model Name: {}'.format(model)
+    print('--')
+    print('Model Name: {}'.format(model))
 #    print '============================================================================================'
-    print 'Epoch: {}, Update: {}'.format(e_idx, total_batch_cnt)
+    print('Epoch: {}, Update: {}'.format(e_idx, total_batch_cnt))
 #    print '--------------------------------------------------------------------------------------------'
-    print 'Prediction Cost: {}'.format(train_predict_cost)
-    print 'Gradient Norm: {}'.format(network_grads_norm)
+    print('Prediction Cost: {}'.format(train_predict_cost))
+    print('Gradient Norm: {}'.format(network_grads_norm))
 #    print '--------------------------------------------------------------------------------------------'
 #    print '--------------------------------------------------------------------------------------------'
 #    print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
-    print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
-    print '--'
+    print('Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2]))
 
