@@ -84,10 +84,10 @@ def main(args):
 
     print('Load data stream')
     train_datastream = get_datastream(path=args.data_path,
-                                      which_set='train_si84',
+                                      which_set=args.train_dataset,
                                       batch_size=args.batch_size, use_ivectors=args.use_ivectors)
     valid_eval_datastream = get_datastream(path=args.data_path,
-                                      which_set='test_dev93',
+                                      which_set=args.valid_dataset,
                                       batch_size=args.batch_size, use_ivectors=args.use_ivectors)
 
 
