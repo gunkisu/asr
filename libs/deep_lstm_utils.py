@@ -1,20 +1,24 @@
+from __future__ import print_function
+import argparse
+import sys
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
-from models.deep_bidir_lstm import deep_bidir_lstm_model
-from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
-from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.updates import total_norm_constraint
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
-from fuel.schemes import ShuffledScheme
+from fuel.schemes import ShuffledScheme, SequentialScheme
 from fuel.transformers import Padding, FilterSources, AgnosticTransformer
 
 from six import iteritems
 import itertools
+
+from models.deep_bidir_lstm import deep_bidir_lstm_model
+from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
+from libs.param_utils import set_model_param_value
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
@@ -66,9 +70,59 @@ class ConcatenateTransformer(Transformer):
         example.insert(insert_pos, concat_data)
         return example 
 
-def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=True):
+def get_arg_parser():
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument('--batch-size', default=1, help='batch size', type=int)
+    parser.add_argument('--num-nodes', default=500, help='number of hidden nodes', type=int)
+    parser.add_argument('--num-layers', default=5, help='number of layers', type=int)
+    parser.add_argument('--learn-rate', default=0.0001, help='learning rate', type=float)
+    parser.add_argument('--grad-norm', default=0.0, help='gradient norm', type=float)
+    parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
+    parser.add_argument('--grad-steps', default=-1, help='gradient steps', type=int)
+    parser.add_argument('--use-ivectors', help='whether to use ivectors', action='store_true')
+    parser.add_argument('--data-path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
+    parser.add_argument('--input-dim', help='input dimension', default=123, type=int)
+    parser.add_argument('--output-dim', help='output dimension', default=3436, type=int)
+    parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
+    parser.add_argument('--no-peepholes', help='do not use peephole connections', action='store_true')
+    parser.add_argument('--dropout-ratio', help='dropout ratio', default=0.0, type=float)
+    parser.add_argument('--weight-noise', help='weight noise', default=0.0, type=float)
+    parser.add_argument('--l2-lambda', help='l2 regularizer', default=0.0, type=float)
+    parser.add_argument('--use-layer-norm', help='layer norm', action='store_true')
+    parser.add_argument('--learn-init', help='whether to learn initial hidden states', action='store_true')
+    parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
+    parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
+    parser.add_argument('--updater', help='sgd or momentum', default='momentum')
+
+    return parser
+
+def get_feat_stream(path, which_set='test_eval92', batch_size=1, use_ivectors=False):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    print path, which_set
+    print(path, which_set, file=sys.stderr)
+    iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
+    base_stream = DataStream(dataset=wsj_dataset,
+                             iteration_scheme=iterator_scheme)
+    if use_ivectors:
+        fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors'])
+        fs = ConcatenateTransformer(fs, ['features', 'ivectors'], 'features')
+    else:
+        fs = FilterSources(data_stream=base_stream, sources=['features'])
+    padded_stream = Padding(data_stream=fs)
+    return padded_stream
+
+def get_uttid_stream(path, which_set='test_eval92', batch_size=1):
+    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
+    print(path, which_set, file=sys.stderr)
+    iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
+    base_stream = DataStream(dataset=wsj_dataset,
+                             iteration_scheme=iterator_scheme)
+    fs = FilterSources(data_stream=base_stream, sources=['uttids'])
+    return fs
+
+def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=False):
+    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
+    print(path, which_set, file=sys.stderr)
     iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
@@ -85,13 +139,13 @@ def build_network(input_data,
                   num_inputs,
                   num_units_list,
                   num_outputs,
-                  dropout_ratio=0.2,
-                  weight_noise=0.0,
-                  use_layer_norm=True,
-                  peepholes=False,
-                  learn_init=True,
-                  grad_clipping=0.0,
-                  gradient_steps=-1):
+                  dropout_ratio,
+                  weight_noise,
+                  use_layer_norm,
+                  peepholes,
+                  learn_init,
+                  grad_clipping,
+                  gradient_steps, use_softmax=False):
 
     network = deep_bidir_lstm_model(input_var=input_data,
                                     mask_var=input_mask,
@@ -105,7 +159,7 @@ def build_network(input_data,
                                     learn_init=learn_init,
                                     grad_clipping=grad_clipping,
                                     gradient_steps=gradient_steps,
-                                    use_softmax=False)
+                                    use_softmax=use_softmax)
     return network
 
 def set_network_trainer(input_data,
@@ -267,16 +321,15 @@ def save_network(network_params, trainer_params, total_batch_cnt, save_path):
 def show_status(save_path, e_idx, total_batch_cnt, train_predict_cost, network_grads_norm, evaluation_history):
     model = save_path.split('/')[-1]
 #    print '============================================================================================'
-    print '--'
-    print 'Model Name: {}'.format(model)
+    print('--')
+    print('Model Name: {}'.format(model))
 #    print '============================================================================================'
-    print 'Epoch: {}, Update: {}'.format(e_idx, total_batch_cnt)
+    print('Epoch: {}, Update: {}'.format(e_idx, total_batch_cnt))
 #    print '--------------------------------------------------------------------------------------------'
-    print 'Prediction Cost: {}'.format(train_predict_cost)
-    print 'Gradient Norm: {}'.format(network_grads_norm)
+    print('Prediction Cost: {}'.format(train_predict_cost))
+    print('Gradient Norm: {}'.format(network_grads_norm))
 #    print '--------------------------------------------------------------------------------------------'
 #    print '--------------------------------------------------------------------------------------------'
 #    print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
-    print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
-    print '--'
+    print('Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2]))
 
