@@ -415,9 +415,9 @@ if __name__ == '__main__':
     options['eval_batch_size'] = 64
     options['num_epochs'] = 200
 
-    options['train_disp_freq'] = 100
-    options['train_eval_freq'] = 1000
-    options['train_save_freq'] = 500
+    options['train_disp_freq'] = 50
+    options['train_eval_freq'] = 500
+    options['train_save_freq'] = 100
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
 
