@@ -18,6 +18,8 @@ def main(args):
     reload_path = args.save_path + '_last_model.pkl'
 
     if os.path.exists(reload_path):
+        print('Previously trained model detected: {}'.format(reload_path))
+        print('Training will continue with the model')
         args.reload_model = reload_path
     else:
         args.reload_model = None
