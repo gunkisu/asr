@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
 
 from libs.deep_lstm_utils import *
 from libs.lasagne_libs.updates import momentum
+from models.deep_bidir_lstm import deep_bidir_lstm_model
 
 def main(args):
     args.save_path = './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
@@ -24,24 +27,25 @@ def main(args):
 
     print(args)
 
-    print 'Build and compile network'
+    print('Build and compile network')
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-
-    network = build_network(input_data=input_data,
-                            input_mask=input_mask,
-                            num_inputs=args.input_dim,
-                            num_units_list=[args.num_nodes]*args.num_layers,
-                            num_outputs=args.output_dim,
-                            dropout_ratio=args.dropout_ratio,
-                            weight_noise=args.weight_noise,
-                            use_layer_norm=args.use_layer_norm,
-                            peepholes=not args.no_peepholes,
-                            learn_init=args.learn_init,
-                            grad_clipping=args.grad_clipping,
-                            gradient_steps=args.grad_steps)
+    
+    network = deep_bidir_lstm_model(input_var=input_data,
+                                    mask_var=input_mask,
+                                    num_inputs=args.input_dim,
+                                    num_units_list=[args.num_nodes]*args.num_layers,
+                                    num_outputs=args.output_dim,
+                                    dropout_ratio=args.dropout_ratio,
+                                    weight_noise=args.weight_noise,
+                                    use_layer_norm=args.use_layer_norm,
+                                    peepholes=not args.no_peepholes,
+                                    learn_init=args.learn_init,
+                                    grad_clipping=args.grad_clipping,
+                                    gradient_steps=args.grad_steps,
+                                    use_softmax=False)
 
     network_params = get_all_params(network, trainable=True)
 
@@ -56,7 +60,7 @@ def main(args):
         pretrain_update_params_val = None
         pretrain_total_batch_cnt = 0
 
-    print 'Build network trainer'
+    print('Build network trainer')
     training_fn, trainer_params = set_network_trainer(input_data=input_data,
                                                       input_mask=input_mask,
                                                       target_data=target_data,
@@ -69,7 +73,7 @@ def main(args):
                                                       l2_lambda=args.l2_lambda,
                                                       load_updater_params=pretrain_update_params_val)
 
-    print 'Build network predictor'
+    print('Build network predictor')
     predict_fn = set_network_predictor(input_data=input_data,
                                        input_mask=input_mask,
                                        target_data=target_data,
@@ -78,7 +82,7 @@ def main(args):
                                        network=network)
 
 
-    print 'Load data stream'
+    print('Load data stream')
     train_datastream = get_datastream(path=args.data_path,
                                       which_set='train_si84',
                                       batch_size=args.batch_size, use_ivectors=args.use_ivectors)
@@ -87,7 +91,7 @@ def main(args):
                                       batch_size=args.batch_size, use_ivectors=args.use_ivectors)
 
 
-    print 'Start training'
+    print('Start training')
     evaluation_history =[[[10.0, 10.0, 1.0], [10.0, 10.0 ,1.0]]]
     early_stop_flag = False
     early_stop_cnt = 0
@@ -147,7 +151,7 @@ def main(args):
             save_network(network_params, trainer_params, total_batch_cnt, args.save_path + '_last_model.pkl')
  
     except KeyboardInterrupt:
-        print 'Training Interrupted -- Saving the network and Finishing...'
+        print('Training Interrupted -- Saving the network and Finishing...')
         save_network(network_params, trainer_params, total_batch_cnt, args.save_path)
 
 if __name__ == '__main__':

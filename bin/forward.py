@@ -1,20 +1,16 @@
 from __future__ import print_function
+
 import sys
 import numpy, theano, lasagne, pickle
 from theano import tensor as T
-from collections import OrderedDict
 from lasagne.layers import get_output, get_all_params
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
-from fuel.datasets.hdf5 import H5PYDataset
-from fuel.streams import DataStream
-from fuel.schemes import SequentialScheme
-from fuel.transformers import Padding, FilterSources
-
-from libs.lasagne_libs.updates import momentum
 
 from libs.deep_lstm_utils import *
 import kaldi_io
+
+from models.deep_bidir_lstm import deep_bidir_lstm_model
 
 def ff(input_data, input_mask, network):
     predict_data = get_output(network, deterministic=True)
@@ -29,19 +25,21 @@ def main(args):
         args.input_dim = args.input_dim + args.ivector_dim
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
+    
+    network = deep_bidir_lstm_model(input_var=input_data,
+                                    mask_var=input_mask,
+                                    num_inputs=args.input_dim,
+                                    num_units_list=[args.num_nodes]*args.num_layers,
+                                    num_outputs=args.output_dim,
+                                    dropout_ratio=args.dropout_ratio,
+                                    weight_noise=args.weight_noise,
+                                    use_layer_norm=args.use_layer_norm,
+                                    peepholes=not args.no_peepholes,
+                                    learn_init=args.learn_init,
+                                    grad_clipping=args.grad_clipping,
+                                    gradient_steps=args.grad_steps)
+                                    use_softmax=True)
 
-    network = build_network(input_data=input_data,
-                            input_mask=input_mask,
-                            num_inputs=args.input_dim,
-                            num_units_list=[args.num_nodes]*args.num_layers,
-                            num_outputs=args.output_dim,
-                            dropout_ratio=args.dropout_ratio,
-                            weight_noise=args.weight_noise,
-                            use_layer_norm=args.use_layer_norm,
-                            peepholes=not args.no_peepholes,
-                            learn_init=args.learn_init,
-                            grad_clipping=args.grad_clipping,
-                            gradient_steps=args.grad_steps, use_softmax=True)
     network_params = get_all_params(network, trainable=True)
 
     print('Loading Parameters...', file=sys.stderr)

@@ -19,56 +19,10 @@ import itertools
 from models.deep_bidir_lstm import deep_bidir_lstm_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
+from data.transformers import ConcatenateTransformer
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
-
-from fuel.transformers import Transformer
-
-class ConcatenateTransformer(Transformer):
-    def __init__(self, data_stream, concat_sources, new_source=None, **kwargs):
-        if any(source not in data_stream.sources for source in concat_sources):
-            raise ValueError("sources must all be contained in "
-                             "data_stream.sources")
-
-        self.new_source = new_source if new_source else '_'.join(concat_sources)
-        if data_stream.axis_labels:
-            axis_labels = dict((source, labels) for (source, labels)
-                    in iteritems(data_stream.axis_labels)
-                        if source not in concat_sources) 
-            axis_labels[self.new_source] = 'concatenated source: {}'.format(concat_sources)
-            kwargs.setdefault('axis_labels', axis_labels)
-        
-        super(ConcatenateTransformer, self).__init__(
-            data_stream=data_stream,
-            produces_examples=data_stream.produces_examples,
-            **kwargs)
-
-        insert_pos = self.data_stream.sources.index(concat_sources[0])
-        new_sources = [s for s in data_stream.sources if s not in concat_sources]
-        new_sources.insert(insert_pos, self.new_source)
-        self.sources = tuple(new_sources)
-        self.concat_sources = concat_sources
-       
-    def transform_batch(self, batch):
-        trans_data = []
-        src_indices = [self.data_stream.sources.index(s) for s in self.concat_sources]
-        data_from_concat_sources = [batch[i] for i in src_indices]
-        for examples in itertools.izip(*data_from_concat_sources):
-            trans_data.append(numpy.concatenate(examples, axis=1))
-        insert_pos = self.data_stream.sources.index(self.concat_sources[0])
-        batch = [d for i, d in enumerate(batch) if i not in src_indices]
-        batch.insert(insert_pos, trans_data)
-        return numpy.asarray(batch)
-    
-    def transform_example(self, example):
-        src_indices = [self.data_stream.sources.index(s) for s in self.concat_sources]
-        data_from_concat_sources = tuple(example[i] for i in src_indices)
-        concat_data = numpy.concatenate(data_from_concat_sources, axis=1)
-        insert_pos = self.data_stream.sources.index(self.concat_sources[0])
-        example = [d for i, d in enumerate(example) if i not in src_indices]
-        example.insert(insert_pos, concat_data)
-        return example 
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
