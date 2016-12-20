@@ -85,13 +85,12 @@ def deep_bidir_lstm_alex(input_var,
                           input_dim,
                           num_units_list,
                           output_dim,
-                          batch_size,
                           grad_clipping=1.0):
     
-    input_layer = InputLayer(shape=(batch_size, None, input_dim),
+    input_layer = InputLayer(shape=(None, None, input_dim),
                              input_var=input_var)
 
-    mask_layer = InputLayer(shape=(batch_size, None),
+    mask_layer = InputLayer(shape=(None, None),
                             input_var=mask_var)
 
     prev_input_layer = input_layer
@@ -110,9 +109,12 @@ def deep_bidir_lstm_alex(input_var,
         prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
                                        axis=-1)
 
+
+
+    n_batch, n_time_steps, _ = input_var.shape
     reshape_layer = ReshapeLayer(prev_input_layer, (-1, [2]))
     dense_layer = DenseLayer(reshape_layer, num_units=output_dim, nonlinearity=nonlinearities.softmax)
-    output_layer = ReshapeLayer(dense_layer, (batch_size, -1, output_dim))
+    output_layer = ReshapeLayer(dense_layer, (n_batch, n_time_steps, output_dim))
 
 #    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
 #                                      num_outputs=output_dim,
