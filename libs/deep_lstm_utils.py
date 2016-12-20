@@ -7,6 +7,7 @@ from collections import OrderedDict
 from lasagne.layers import get_output, get_all_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.updates import total_norm_constraint
+from lasagne.objectives import categorical_crossentropy
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
@@ -23,6 +24,25 @@ from data.transformers import ConcatenateTransformer
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
+
+
+import time
+
+
+class StopWatch():
+    def __init__(self):
+        self.start_time = time.time() 
+
+    def reset(self):
+        self.start_time = time.time()
+
+    def elapsed(self):
+        return time.time() - self.start_time
+    
+    def print_elapsed(self):
+        time_diff = time.time() - self.start_time
+
+        print('Took {}s ({}m; {}h)'.format(time_diff, time_diff / 60, time_diff / 3600))
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -90,33 +110,46 @@ def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=Fals
     padded_stream = Padding(data_stream=fs)
     return padded_stream
 
-def build_network(input_data,
-                  input_mask,
-                  num_inputs,
-                  num_units_list,
-                  num_outputs,
-                  dropout_ratio,
-                  weight_noise,
-                  use_layer_norm,
-                  peepholes,
-                  learn_init,
-                  grad_clipping,
-                  gradient_steps, use_softmax=False):
+def trainer(input_data,
+                        input_mask,
+                        target_data,
+                        target_mask,
+                        num_outputs,
+                        network,
+                        updater,
+                        learning_rate,
+                        load_updater_params=None):
+    
+    o = get_output(network, deterministic=False)
+    num_seqs = o.shape[0]
+    ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
+            targets=T.flatten(target_data, 1))
 
-    network = deep_bidir_lstm_model(input_var=input_data,
-                                    mask_var=input_mask,
-                                    num_inputs=num_inputs,
-                                    num_units_list=num_units_list,
-                                    num_outputs=num_outputs,
-                                    dropout_ratio=dropout_ratio,
-                                    weight_noise=weight_noise,
-                                    use_layer_norm=use_layer_norm,
-                                    peepholes=peepholes,
-                                    learn_init=learn_init,
-                                    grad_clipping=grad_clipping,
-                                    gradient_steps=gradient_steps,
-                                    use_softmax=use_softmax)
-    return network
+    ce = ce * T.flatten(target_mask, 1)
+
+    ce = ce.sum()/num_seqs
+    ce_frame = ce.sum()/target_mask.sum()
+
+    network_params = get_all_params(network, trainable=True)
+    network_grads = theano.grad(cost=ce,
+                                wrt=network_params)
+
+    network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
+
+    train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
+    train_updates, trainer_params = updater(loss_or_grads=network_grads,
+                                            params=network_params,
+                                            learning_rate=train_lr,
+                                            load_params_dict=load_updater_params)
+
+    training_fn = theano.function(inputs=[input_data,
+                                          input_mask,
+                                          target_data,
+                                          target_mask],
+                                  outputs=[ce_frame,
+                                           network_grads_norm],
+                                  updates=train_updates)
+    return training_fn, trainer_params
 
 def set_network_trainer(input_data,
                         input_mask,
@@ -182,6 +215,31 @@ def set_network_trainer(input_data,
                                            network_grads_norm],
                                   updates=train_updates)
     return training_fn, trainer_params
+
+def predictor(input_data,
+                          input_mask,
+                          target_data,
+                          target_mask,
+                          num_outputs,
+                          network):
+    o = get_output(network, deterministic=False)
+    num_seqs = o.shape[0]
+    ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
+            targets=T.flatten(target_data, 1))
+
+    # get prediction index
+    pred_idx = T.argmax(o, axis=-1)
+    ce = ce * T.flatten(target_mask, 1)
+
+    #ce = ce.sum()/num_seqs
+    ce_frame = ce.sum()/target_mask.sum()
+    # get one hot target
+    return theano.function(inputs=[input_data,
+                                         input_mask,
+                                         target_data,
+                                         target_mask],
+                                 outputs=[pred_idx,
+                                          ce_frame])
 
 def set_network_predictor(input_data,
                           input_mask,
@@ -261,10 +319,9 @@ def eval_net(predict_fn,
         total_cnt += 1.
 
     total_nll /= total_cnt
-    total_bpc = total_nll/numpy.log(2.0)
     total_fer /= total_cnt
 
-    return total_nll, total_bpc, total_fer
+    return total_nll, total_fer
 
 def save_network(network_params, trainer_params, total_batch_cnt, save_path):
     cur_network_params_val = get_model_param_values(network_params)
@@ -274,18 +331,12 @@ def save_network(network_params, trainer_params, total_batch_cnt, save_path):
                 open(save_path, 'wb'))
 
 
-def show_status(save_path, e_idx, total_batch_cnt, train_predict_cost, network_grads_norm, evaluation_history):
+def show_status(save_path, e_idx, total_batch_cnt, ce_frame, network_grads_norm, eval_history):
     model = save_path.split('/')[-1]
-#    print '============================================================================================'
     print('--')
     print('Model Name: {}'.format(model))
-#    print '============================================================================================'
     print('Epoch: {}, Update: {}'.format(e_idx, total_batch_cnt))
-#    print '--------------------------------------------------------------------------------------------'
-    print('Prediction Cost: {}'.format(train_predict_cost))
+    print('CE: {}'.format(ce_frame))
     print('Gradient Norm: {}'.format(network_grads_norm))
-#    print '--------------------------------------------------------------------------------------------'
-#    print '--------------------------------------------------------------------------------------------'
-#    print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
-    print('Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2]))
+    print('Valid CE: {}, FER: {}'.format(eval_history[-1][1][0], eval_history[-1][1][1]))
 

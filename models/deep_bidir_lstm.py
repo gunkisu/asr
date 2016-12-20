@@ -77,6 +77,41 @@ def deep_bidir_lstm_model(input_var,
     return output_layer
 
 
+def deep_bidir_lstm_alex(input_var,
+                          mask_var,
+                          input_dim,
+                          num_units_list,
+                          output_dim,
+                          grad_clipping=1.0):
+    
+    input_layer = InputLayer(shape=(None, None, input_dim),
+                             input_var=input_var)
+
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    prev_input_layer = input_layer
+    for num_units in num_units_list:
+        lstm_fwd_layer = LSTMLayer(incoming=prev_input_layer,
+                                   mask_input=mask_layer,
+                                   num_units=num_units,
+                                   grad_clipping=grad_clipping,
+                                   backwards=False)
+        lstm_bwd_layer = LSTMLayer(incoming=prev_input_layer,
+                                   mask_input=mask_layer,
+                                   num_units=num_units,
+                                   grad_clipping=grad_clipping,
+                                   backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
+                                       axis=-1)
+
+
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=output_dim,
+                                      mask_input=mask_layer,
+                                      nonlinearity=nonlinearities.softmax)
+    return output_layer
 
 
 
