@@ -3,9 +3,9 @@ from lasagne.layers import (InputLayer,
                             DropoutLayer,
                             ConcatLayer)
 from libs.lasagne_libs.layers import SequenceDenseLayer
-#from libs.lasagne_libs.layers import LSTMLayer
-from lasagne.layers import LSTMLayer, DenseLayer, ReshapeLayer
-#from lasagne.layers import SequenceDenseLayer
+from libs.lasagne_libs.layers import LSTMLayer
+from lasagne.layers import LSTMLayer as LasagneLSTMLayer
+from lasagne.layers import DenseLayer, ReshapeLayer
 from lasagne.layers import get_output_shape
 
 def deep_bidir_lstm_model(input_var,
@@ -100,16 +100,16 @@ def deep_bidir_lstm_alex(input_var,
 
     prev_input_layer = input_layer
     for num_units in num_units_list:
-        lstm_fwd_layer = LSTMLayer(incoming=prev_input_layer,
-                                   mask_input=mask_layer,
-                                   num_units=num_units,
-                                   grad_clipping=grad_clipping,
-                                   backwards=False)
-        lstm_bwd_layer = LSTMLayer(incoming=prev_input_layer,
-                                   mask_input=mask_layer,
-                                   num_units=num_units,
-                                   grad_clipping=grad_clipping,
-                                   backwards=True)
+        lstm_fwd_layer = LasagneLSTMLayer(incoming=prev_input_layer,
+                                          mask_input=mask_layer,
+                                          num_units=num_units,
+                                          grad_clipping=grad_clipping,
+                                          backwards=False)
+        lstm_bwd_layer = LasagneLSTMLayer(incoming=prev_input_layer,
+                                          mask_input=mask_layer,
+                                          num_units=num_units,
+                                          grad_clipping=grad_clipping,
+                                          backwards=True)
 
         prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
                                        axis=-1)
