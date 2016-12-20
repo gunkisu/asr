@@ -13,6 +13,9 @@ from six import iteritems
 class ConcatenateTransformer(Transformer):
     '''Concatenate data sources into one data source'''
     def __init__(self, data_stream, concat_sources, new_source=None, **kwargs):
+        if data_stream.produces_examples:
+                 raise ValueError('the wrapped data stream must produce batches of '
+                                                      'examples, not examples')
         if any(source not in data_stream.sources for source in concat_sources):
             raise ValueError("sources must all be contained in "
                              "data_stream.sources")
@@ -27,7 +30,7 @@ class ConcatenateTransformer(Transformer):
         
         super(ConcatenateTransformer, self).__init__(
             data_stream=data_stream,
-            produces_examples=data_stream.produces_examples,
+            produces_examples=False,
             **kwargs)
 
         insert_pos = self.data_stream.sources.index(concat_sources[0])
@@ -46,15 +49,6 @@ class ConcatenateTransformer(Transformer):
         batch = [d for i, d in enumerate(batch) if i not in src_indices]
         batch.insert(insert_pos, trans_data)
         return numpy.asarray(batch)
-    
-    def transform_example(self, example):
-        src_indices = [self.data_stream.sources.index(s) for s in self.concat_sources]
-        data_from_concat_sources = tuple(example[i] for i in src_indices)
-        concat_data = numpy.concatenate(data_from_concat_sources, axis=1)
-        insert_pos = self.data_stream.sources.index(self.concat_sources[0])
-        example = [d for i, d in enumerate(example) if i not in src_indices]
-        example.insert(insert_pos, concat_data)
-        return example 
 
 class MaximumFrameCache(Transformer):
     """Cache examples, and create batches of maximum number of frames.

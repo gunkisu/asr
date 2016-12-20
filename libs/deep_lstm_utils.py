@@ -65,11 +65,11 @@ def trainer(input_data,
 
     ce = ce * T.flatten(target_mask, 1)
 
-    ce = ce.sum()/num_seqs
+    ce_cost = ce.sum()/num_seqs
     ce_frame = ce.sum()/target_mask.sum()
 
     network_params = get_all_params(network, trainable=True)
-    network_grads = theano.grad(cost=ce,
+    network_grads = theano.grad(cost=ce_cost,
                                 wrt=network_params)
 
     network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))

@@ -43,7 +43,7 @@ def main(args):
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
                                     num_units_list=[args.num_nodes]*args.num_layers,
-                                    output_dim=args.output_dim)
+                                    output_dim=args.output_dim, batch_size=args.batch_size)
 
     network_params = get_all_params(network, trainable=True)
 

@@ -3,7 +3,10 @@ from lasagne.layers import (InputLayer,
                             DropoutLayer,
                             ConcatLayer)
 from libs.lasagne_libs.layers import SequenceDenseLayer
-from libs.lasagne_libs.layers import LSTMLayer
+#from libs.lasagne_libs.layers import LSTMLayer
+from lasagne.layers import LSTMLayer, DenseLayer, ReshapeLayer
+#from lasagne.layers import SequenceDenseLayer
+from lasagne.layers import get_output_shape
 
 def deep_bidir_lstm_model(input_var,
                           mask_var,
@@ -82,6 +85,46 @@ def deep_bidir_lstm_alex(input_var,
                           input_dim,
                           num_units_list,
                           output_dim,
+                          batch_size,
+                          grad_clipping=1.0):
+    
+    input_layer = InputLayer(shape=(batch_size, None, input_dim),
+                             input_var=input_var)
+
+    mask_layer = InputLayer(shape=(batch_size, None),
+                            input_var=mask_var)
+
+    prev_input_layer = input_layer
+    for num_units in num_units_list:
+        lstm_fwd_layer = LSTMLayer(incoming=prev_input_layer,
+                                   mask_input=mask_layer,
+                                   num_units=num_units,
+                                   grad_clipping=grad_clipping,
+                                   backwards=False)
+        lstm_bwd_layer = LSTMLayer(incoming=prev_input_layer,
+                                   mask_input=mask_layer,
+                                   num_units=num_units,
+                                   grad_clipping=grad_clipping,
+                                   backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
+                                       axis=-1)
+
+    reshape_layer = ReshapeLayer(prev_input_layer, (-1, [2]))
+    dense_layer = DenseLayer(reshape_layer, num_units=output_dim, nonlinearity=nonlinearities.softmax)
+    output_layer = ReshapeLayer(dense_layer, (batch_size, -1, output_dim))
+
+#    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+#                                      num_outputs=output_dim,
+#                                      mask_input=mask_layer,
+#                                      nonlinearity=nonlinearities.softmax)
+    return output_layer
+
+def deep_bidir_lstm_lhuc(input_var,
+                          mask_var,
+                          input_dim,
+                          num_units_list,
+                          output_dim,
                           grad_clipping=1.0):
     
     input_layer = InputLayer(shape=(None, None, input_dim),
@@ -112,6 +155,5 @@ def deep_bidir_lstm_alex(input_var,
                                       mask_input=mask_layer,
                                       nonlinearity=nonlinearities.softmax)
     return output_layer
-
 
 
