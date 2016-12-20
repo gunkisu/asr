@@ -84,6 +84,7 @@ class SequenceDenseLayer(MergeLayer):
 
         if self.nonlinearity==nonlinearities.softmax:
             # softmax operation for probability
+            activation = activation - T.max(activation, axis=-1, keepdims=True)
             activation = T.exp(activation)
             if mask:
                 activation = activation*mask[:, :, None]
