@@ -125,7 +125,7 @@ def main(args):
             network_grads_norm = train_output[1]
 
             if b_idx%args.train_disp_freq == 0: 
-                show_status(args.save_path, ce_frame, network_grads_norm)
+                show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size)
             train_ce_frame_sum += ce_frame
 
         print('End of Epoch {}'.format(e_idx))

@@ -164,9 +164,9 @@ def save_network(network_params, trainer_params, epoch_cnt, save_path):
                 open(save_path, 'wb'))
 
 
-def show_status(save_path, ce_frame, network_grads_norm):
+def show_status(save_path, ce_frame, network_grads_norm, batch_idx, batch_size):
     model = save_path.split('/')[-1]
     print('--')
     print('Model Name: {}'.format(model))
-    print('Train CE (Batch): {}'.format(ce_frame))
+    print('Train CE {} (batch {}, seen {} examples so far): '.format(ce_frame, batch_idx, batch_idx*batch_size))
     print('Gradient Norm: {}'.format(network_grads_norm))
