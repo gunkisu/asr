@@ -386,6 +386,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
     parser.add_argument('-w', '--weight_noise', action='store', help='weight noise', default=0.0)
     parser.add_argument('-p', '--peepholes', action='store', help='peepholes', default=1)
+    parser.add_argument('-r', '--reg_l2', action='store', help='l2 regularizer', default=5)
 
     args = parser.parse_args()
     batch_size = int(args.batch_size)
@@ -396,6 +397,7 @@ if __name__ == '__main__':
     gradient_steps = int(args.grad_steps)
     weight_noise = float(args.weight_noise)
     peepholes = int(args.peepholes)
+    l2_lambda = int(args.reg_l2)
 
     options = OrderedDict()
     options['num_inputs'] = 123
@@ -417,7 +419,7 @@ if __name__ == '__main__':
     options['grad_norm'] = grad_norm
     options['grad_clipping'] = grad_clipping
     options['gradient_steps'] = gradient_steps
-    options['l2_lambda'] = 1e-5
+    options['l2_lambda'] = 0.0 if l2_lambda==0 else 10**(-l2_lambda)
 
     options['batch_size'] = batch_size
     options['eval_batch_size'] = 64
@@ -435,6 +437,7 @@ if __name__ == '__main__':
                            '_gc' + str(int(grad_clipping)) + \
                            '_gs' + str(int(gradient_steps)) + \
                            '_nl' + str(int(num_layers)) + \
+                           '_rg' + str(int(l2_lambda)) + \
                            '_p' + str(int(peepholes)) + \
                            '_b' + str(int(batch_size))
 
@@ -450,11 +453,3 @@ if __name__ == '__main__':
         print str(key), ': ', str(val)
 
     main(options)
-
-
-
-
-
-
-
-
