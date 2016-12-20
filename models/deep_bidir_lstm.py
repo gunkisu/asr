@@ -17,7 +17,8 @@ def deep_bidir_lstm_model(input_var,
                           learn_init=False,
                           grad_clipping=0.0,
                           gradient_steps=-1,
-                          use_softmax=True):
+                          use_softmax=True,
+                          use_projection=False):
     ###############
     # input layer #
     ###############
@@ -64,6 +65,11 @@ def deep_bidir_lstm_model(input_var,
         prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
                                        axis=-1)
 
+        if use_projection:
+            prev_input_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                                  num_outputs=num_units)
+
+
 
     ################
     # output layer #
@@ -75,7 +81,6 @@ def deep_bidir_lstm_model(input_var,
                                       mask_input=mask_layer,
                                       nonlinearity=nonlinearities.softmax if use_softmax else None)
     return output_layer
-
 
 def deep_bidir_lstm_alex(input_var,
                           mask_var,

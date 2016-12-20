@@ -41,7 +41,8 @@ def build_network(input_data,
                   peepholes=False,
                   learn_init=True,
                   grad_clipping=0.0,
-                  gradient_steps=-1):
+                  gradient_steps=-1,
+                  use_projection=False):
 
     network = deep_bidir_lstm_model(input_var=input_data,
                                     mask_var=input_mask,
@@ -55,7 +56,8 @@ def build_network(input_data,
                                     learn_init=learn_init,
                                     grad_clipping=grad_clipping,
                                     gradient_steps=gradient_steps,
-                                    use_softmax=False)
+                                    use_softmax=False,
+                                    use_projection=use_projection)
     return network
 
 def set_network_trainer(input_data,
@@ -225,7 +227,8 @@ def main(options):
                             peepholes=options['peepholes'],
                             learn_init=options['learn_init'],
                             grad_clipping=options['grad_clipping'],
-                            gradient_steps=options['gradient_steps'])
+                            gradient_steps=options['gradient_steps'],
+                            use_projection=options['use_projection'])
 
     network_params = get_all_params(network, trainable=True)
 
@@ -380,6 +383,7 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--weight_noise', action='store', help='weight noise', default=0.0)
     parser.add_argument('-p', '--peepholes', action='store', help='peepholes', default=1)
     parser.add_argument('-r', '--reg_l2', action='store', help='l2 regularizer', default=5)
+    parser.add_argument('-j', '--projection', action='store', help='projection layer', default=0)
 
     args = parser.parse_args()
     batch_size = int(args.batch_size)
@@ -391,11 +395,13 @@ if __name__ == '__main__':
     weight_noise = float(args.weight_noise)
     peepholes = int(args.peepholes)
     l2_lambda = int(args.reg_l2)
+    use_projection = int(args.projection)
 
     options = OrderedDict()
     options['num_inputs'] = 123
     options['num_units_list'] = [500]*num_layers
     options['num_outputs'] = 3436
+    options['use_projection'] = True if use_projection==1 else False
 
     options['dropout_ratio'] = 0.0
     options['weight_noise'] = weight_noise
@@ -429,6 +435,7 @@ if __name__ == '__main__':
                            '_nl' + str(int(num_layers)) + \
                            '_rg' + str(int(l2_lambda)) + \
                            '_p' + str(int(peepholes)) + \
+                           '_j' + str(int(use_projection)) + \
                            '_b' + str(int(batch_size))
 
 
