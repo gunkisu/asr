@@ -3,11 +3,15 @@ from __future__ import print_function
 
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 
 from libs.deep_lstm_utils import *
 from libs.lasagne_libs.updates import momentum
+from libs.utils import StopWatch
 from models.deep_bidir_lstm import deep_bidir_lstm_alex
+
+from data.wsj.fuel_utils import get_feat_stream, get_uttid_stream, get_datastream
+
 
 def main(args):
     args.save_path = './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
@@ -47,12 +51,12 @@ def main(args):
         print('Loading Parameters...')
         with open(args.reload_model, 'rb') as f:
             pretrain_network_params_val,  pretrain_update_params_val, \
-                    pretrain_total_batch_cnt = pickle.load(f)
+                    pretrain_total_epoch_cnt = pickle.load(f)
 
         set_model_param_value(network_params, pretrain_network_params_val)
     else:
         pretrain_update_params_val = None
-        pretrain_total_batch_cnt = 0
+        pretrain_total_epoch_cnt = 0
 
     print('Build trainer')
     sw = StopWatch()
@@ -78,7 +82,7 @@ def main(args):
                                        network=network)
 
     sw.print_elapsed()
-    print('Load data stream')
+    print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
     train_datastream = get_datastream(path=args.data_path,
                                       which_set=args.train_dataset,
                                       batch_size=args.batch_size, use_ivectors=args.use_ivectors)
@@ -88,20 +92,25 @@ def main(args):
 
 
     print('Start training')
-    evaluation_history =[[[10.0, 1.0], [10.0, 1.0]]]
+    EvalRecord = namedtuple('EvalRecord', ['ce_frame', 'fer'])
+
+    eval_history =[EvalRecord(10.0, 1.0)]
     early_stop_flag = False
     early_stop_cnt = 0
-    total_batch_cnt = 0
 
-    for e_idx in range(args.num_epochs):
+    # e_idx starts from 1
+    for e_idx in range(1, args.num_epochs+1):
+        if e_idx <= pretrain_total_epoch_cnt:
+            print('Skip Epoch {}'.format(e_idx))
+            continue
+
         epoch_sw = StopWatch()
-        print('Start Epoch {}'.format(e_idx+1))
+        print('--')
+        print('Epoch {} starts'.format(e_idx))
+        print('--')
         
-        for b_idx, data in enumerate(train_datastream.get_epoch_iterator()):
-            total_batch_cnt += 1
-            if pretrain_total_batch_cnt>=total_batch_cnt:
-                continue
-
+        train_ce_frame_sum = 0.0
+        for b_idx, data in enumerate(train_datastream.get_epoch_iterator(), start=1):
             input_data = data[0].astype(floatX)
             input_mask = data[1].astype(floatX)
 
@@ -115,8 +124,9 @@ def main(args):
             ce_frame = train_output[0]
             network_grads_norm = train_output[1]
 
-            if total_batch_cnt%args.train_disp_freq== 0 and total_batch_cnt!=0: 
-                show_status(args.save_path, e_idx, total_batch_cnt, ce_frame, network_grads_norm, evaluation_history)
+            if b_idx%args.train_disp_freq == 0: 
+                show_status(args.save_path, ce_frame, network_grads_norm)
+            train_ce_frame_sum += ce_frame
 
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
@@ -124,29 +134,30 @@ def main(args):
         eval_sw = StopWatch()
 #            train_nll, train_fer = eval_net(predict_fn,
 #                                                                 train_eval_datastream)
-        valid_nll, valid_fer = eval_net(predict_fn,
+        valid_ce_frame, valid_fer = eval_net(predict_fn,
         
                                                              valid_eval_datastream)
-
         eval_sw.print_elapsed()
-        if valid_fer>evaluation_history[-1][1][2]:
+
+        if valid_fer>eval_history[-1].fer:
             early_stop_cnt += 1.
         else:
             early_stop_cnt = 0.
-            save_network(network_params, trainer_params, total_batch_cnt, args.save_path+'_best_model.pkl') 
+            save_network(network_params, trainer_params, e_idx, args.save_path+'_best_model.pkl') 
 
-        if early_stop_cnt>10:
-            print('Training Early Stopped')
-            break
+        print('Train CE: {}'.format(train_ce_frame_sum / b_idx))
+        print('Valid CE: {}, FER: {}'.format(valid_ce_frame, valid_fer))
 
         print('Saving the network and evaluation history')
-
-        evaluation_history.append([[None, None],
-                                   [valid_nll, valid_fer]])
+        eval_history.append(EvalRecord(valid_ce_frame, valid_fer))
         numpy.savez(args.save_path + '_eval_history',
-                    eval_history=evaluation_history)
+                    eval_history=eval_history)
 
-        save_network(network_params, trainer_params, total_batch_cnt, args.save_path + '_last_model.pkl')
+        save_network(network_params, trainer_params, e_idx, args.save_path + '_last_model.pkl')
+        
+        if early_stop_cnt>10:
+            print('Training early stopped')
+            break
 
 if __name__ == '__main__':
     parser = get_arg_parser()

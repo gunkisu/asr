@@ -9,40 +9,15 @@ from lasagne.regularization import regularize_network_params, l2
 from lasagne.updates import total_norm_constraint
 from lasagne.objectives import categorical_crossentropy
 
-from fuel.datasets.hdf5 import H5PYDataset
-from fuel.streams import DataStream
-from fuel.schemes import ShuffledScheme, SequentialScheme
-from fuel.transformers import Padding, FilterSources, AgnosticTransformer
-
 from six import iteritems
 import itertools
 
 from models.deep_bidir_lstm import deep_bidir_lstm_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
-from data.transformers import ConcatenateTransformer
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
-
-
-import time
-
-
-class StopWatch():
-    def __init__(self):
-        self.start_time = time.time() 
-
-    def reset(self):
-        self.start_time = time.time()
-
-    def elapsed(self):
-        return time.time() - self.start_time
-    
-    def print_elapsed(self):
-        time_diff = time.time() - self.start_time
-
-        print('Took {}s ({}m; {}h)'.format(time_diff, time_diff / 60, time_diff / 3600))
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -72,43 +47,6 @@ def get_arg_parser():
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
 
     return parser
-
-def get_feat_stream(path, which_set='test_eval92', batch_size=1, use_ivectors=False):
-    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    print(path, which_set, file=sys.stderr)
-    iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
-    base_stream = DataStream(dataset=wsj_dataset,
-                             iteration_scheme=iterator_scheme)
-    if use_ivectors:
-        fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors'])
-        fs = ConcatenateTransformer(fs, ['features', 'ivectors'], 'features')
-    else:
-        fs = FilterSources(data_stream=base_stream, sources=['features'])
-    padded_stream = Padding(data_stream=fs)
-    return padded_stream
-
-def get_uttid_stream(path, which_set='test_eval92', batch_size=1):
-    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    print(path, which_set, file=sys.stderr)
-    iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
-    base_stream = DataStream(dataset=wsj_dataset,
-                             iteration_scheme=iterator_scheme)
-    fs = FilterSources(data_stream=base_stream, sources=['uttids'])
-    return fs
-
-def get_datastream(path, which_set='train_si84', batch_size=1, use_ivectors=False):
-    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    print(path, which_set, file=sys.stderr)
-    iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
-    base_stream = DataStream(dataset=wsj_dataset,
-                             iteration_scheme=iterator_scheme)
-    if use_ivectors:
-        fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
-        fs = ConcatenateTransformer(fs, ['features', 'ivectors'], 'features')
-    else:
-        fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
-    padded_stream = Padding(data_stream=fs)
-    return padded_stream
 
 def trainer(input_data,
                         input_mask,
@@ -151,71 +89,6 @@ def trainer(input_data,
                                   updates=train_updates)
     return training_fn, trainer_params
 
-def set_network_trainer(input_data,
-                        input_mask,
-                        target_data,
-                        target_mask,
-                        num_outputs,
-                        network,
-                        updater,
-                        learning_rate,
-                        grad_max_norm=10.,
-                        l2_lambda=1e-5,
-                        load_updater_params=None):
-    # get one hot target
-    one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
-                                                 nb_class=num_outputs,
-                                                 dtype=floatX)
-
-    # get network output data
-    predict_data = get_output(network, deterministic=False)
-    num_seqs = predict_data.shape[0]
-
-    # get prediction cost
-    predict_data = T.reshape(x=predict_data,
-                             newshape=(-1, num_outputs),
-                             ndim=2)
-    predict_data = predict_data - T.max(predict_data, axis=-1, keepdims=True)
-    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=-1, keepdims=True))
-    train_predict_cost = -T.sum(T.mul(one_hot_target_data, predict_data), axis=-1)
-    train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
-    train_model_cost = train_predict_cost.sum()/num_seqs
-    train_frame_cost = train_predict_cost.sum()/target_mask.sum()
-
-    # get regularizer cost
-    train_regularizer_cost = regularize_network_params(network, penalty=l2)
-
-    # get network parameters
-    network_params = get_all_params(network, trainable=True)
-
-    # get network gradients
-    network_grads = theano.grad(cost=train_model_cost + train_regularizer_cost*l2_lambda,
-                                wrt=network_params)
-
-    if grad_max_norm>0.:
-        network_grads, network_grads_norm = total_norm_constraint(tensor_vars=network_grads,
-                                                                  max_norm=grad_max_norm,
-                                                                  return_norm=True)
-    else:
-        network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
-
-    # set updater
-    train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
-    train_updates, trainer_params = updater(loss_or_grads=network_grads,
-                                            params=network_params,
-                                            learning_rate=train_lr,
-                                            load_params_dict=load_updater_params)
-
-    # get training (update) function
-    training_fn = theano.function(inputs=[input_data,
-                                          input_mask,
-                                          target_data,
-                                          target_mask],
-                                  outputs=[train_frame_cost,
-                                           network_grads_norm],
-                                  updates=train_updates)
-    return training_fn, trainer_params
-
 def predictor(input_data,
                           input_mask,
                           target_data,
@@ -241,44 +114,6 @@ def predictor(input_data,
                                  outputs=[pred_idx,
                                           ce_frame])
 
-def set_network_predictor(input_data,
-                          input_mask,
-                          target_data,
-                          target_mask,
-                          num_outputs,
-                          network):
-    # get one hot target
-    one_hot_target_data = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
-                                                 nb_class= num_outputs,
-                                                 dtype=floatX)
-
-    # get network output data
-    predict_data = get_output(network, deterministic=True)
-
-    # get prediction index
-    predict_idx = T.argmax(T.exp(predict_data), axis=-1)
-
-    # get prediction cost
-    predict_data = T.reshape(x=predict_data,
-                             newshape=(-1, predict_data.shape[-1]),
-                             ndim=2)
-
-    predict_data = predict_data - T.max(predict_data, axis=-1, keepdims=True)
-    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=-1, keepdims=True))
-    predict_cost = -T.sum(T.mul(one_hot_target_data, predict_data), axis=-1)
-    predict_cost = predict_cost*T.flatten(target_mask, 1)
-    predict_cost = predict_cost.sum()/target_mask.sum()
-
-    # get prediction function
-    predict_fn = theano.function(inputs=[input_data,
-                                         input_mask,
-                                         target_data,
-                                         target_mask],
-                                 outputs=[predict_idx,
-                                          predict_cost])
-
-    return predict_fn
-
 def eval_net(predict_fn,
                        data_stream):
 
@@ -287,10 +122,9 @@ def eval_net(predict_fn,
     # evaluation results
     total_nll = 0.
     total_fer = 0.
-    total_cnt = 0.
 
     # for each batch
-    for i, data in enumerate(data_iterator):
+    for batch_cnt, data in enumerate(data_iterator, start=1):
         # get input data
         input_data = data[0].astype(floatX)
         input_mask = data[1].astype(floatX)
@@ -316,27 +150,23 @@ def eval_net(predict_fn,
         # add up cost
         total_nll += predict_cost
         total_fer += (1.0 - match_avg)
-        total_cnt += 1.
 
-    total_nll /= total_cnt
-    total_fer /= total_cnt
+    total_nll /= batch_cnt 
+    total_fer /= batch_cnt
 
     return total_nll, total_fer
 
-def save_network(network_params, trainer_params, total_batch_cnt, save_path):
+
+def save_network(network_params, trainer_params, epoch_cnt, save_path):
     cur_network_params_val = get_model_param_values(network_params)
     cur_trainer_params_val = get_update_params_values(trainer_params)
-    cur_total_batch_cnt = total_batch_cnt
-    pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
+    pickle.dump([cur_network_params_val, cur_trainer_params_val, epoch_cnt],
                 open(save_path, 'wb'))
 
 
-def show_status(save_path, e_idx, total_batch_cnt, ce_frame, network_grads_norm, eval_history):
+def show_status(save_path, ce_frame, network_grads_norm):
     model = save_path.split('/')[-1]
     print('--')
     print('Model Name: {}'.format(model))
-    print('Epoch: {}, Update: {}'.format(e_idx, total_batch_cnt))
-    print('CE: {}'.format(ce_frame))
+    print('Train CE (Batch): {}'.format(ce_frame))
     print('Gradient Norm: {}'.format(network_grads_norm))
-    print('Valid CE: {}, FER: {}'.format(eval_history[-1][1][0], eval_history[-1][1][1]))
-
