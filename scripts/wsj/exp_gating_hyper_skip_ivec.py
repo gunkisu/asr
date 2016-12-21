@@ -421,7 +421,7 @@ if __name__ == '__main__':
     peepholes = int(args.peepholes)
 
     options = OrderedDict()
-    options['num_ivecs'] = 100
+    options['num_ivectors'] = 100
     options['num_inputs'] = 123
     options['num_inner_units_list'] = [250]*num_layers
     options['num_factor_units_list'] = [125]*num_layers
