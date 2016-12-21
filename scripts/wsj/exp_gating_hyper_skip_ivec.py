@@ -26,7 +26,7 @@ def get_datastream(path, which_set='train_si84', batch_size=1):
     iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
-    fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors' 'targets'])
+    fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
     padded_stream = Padding(data_stream=fs)
     return padded_stream
 
