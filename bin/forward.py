@@ -10,8 +10,8 @@ from libs.param_utils import set_model_param_value
 from libs.deep_lstm_utils import *
 import kaldi_io
 
-from models.deep_bidir_lstm import deep_bidir_lstm_alex
-from data.wsj.fuel_utils import get_feat_stream, get_uttid_stream, get_datastream
+import models.deep_bidir_lstm as models 
+import data.wsj.fuel_utils as fuel_utils
 
 def ff(input_data, input_mask, network):
     predict_data = get_output(network, deterministic=True)
@@ -27,7 +27,7 @@ def main(args):
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
     
-    network = deep_bidir_lstm_alex(input_var=input_data,
+    network = models.deep_bidir_lstm_alex(input_var=input_data,
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
                                     num_units_list=[args.num_nodes]*args.num_layers,
@@ -47,8 +47,8 @@ def main(args):
         sys.exit(1)
 
     ff_fn = ff(input_data=input_data, input_mask=input_mask, network=network)
-    feat_stream = get_feat_stream(args.data_path, args.dataset, args.batch_size, use_ivectors=args.use_ivectors) 
-    uttid_stream = get_uttid_stream(args.data_path, args.dataset, args.batch_size) 
+    feat_stream = fuel_utils.get_padded_feat_stream(args.data_path, args.dataset, args.batch_size, use_ivectors=args.use_ivectors) 
+    uttid_stream = fuel_utils.get_uttid_stream(args.data_path, args.dataset, args.batch_size) 
     
     writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 
