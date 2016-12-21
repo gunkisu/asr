@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
-from models.deep_bidir_lstm import deep_bidir_lstm_prj_model
+from models.gating_hyper_nets import deep_gating_skip_ivector_hyper_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
@@ -20,50 +20,55 @@ eps = numpy.finfo(floatX).eps
 
 set_rng(numpy.random.RandomState(111))
 
-import pdb
-
 def get_datastream(path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     print path, which_set
     iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
-    fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
+    fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
     padded_stream = Padding(data_stream=fs)
     return padded_stream
 
 def build_network(input_data,
                   input_mask,
+                  ivector_data,
+                  num_ivectors,
                   num_inputs,
-                  num_prj_list,
-                  num_units_list,
+                  num_inner_units_list,
+                  num_factor_units_list,
+                  num_outer_units_list,
                   num_outputs,
+                  gating_nonlinearity=None,
                   dropout_ratio=0.2,
                   weight_noise=0.0,
                   use_layer_norm=True,
                   peepholes=False,
                   learn_init=True,
-                  grad_clipping=0.0,
-                  gradient_steps=-1):
+                  grad_clipping=0.0):
 
-    network = deep_bidir_lstm_prj_model(input_var=input_data,
-                                        mask_var=input_mask,
-                                        num_inputs=num_inputs,
-                                        num_prj_list=num_prj_list,
-                                        num_units_list=num_units_list,
-                                        num_outputs=num_outputs,
-                                        dropout_ratio=dropout_ratio,
-                                        weight_noise=weight_noise,
-                                        use_layer_norm=use_layer_norm,
-                                        peepholes=peepholes,
-                                        learn_init=learn_init,
-                                        grad_clipping=grad_clipping,
-                                        gradient_steps=gradient_steps,
-                                        use_softmax=False)
+    network = deep_gating_skip_ivector_hyper_model(input_var=input_data,
+                                                   mask_var=input_mask,
+                                                   ivec_var=ivector_data,
+                                                   num_ivecs=num_ivectors,
+                                                   num_inputs=num_inputs,
+                                                   num_inner_units_list=num_inner_units_list,
+                                                   num_factor_units_list=num_factor_units_list,
+                                                   num_outer_units_list=num_outer_units_list,
+                                                   num_outputs=num_outputs,
+                                                   gating_nonlinearity=gating_nonlinearity,
+                                                   dropout_ratio=dropout_ratio,
+                                                   weight_noise=weight_noise,
+                                                   use_layer_norm=use_layer_norm,
+                                                   peepholes=peepholes,
+                                                   learn_init=learn_init,
+                                                   grad_clipping=grad_clipping,
+                                                   use_softmax=False)
     return network
 
 def set_network_trainer(input_data,
                         input_mask,
+                        ivector_data,
                         target_data,
                         target_mask,
                         num_outputs,
@@ -86,11 +91,7 @@ def set_network_trainer(input_data,
     predict_data = T.reshape(x=predict_data,
                              newshape=(-1, num_outputs),
                              ndim=2)
-
     predict_data = predict_data - T.max(predict_data, axis=-1, keepdims=True)
-
-    pre_predict_data = predict_data
-
     predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=-1, keepdims=True))
     train_predict_cost = -T.sum(T.mul(one_hot_target_data, predict_data), axis=-1)
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
@@ -98,13 +99,13 @@ def set_network_trainer(input_data,
     train_frame_cost = train_predict_cost.sum()/target_mask.sum()
 
     # get regularizer cost
-    train_regularizer_cost = regularize_network_params(network, penalty=l2)
+    train_regularizer_cost = regularize_network_params(network, penalty=l2)*l2_lambda
 
     # get network parameters
     network_params = get_all_params(network, trainable=True)
 
     # get network gradients
-    network_grads = theano.grad(cost=train_model_cost + train_regularizer_cost*l2_lambda,
+    network_grads = theano.grad(cost=train_model_cost + train_regularizer_cost,
                                 wrt=network_params)
 
     if grad_max_norm>0.:
@@ -124,16 +125,17 @@ def set_network_trainer(input_data,
     # get training (update) function
     training_fn = theano.function(inputs=[input_data,
                                           input_mask,
+                                          ivector_data,
                                           target_data,
                                           target_mask],
                                   outputs=[train_frame_cost,
-                                           network_grads_norm,
-                                           pre_predict_data],
+                                           network_grads_norm],
                                   updates=train_updates)
     return training_fn, trainer_params
 
 def set_network_predictor(input_data,
                           input_mask,
+                          ivector_data,
                           target_data,
                           target_mask,
                           num_outputs,
@@ -163,6 +165,7 @@ def set_network_predictor(input_data,
     # get prediction function
     predict_fn = theano.function(inputs=[input_data,
                                          input_mask,
+                                         ivector_data,
                                          target_data,
                                          target_mask],
                                  outputs=[predict_idx,
@@ -177,7 +180,7 @@ def network_evaluation(predict_fn,
 
     # evaluation results
     total_nll = 0.
-    total_fer = 0.
+    total_per = 0.
     total_cnt = 0.
 
     # for each batch
@@ -186,13 +189,18 @@ def network_evaluation(predict_fn,
         input_data = data[0].astype(floatX)
         input_mask = data[1].astype(floatX)
 
+        # get ivector data
+        ivector_data = data[2].astype(floatX)
+        ivector_mask = data[3].astype(floatX)
+
         # get target data
-        target_data = data[2]
-        target_mask = data[3].astype(floatX)
+        target_data = data[4]
+        target_mask = data[5].astype(floatX)
 
         # get prediction data
         predict_output = predict_fn(input_data,
                                     input_mask,
+                                    ivector_data,
                                     target_data,
                                     target_mask)
         predict_idx = predict_output[0]
@@ -202,40 +210,45 @@ def network_evaluation(predict_fn,
         match_data = (target_data == predict_idx)*target_mask
 
         # average over sequence
-        match_avg = numpy.sum(match_data)/numpy.sum(target_mask)
+        match_avg = numpy.sum(match_data, axis=-1)/numpy.sum(target_mask, axis=-1)
+        match_avg = match_avg.mean()
 
         # add up cost
         total_nll += predict_cost
-        total_fer += (1.0 - match_avg)
+        total_per += (1.0 - match_avg)
         total_cnt += 1.
 
     total_nll /= total_cnt
     total_bpc = total_nll/numpy.log(2.0)
-    total_fer /= total_cnt
+    total_per /= total_cnt
 
-    return total_nll, total_bpc, total_fer
+    return total_nll, total_bpc, total_per
 
 
 def main(options):
     print 'Build and compile network'
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
+    ivector_data = T.ftensor3('ivector_data')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
     network = build_network(input_data=input_data,
                             input_mask=input_mask,
+                            ivector_data=ivector_data,
+                            num_ivectors=options['num_ivectors'],
                             num_inputs=options['num_inputs'],
-                            num_prj_list=options['num_prj_list'],
-                            num_units_list=options['num_units_list'],
+                            num_inner_units_list=options['num_inner_units_list'],
+                            num_factor_units_list=options['num_factor_units_list'],
+                            num_outer_units_list=options['num_outer_units_list'],
                             num_outputs=options['num_outputs'],
+                            gating_nonlinearity=options['gating_nonlinearity'],
                             dropout_ratio=options['dropout_ratio'],
                             weight_noise=options['weight_noise'],
                             use_layer_norm=options['use_layer_norm'],
                             peepholes=options['peepholes'],
                             learn_init=options['learn_init'],
-                            grad_clipping=options['grad_clipping'],
-                            gradient_steps=options['gradient_steps'])
+                            grad_clipping=options['grad_clipping'])
 
     network_params = get_all_params(network, trainable=True)
 
@@ -252,6 +265,7 @@ def main(options):
     print 'Build network trainer'
     training_fn, trainer_params = set_network_trainer(input_data=input_data,
                                                       input_mask=input_mask,
+                                                      ivector_data=ivector_data,
                                                       target_data=target_data,
                                                       target_mask=target_mask,
                                                       num_outputs=options['num_outputs'],
@@ -265,6 +279,7 @@ def main(options):
     print 'Build network predictor'
     predict_fn = set_network_predictor(input_data=input_data,
                                        input_mask=input_mask,
+                                       ivector_data=ivector_data,
                                        target_data=target_data,
                                        target_mask=target_mask,
                                        num_outputs=options['num_outputs'],
@@ -298,21 +313,22 @@ def main(options):
                 input_data = data[0].astype(floatX)
                 input_mask = data[1].astype(floatX)
 
+                # get ivector data
+                ivector_data = data[2].astype(floatX)
+                ivector_mask = data[3].astype(floatX)
+
                 # get target data
-                target_data = data[2]
-                target_mask = data[3].astype(floatX)
+                target_data = data[4]
+                target_mask = data[5].astype(floatX)
 
                 # get output
                 train_output = training_fn(input_data,
                                            input_mask,
+                                           ivector_data,
                                            target_data,
                                            target_mask)
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
-                #
-                # print train_output[2].min(), train_output[2].max(), train_output[0]
-                # if total_batch_cnt%10 ==0:
-                #     raw_input()
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
@@ -382,18 +398,17 @@ def main(options):
                     open(options['save_path'] + '_last_model.pkl', 'wb'))
 
 if __name__ == '__main__':
-    from libs.lasagne_libs.updates import momentum
+    from libs.lasagne_libs.updates import adamax, nesterov_momentum, momentum
     parser = ArgumentParser()
 
     parser.add_argument('-b', '--batch_size', action='store',help='batch size', default=1)
-    parser.add_argument('-n', '--num_layers', action='store',help='num of layers', default=5)
-    parser.add_argument('-l', '--learn_rate', action='store', help='learning rate', default=4)
+    parser.add_argument('-n', '--num_layers', action='store',help='num of layers', default=2)
+    parser.add_argument('-l', '--learn_rate', action='store', help='learning rate', default=1)
     parser.add_argument('-g', '--grad_norm', action='store', help='gradient norm', default=0.0)
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
     parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
     parser.add_argument('-w', '--weight_noise', action='store', help='weight noise', default=0.0)
     parser.add_argument('-p', '--peepholes', action='store', help='peepholes', default=1)
-    parser.add_argument('-r', '--reg_l2', action='store', help='l2 regularizer', default=5)
 
     args = parser.parse_args()
     batch_size = int(args.batch_size)
@@ -404,17 +419,19 @@ if __name__ == '__main__':
     gradient_steps = int(args.grad_steps)
     weight_noise = float(args.weight_noise)
     peepholes = int(args.peepholes)
-    l2_lambda = int(args.reg_l2)
 
     options = OrderedDict()
+    options['num_ivectors'] = 100
     options['num_inputs'] = 123
-    options['num_prj_list'] = [250]*num_layers
-    options['num_units_list'] = [500]*num_layers
+    options['num_inner_units_list'] = [250]*num_layers
+    options['num_factor_units_list'] = [125]*num_layers
+    options['num_outer_units_list'] = [500]*num_layers
     options['num_outputs'] = 3436
 
     options['dropout_ratio'] = 0.0
     options['weight_noise'] = weight_noise
     options['use_layer_norm'] = False
+    options['gating_nonlinearity'] = None
 
     options['peepholes'] = True if peepholes==1 else False
     options['learn_init'] = False
@@ -424,7 +441,7 @@ if __name__ == '__main__':
     options['grad_norm'] = grad_norm
     options['grad_clipping'] = grad_clipping
     options['gradient_steps'] = gradient_steps
-    options['l2_lambda'] = 0.0 if l2_lambda==0 else 10**(-l2_lambda)
+    options['l2_lambda'] = 1e-5
 
     options['batch_size'] = batch_size
     options['eval_batch_size'] = 64
@@ -434,15 +451,14 @@ if __name__ == '__main__':
     options['train_eval_freq'] = 500
     options['train_save_freq'] = 100
 
-    options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
+    options['data_path'] = '/home/kimts/data/speech/wsj_fbank123_ivector.h5'
 
-    options['save_path'] = './wsj_deep_lstm_prj' + \
+    options['save_path'] = './wsj_gating_hyper_skip_ivector' + \
                            '_lr' + str(int(learn_rate)) + \
                            '_gn' + str(int(grad_norm)) + \
                            '_gc' + str(int(grad_clipping)) + \
                            '_gs' + str(int(gradient_steps)) + \
                            '_nl' + str(int(num_layers)) + \
-                           '_rg' + str(int(l2_lambda)) + \
                            '_p' + str(int(peepholes)) + \
                            '_b' + str(int(batch_size))
 
@@ -458,3 +474,11 @@ if __name__ == '__main__':
         print str(key), ': ', str(val)
 
     main(options)
+
+
+
+
+
+
+
+

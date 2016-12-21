@@ -643,7 +643,7 @@ class LSTMPLayer(MergeLayer):
                                                     name="W_cell_to_outgate")
 
         #### hidden projection ####
-        self.W_hid_projection = self.add_param(spec=outgate.W_hid,
+        self.W_hid_projection = self.add_param(spec=init.Orthogonal(0.1),
                                                shape=(num_units, num_prj),
                                                name="W_cell_to_outgate")
 
