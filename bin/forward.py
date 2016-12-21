@@ -10,7 +10,8 @@ from libs.param_utils import set_model_param_value
 from libs.deep_lstm_utils import *
 import kaldi_io
 
-from models.deep_bidir_lstm import deep_bidir_lstm_model
+from models.deep_bidir_lstm import deep_bidir_lstm_alex
+from data.wsj.fuel_utils import get_feat_stream, get_uttid_stream, get_datastream
 
 def ff(input_data, input_mask, network):
     predict_data = get_output(network, deterministic=True)
@@ -26,19 +27,11 @@ def main(args):
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
     
-    network = deep_bidir_lstm_model(input_var=input_data,
+    network = deep_bidir_lstm_alex(input_var=input_data,
                                     mask_var=input_mask,
-                                    num_inputs=args.input_dim,
+                                    input_dim=args.input_dim,
                                     num_units_list=[args.num_nodes]*args.num_layers,
-                                    num_outputs=args.output_dim,
-                                    dropout_ratio=args.dropout_ratio,
-                                    weight_noise=args.weight_noise,
-                                    use_layer_norm=args.use_layer_norm,
-                                    peepholes=not args.no_peepholes,
-                                    learn_init=args.learn_init,
-                                    grad_clipping=args.grad_clipping,
-                                    gradient_steps=args.grad_steps)
-                                    use_softmax=True)
+                                    output_dim=args.output_dim)
 
     network_params = get_all_params(network, trainable=True)
 
@@ -46,7 +39,7 @@ def main(args):
     if args.model:
         with open(args.model, 'rb') as f:
             pretrain_network_params_val,  pretrain_update_params_val, \
-                    pretrain_total_batch_cnt = pickle.load(f)
+                    pretrain_total_epoch_cnt = pickle.load(f)
 
             set_model_param_value(network_params, pretrain_network_params_val)
     else:
