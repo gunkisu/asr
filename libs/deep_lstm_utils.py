@@ -100,13 +100,11 @@ def predictor(input_data,
     ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
             targets=T.flatten(target_data, 1))
 
-    # get prediction index
     pred_idx = T.argmax(o, axis=-1)
     ce = ce * T.flatten(target_mask, 1)
 
-    #ce = ce.sum()/num_seqs
     ce_frame = ce.sum()/target_mask.sum()
-    # get one hot target
+
     return theano.function(inputs=[input_data,
                                          input_mask,
                                          target_data,
@@ -119,21 +117,16 @@ def eval_net(predict_fn,
 
     data_iterator = data_stream.get_epoch_iterator()
 
-    # evaluation results
     total_nll = 0.
     total_fer = 0.
 
-    # for each batch
     for batch_cnt, data in enumerate(data_iterator, start=1):
-        # get input data
         input_data = data[0].astype(floatX)
         input_mask = data[1].astype(floatX)
 
-        # get target data
         target_data = data[2]
         target_mask = data[3].astype(floatX)
 
-        # get prediction data
         predict_output = predict_fn(input_data,
                                     input_mask,
                                     target_data,
@@ -141,13 +134,9 @@ def eval_net(predict_fn,
         predict_idx = predict_output[0]
         predict_cost = predict_output[1]
 
-        # compare with target data
         match_data = (target_data == predict_idx)*target_mask
-
-        # average over sequence
         match_avg = numpy.sum(match_data)/numpy.sum(target_mask)
 
-        # add up cost
         total_nll += predict_cost
         total_fer += (1.0 - match_avg)
 
@@ -164,9 +153,9 @@ def save_network(network_params, trainer_params, epoch_cnt, save_path):
                 open(save_path, 'wb'))
 
 
-def show_status(save_path, ce_frame, network_grads_norm, batch_idx, batch_size):
+def show_status(save_path, ce_frame, network_grads_norm, batch_idx, batch_size, epoch_idx):
     model = save_path.split('/')[-1]
     print('--')
-    print('Model Name: {}'.format(model))
-    print('Train CE {} (batch {}, seen {} examples so far): '.format(ce_frame, batch_idx, batch_idx*batch_size))
+    print('Model Name: {} (Epoch {})'.format(model, epoch_idx))
+    print('Train CE {} (batch {}, {} examples so far): '.format(ce_frame, batch_idx, batch_idx*batch_size))
     print('Gradient Norm: {}'.format(network_grads_norm))
