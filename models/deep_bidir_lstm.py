@@ -81,7 +81,6 @@ def deep_bidir_lstm_model(input_var,
                                 p=dropout_ratio)
     output_layer = SequenceDenseLayer(incoming=output_layer,
                                       num_outputs=num_outputs,
-                                      mask_input=mask_layer,
                                       nonlinearity=nonlinearities.softmax if use_softmax else None)
     return output_layer
 
@@ -152,7 +151,6 @@ def deep_bidir_lstm_prj_model(input_var,
                                 p=dropout_ratio)
     output_layer = SequenceDenseLayer(incoming=output_layer,
                                       num_outputs=num_outputs,
-                                      mask_input=mask_layer,
                                       nonlinearity=nonlinearities.softmax if use_softmax else None)
     return output_layer
 
