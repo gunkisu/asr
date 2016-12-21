@@ -20,6 +20,8 @@ eps = numpy.finfo(floatX).eps
 
 set_rng(numpy.random.RandomState(111))
 
+import pdb
+
 def get_datastream(path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     print path, which_set
@@ -121,7 +123,8 @@ def set_network_trainer(input_data,
                                           target_data,
                                           target_mask],
                                   outputs=[train_frame_cost,
-                                           network_grads_norm],
+                                           network_grads_norm,
+                                           predict_data],
                                   updates=train_updates)
     return training_fn, trainer_params
 
@@ -302,6 +305,8 @@ def main(options):
                                            target_mask)
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
+
+                pdb.set_trace()
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
