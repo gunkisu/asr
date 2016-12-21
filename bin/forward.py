@@ -47,7 +47,7 @@ def main(args):
         sys.exit(1)
 
     ff_fn = ff(input_data=input_data, input_mask=input_mask, network=network)
-    feat_stream = fuel_utils.get_padded_feat_stream(args.data_path, args.dataset, args.batch_size, use_ivectors=args.use_ivectors) 
+    feat_stream = fuel_utils.get_feat_stream(args.data_path, args.dataset, args.batch_size, use_ivectors=args.use_ivectors) 
     uttid_stream = fuel_utils.get_uttid_stream(args.data_path, args.dataset, args.batch_size) 
     
     writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)

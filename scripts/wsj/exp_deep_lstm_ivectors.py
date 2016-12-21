@@ -12,6 +12,9 @@ import libs.utils as utils
 import models.deep_bidir_lstm as models
 import data.wsj.fuel_utils as fuel_utils
 
+import data.transformers as trans
+from fuel.transformers import Padding
+
 def main(args):
     args.save_path = './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
             args.learn_rate, args.grad_norm, args.grad_clipping, args.grad_steps, args.num_layers, args.num_nodes, 
@@ -82,13 +85,19 @@ def main(args):
 
     sw.print_elapsed()
     print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
-    train_ds = fuel_utils.get_padded_datastream(path=args.data_path,
-                                      which_set=args.train_dataset,
-                                      batch_size=args.batch_size, use_ivectors=args.use_ivectors)
-    valid_ds = fuel_utils.get_padded_datastream(path=args.data_path,
-                                      which_set=args.valid_dataset,
-                                      batch_size=args.batch_size, use_ivectors=args.use_ivectors)
-
+    
+    train_ds = fuel_utils.get_datastream(path=args.data_path,
+                                  which_set=args.train_dataset,
+                                  batch_size=args.batch_size, 
+                                  use_ivectors=args.use_ivectors, 
+                                  truncate_ivectors=args.truncate_ivectors, 
+                                  ivector_dim=args.ivector_dim)
+    valid_ds = fuel_utils.get_datastream(path=args.data_path,
+                                  which_set=args.valid_dataset,
+                                  batch_size=args.batch_size, 
+                                  use_ivectors=args.use_ivectors,
+                                  truncate_ivectors=args.truncate_ivectors,
+                                  ivector_dim=args.ivector_dim)
 
     print('Start training')
     EvalRecord = namedtuple('EvalRecord', ['ce_frame', 'fer'])
