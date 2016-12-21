@@ -309,10 +309,10 @@ def main(options):
                                            target_mask)
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
-
-                print train_output[2].min(), train_output[2].max(), train_output[0]
-                if total_batch_cnt%10 ==0:
-                    raw_input()
+                #
+                # print train_output[2].min(), train_output[2].max(), train_output[0]
+                # if total_batch_cnt%10 ==0:
+                #     raw_input()
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
