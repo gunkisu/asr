@@ -83,10 +83,10 @@ def main(args):
 
     sw.print_elapsed()
     print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
-    train_datastream = get_datastream(path=args.data_path,
+    train_ds = get_datastream(path=args.data_path,
                                       which_set=args.train_dataset,
                                       batch_size=args.batch_size, use_ivectors=args.use_ivectors)
-    valid_eval_datastream = get_datastream(path=args.data_path,
+    valid_ds = get_datastream(path=args.data_path,
                                       which_set=args.valid_dataset,
                                       batch_size=args.batch_size, use_ivectors=args.use_ivectors)
 
@@ -110,7 +110,7 @@ def main(args):
         print('--')
         
         train_ce_frame_sum = 0.0
-        for b_idx, data in enumerate(train_datastream.get_epoch_iterator(), start=1):
+        for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
             input_data = data[0].astype(floatX)
             input_mask = data[1].astype(floatX)
 
@@ -125,18 +125,16 @@ def main(args):
             network_grads_norm = train_output[1]
 
             if b_idx%args.train_disp_freq == 0: 
-                show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size)
+                show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size, e_idx)
             train_ce_frame_sum += ce_frame
 
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
+        
         print('Evaluating the network on the validation dataset')
         eval_sw = StopWatch()
-#            train_nll, train_fer = eval_net(predict_fn,
-#                                                                 train_eval_datastream)
-        valid_ce_frame, valid_fer = eval_net(predict_fn,
-        
-                                                             valid_eval_datastream)
+        #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
+        valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds)
         eval_sw.print_elapsed()
 
         if valid_fer>eval_history[-1].fer:
