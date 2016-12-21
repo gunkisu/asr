@@ -86,7 +86,11 @@ def set_network_trainer(input_data,
     predict_data = T.reshape(x=predict_data,
                              newshape=(-1, num_outputs),
                              ndim=2)
+
     predict_data = predict_data - T.max(predict_data, axis=-1, keepdims=True)
+
+    pre_predict_data = predict_data
+
     predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=-1, keepdims=True))
     train_predict_cost = -T.sum(T.mul(one_hot_target_data, predict_data), axis=-1)
     train_predict_cost = train_predict_cost*T.flatten(target_mask, 1)
@@ -124,7 +128,7 @@ def set_network_trainer(input_data,
                                           target_mask],
                                   outputs=[train_frame_cost,
                                            network_grads_norm,
-                                           predict_data],
+                                           pre_predict_data],
                                   updates=train_updates)
     return training_fn, trainer_params
 
