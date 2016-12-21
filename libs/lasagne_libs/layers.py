@@ -512,150 +512,350 @@ class LSTMLayer(MergeLayer):
 
             return T.concatenate([hid_out, cell_out], axis=-1)
 
-class BiDirLSTMLayer(MergeLayer):
+class LSTMPLayer(MergeLayer):
     def __init__(self,
                  incoming,
+                 num_prj,
                  num_units,
                  ingate=Gate(),
                  forgetgate=Gate(b=init.Constant(1.)),
                  cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
                  outgate=Gate(),
                  nonlinearity=nonlinearities.tanh,
-                 fwd_cell_init=init.Constant(0.),
-                 fwd_hid_init=init.Constant(0.),
-                 bwd_cell_init=init.Constant(0.),
-                 bwd_hid_init=init.Constant(0.),
+                 cell_init=init.Constant(0.),
+                 hid_init=init.Constant(0.),
                  dropout_ratio=0.2,
-                 use_layer_norm=True,
                  weight_noise=0.0,
                  backwards=False,
                  learn_init=False,
-                 peepholes=False,
+                 peepholes=True,
                  gradient_steps=-1,
                  grad_clipping=0,
                  unroll_scan=False,
-                 precompute_input=True,
                  mask_input=None,
                  only_return_final=False,
+                 only_return_hidden=True,
                  **kwargs):
 
         incomings = [incoming]
         self.mask_incoming_index = -1
-        self.fwd_hid_init_incoming_index = -1
-        self.fwd_cell_init_incoming_index = -1
-        self.bwd_hid_init_incoming_index = -1
-        self.bwd_cell_init_incoming_index = -1
         if mask_input is not None:
             incomings.append(mask_input)
             self.mask_incoming_index = len(incomings)-1
-        if isinstance(fwd_hid_init, Layer):
-            incomings.append(fwd_hid_init)
-            self.fwd_hid_init_incoming_index = len(incomings)-1
-        if isinstance(fwd_cell_init, Layer):
-            incomings.append(fwd_cell_init)
-            self.fwd_cell_init_incoming_index = len(incomings)-1
-        if isinstance(bwd_hid_init, Layer):
-            incomings.append(bwd_hid_init)
-            self.bwd_hid_init_incoming_index = len(incomings)-1
-        if isinstance(bwd_cell_init, Layer):
-            incomings.append(bwd_cell_init)
-            self.bwd_cell_init_incoming_index = len(incomings)-1
 
-        super(BiDirLSTMLayer, self).__init__(incomings, **kwargs)
+        self.hid_init_incoming_index = -1
+        if isinstance(hid_init, Layer):
+            incomings.append(hid_init)
+            self.hid_init_incoming_index = len(incomings)-1
 
-        self.fwd_lstm_layer = LSTMLayer(incoming=incoming,
-                                        num_units=num_units,
-                                        ingate=ingate,
-                                        forgetgate=forgetgate,
-                                        cell=cell,
-                                        outgate=outgate,
-                                        nonlinearity=nonlinearity,
-                                        cell_init=fwd_cell_init,
-                                        hid_init=fwd_hid_init,
-                                        dropout_ratio=dropout_ratio,
-                                        use_layer_norm=use_layer_norm,
-                                        weight_noise=weight_noise,
-                                        backwards=False,
-                                        learn_init=learn_init,
-                                        peepholes=peepholes,
-                                        gradient_steps=gradient_steps,
-                                        grad_clipping=grad_clipping,
-                                        unroll_scan=unroll_scan,
-                                        precompute_input=precompute_input,
-                                        mask_input=mask_input,
-                                        only_return_final=only_return_final,
-                                        **kwargs)
-        self.params.update(self.fwd_lstm_layer.params)
+        self.cell_init_incoming_index = -1
+        if isinstance(cell_init, Layer):
+            incomings.append(cell_init)
+            self.cell_init_incoming_index = len(incomings)-1
 
-        self.bwd_lstm_layer = LSTMLayer(incoming=incoming,
-                                        num_units=num_units,
-                                        ingate=ingate,
-                                        forgetgate=forgetgate,
-                                        cell=cell,
-                                        outgate=outgate,
-                                        nonlinearity=nonlinearity,
-                                        cell_init=bwd_cell_init,
-                                        hid_init=bwd_hid_init,
-                                        dropout_ratio=dropout_ratio,
-                                        use_layer_norm=use_layer_norm,
-                                        weight_noise=weight_noise,
-                                        backwards=True,
-                                        learn_init=learn_init,
-                                        peepholes=peepholes,
-                                        gradient_steps=gradient_steps,
-                                        grad_clipping=grad_clipping,
-                                        unroll_scan=unroll_scan,
-                                        precompute_input=precompute_input,
-                                        mask_input=mask_input,
-                                        only_return_final=only_return_final,
-                                        **kwargs)
-        self.params.update(self.bwd_lstm_layer.params)
+        # Initialize parent layer
+        super(LSTMPLayer, self).__init__(incomings, **kwargs)
 
-        self.output_layer = ConcatLayer(incomings=[self.fwd_lstm_layer,
-                                                   self.bwd_lstm_layer],
-                                        axis=-1)
+        # for dropout
+        self.binomial = RandomStreams(get_rng().randint(1, 2147462579)).binomial
+        self.p = dropout_ratio
 
-        self.num_units = num_units*2
+        # for weight noise
+        self.normal = RandomStreams(get_rng().randint(1, 2147462579)).normal
+
+        # If the provided nonlinearity is None, make it linear
+        if nonlinearity is None:
+            self.nonlinearity = nonlinearities.identity
+        else:
+            self.nonlinearity = nonlinearity
+
+        self.weight_noise = weight_noise
+        self.learn_init = learn_init
+        self.num_prj = num_prj
+        self.num_units = num_units
+        self.backwards = backwards
+        self.peepholes = peepholes
+        self.gradient_steps = gradient_steps
+        self.grad_clipping = grad_clipping
+        self.unroll_scan = unroll_scan
         self.only_return_final = only_return_final
+        self.only_return_hidden = only_return_hidden
+
+        if unroll_scan and gradient_steps != -1:
+            raise ValueError("Gradient steps must be -1 when unroll_scan is true.")
+
+        input_shape = self.input_shapes[0]
+        if unroll_scan and input_shape[1] is None:
+            raise ValueError("Input sequence length cannot be specified as "
+                             "None when unroll_scan is True")
+
+        #### weight init ####
+        num_inputs = numpy.prod(input_shape[2:])
+        def add_gate_params(gate, gate_name):
+            return (self.add_param(spec=gate.W_in,
+                                   shape=(num_inputs, num_units),
+                                   name="W_in_to_{}".format(gate_name)),
+                    self.add_param(spec=gate.W_hid,
+                                   shape=(num_prj, num_units),
+                                   name="W_hid_to_{}".format(gate_name)),
+                    self.add_param(spec=gate.b,
+                                   shape=(num_units,),
+                                   name="b_{}".format(gate_name),
+                                   regularizable=False),
+                    gate.nonlinearity)
+
+        #### ingate ####
+        (self.W_in_to_ingate,
+         self.W_hid_to_ingate,
+         self.b_ingate,
+         self.nonlinearity_ingate) = add_gate_params(ingate, 'ingate')
+
+        #### forgetgate ####
+        (self.W_in_to_forgetgate,
+         self.W_hid_to_forgetgate,
+         self.b_forgetgate,
+         self.nonlinearity_forgetgate) = add_gate_params(forgetgate, 'forgetgate')
+
+        #### cell ####
+        (self.W_in_to_cell,
+         self.W_hid_to_cell,
+         self.b_cell,
+         self.nonlinearity_cell) = add_gate_params(cell, 'cell')
+
+        #### outgate ####
+        (self.W_in_to_outgate,
+         self.W_hid_to_outgate,
+         self.b_outgate,
+         self.nonlinearity_outgate) = add_gate_params(outgate, 'outgate')
+
+        #### peepholes ####
+        if self.peepholes:
+            self.W_cell_to_ingate = self.add_param(spec=ingate.W_cell,
+                                                   shape=(num_units, ),
+                                                   name="W_cell_to_ingate")
+
+            self.W_cell_to_forgetgate = self.add_param(spec=forgetgate.W_cell,
+                                                       shape=(num_units, ),
+                                                       name="W_cell_to_forgetgate")
+
+            self.W_cell_to_outgate = self.add_param(spec=outgate.W_cell,
+                                                    shape=(num_units, ),
+                                                    name="W_cell_to_outgate")
+
+        #### hidden projection ####
+        self.W_hid_projection = self.add_param(spec=outgate.W_hid,
+                                               shape=(num_units, num_prj),
+                                               name="W_cell_to_outgate")
+
+
+        # Setup initial values for the cell and the hidden units
+        if isinstance(cell_init, Layer):
+            self.cell_init = cell_init
+        else:
+            self.cell_init = self.add_param(
+                cell_init, (1, num_units), name="cell_init",
+                trainable=learn_init, regularizable=False)
+
+        if isinstance(hid_init, Layer):
+            self.hid_init = hid_init
+        else:
+            self.hid_init = self.add_param(
+                hid_init, (1, num_prj), name="hid_init",
+                trainable=learn_init, regularizable=False)
 
     def get_output_shape_for(self, input_shapes):
-        num_samples = input_shapes[0][0]
-        num_step = input_shapes[0][1]
-        num_units = self.num_units
+        input_shape = input_shapes[0]
+        if self.only_return_hidden:
+            num_outputs = self.num_prj
+        else:
+            num_outputs = self.num_prj + self.num_units
 
         if self.only_return_final:
-            return (num_samples, num_units)
+            return input_shape[0], num_outputs
         else:
-            return (num_samples, num_step, num_units)
+            return input_shape[0], input_shape[1], num_outputs
 
     def get_output_for(self, inputs, deterministic=False, **kwargs):
-        input_dict = {}
-
         input = inputs[0]
-        input_dict[self.input_layers[0]] = input
 
+        mask = None
         if self.mask_incoming_index > 0:
             mask = inputs[self.mask_incoming_index]
-            input_dict[self.input_layers[self.mask_incoming_index]] = mask
 
-        if self.fwd_hid_init_incoming_index > 0:
-            fwd_hid_init = inputs[self.fwd_hid_init_incoming_index]
-            input_dict[self.input_layers[self.fwd_hid_init_incoming_index]] = fwd_hid_init
-        if self.fwd_cell_init_incoming_index > 0:
-            fwd_cell_init = inputs[self.fwd_cell_init_incoming_index]
-            input_dict[self.input_layers[self.fwd_cell_init_incoming_index]] = fwd_cell_init
+        hid_init = None
+        if self.hid_init_incoming_index > 0:
+            hid_init = inputs[self.hid_init_incoming_index]
 
-        if self.bwd_hid_init_incoming_index > 0:
-            bwd_hid_init = inputs[self.bwd_hid_init_incoming_index]
-            input_dict[self.input_layers[self.bwd_hid_init_incoming_index]] = bwd_hid_init
-        if self.bwd_cell_init_incoming_index > 0:
-            bwd_cell_init = inputs[self.bwd_cell_init_incoming_index]
-            input_dict[self.input_layers[self.bwd_cell_init_incoming_index]] = bwd_cell_init
+        cell_init = None
+        if self.cell_init_incoming_index > 0:
+            cell_init = inputs[self.cell_init_incoming_index]
 
+        if input.ndim > 3:
+            input = T.flatten(input, 3)
 
-        output = get_output(self.output_layer,
-                            inputs=input_dict,
-                            deterministic=deterministic)
+        input = input.dimshuffle(1, 0, 2)
+        seq_len, num_batch, _ = input.shape
 
-        return output
+        #### input ####
+        W_in_stacked = T.concatenate([self.W_in_to_ingate,
+                                      self.W_in_to_forgetgate,
+                                      self.W_in_to_cell,
+                                      self.W_in_to_outgate], axis=1)
 
+        #### hidden ####
+        W_hid_stacked = T.concatenate([self.W_hid_to_ingate,
+                                       self.W_hid_to_forgetgate,
+                                       self.W_hid_to_cell,
+                                       self.W_hid_to_outgate], axis=1)
+
+        #### bias ####
+        b_stacked = T.concatenate([self.b_ingate,
+                                   self.b_forgetgate,
+                                   self.b_cell,
+                                   self.b_outgate], axis=0)
+
+        #### weight noise ####
+        if self.weight_noise>0 and deterministic is True:
+            W_in_stacked += self.normal(size=W_in_stacked.shape,
+                                        std=self.weight_noise)
+            W_hid_stacked += self.normal(size=W_hid_stacked.shape,
+                                         std=self.weight_noise)
+
+        def slice_w(x, n):
+            return x[:, n*self.num_units:(n+1)*self.num_units]
+
+        #### set dropout mask ####
+        if deterministic:
+            self.using_dropout = False
+        else:
+            self.using_dropout = True
+        cell_mask = self.binomial((num_batch, self.num_units),
+                                  p=T.constant(1) - self.p,
+                                  dtype=floatX)
+
+        input = T.dot(input, W_in_stacked) + b_stacked
+        def step(input_n,
+                 cell_previous,
+                 hid_previous,
+                 *args):
+            gates = input_n + T.dot(hid_previous, W_hid_stacked)
+
+            ingate = slice_w(gates, 0)
+            forgetgate = slice_w(gates, 1)
+            cell_input = slice_w(gates, 2)
+            outgate = slice_w(gates, 3)
+
+            if self.peepholes:
+                ingate += cell_previous*self.W_cell_to_ingate
+                forgetgate += cell_previous*self.W_cell_to_forgetgate
+
+            if self.grad_clipping:
+                ingate = theano.gradient.grad_clip(ingate,
+                                                   -self.grad_clipping,
+                                                   self.grad_clipping)
+                forgetgate = theano.gradient.grad_clip(forgetgate,
+                                                       -self.grad_clipping,
+                                                       self.grad_clipping)
+                cell_input = theano.gradient.grad_clip(cell_input,
+                                                       -self.grad_clipping,
+                                                       self.grad_clipping)
+
+            ingate = self.nonlinearity_ingate(ingate)
+            forgetgate = self.nonlinearity_forgetgate(forgetgate)
+            cell_input = self.nonlinearity_cell(cell_input)
+
+            # Compute new cell value
+            if self.using_dropout==False or self.p == 0:
+                cell_input = cell_input
+            else:
+                one = T.constant(1)
+                retain_prob = one - self.p
+                cell_input /= retain_prob
+                cell_input = cell_input*cell_mask
+
+            # Compute new cell value
+            cell = forgetgate*cell_previous + ingate*cell_input
+
+            if self.peepholes:
+                outgate += cell*self.W_cell_to_outgate
+
+            if self.grad_clipping:
+                outgate = theano.gradient.grad_clip(outgate,
+                                                    -self.grad_clipping,
+                                                    self.grad_clipping)
+
+            outgate = self.nonlinearity_outgate(outgate)
+
+            # Compute new hidden unit activation
+            hid = outgate * self.nonlinearity(cell)
+            hid = T.dot(hid, self.W_hid_projection)
+            return [cell, hid]
+
+        def step_masked(input_n,
+                        mask_n,
+                        cell_previous,
+                        hid_previous,
+                        *args):
+            cell, hid = step(input_n, cell_previous, hid_previous, *args)
+
+            cell = T.switch(mask_n, cell, cell_previous)
+            hid = T.switch(mask_n, hid, hid_previous)
+            return [cell, hid]
+
+        if mask is not None:
+            mask = mask.dimshuffle(1, 0, 'x')
+            sequences = [input, mask]
+            step_fun = step_masked
+        else:
+            sequences = input
+            step_fun = step
+
+        ones = T.ones((num_batch, 1))
+        if not isinstance(self.cell_init, Layer):
+            cell_init = T.dot(ones, self.cell_init)
+        if not isinstance(self.hid_init, Layer):
+            hid_init = T.dot(ones, self.hid_init)
+
+        non_seqs = [cell_mask, W_hid_stacked]
+        non_seqs += [self.W_hid_projection, ]
+        if self.peepholes:
+            non_seqs += [self.W_cell_to_ingate,
+                         self.W_cell_to_forgetgate,
+                         self.W_cell_to_outgate]
+
+        if self.unroll_scan:
+            input_shape = self.input_shapes[0]
+            cell_out, hid_out = unroll_scan(fn=step_fun,
+                                            sequences=sequences,
+                                            outputs_info=[cell_init, hid_init],
+                                            non_sequences=non_seqs,
+                                            n_steps=input_shape[1])
+        else:
+            cell_out, hid_out = theano.scan(fn=step_fun,
+                                            sequences=sequences,
+                                            outputs_info=[cell_init, hid_init],
+                                            go_backwards=self.backwards,
+                                            truncate_gradient=self.gradient_steps,
+                                            non_sequences=non_seqs,
+                                            strict=True)[0]
+
+        if self.only_return_final:
+            hid_out = hid_out[-1]
+        else:
+            hid_out = hid_out.dimshuffle(1, 0, 2)
+
+            if self.backwards:
+                hid_out = hid_out[:, ::-1]
+
+        if self.only_return_hidden:
+            return hid_out
+        else:
+            if self.only_return_final:
+                cell_out = cell_out[-1]
+            else:
+                cell_out = cell_out.dimshuffle(1, 0, 2)
+
+                if self.backwards:
+                    cell_out = cell_out[:, ::-1]
+
+            return T.concatenate([hid_out, cell_out], axis=-1)
