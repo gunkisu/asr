@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
-from models.deep_bidir_lstm import deep_bidir_lstm_model
+from models.deep_bidir_lstm import deep_bidir_lstm_prj_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params
@@ -33,6 +33,7 @@ def get_datastream(path, which_set='train_si84', batch_size=1):
 def build_network(input_data,
                   input_mask,
                   num_inputs,
+                  num_prj_list,
                   num_units_list,
                   num_outputs,
                   dropout_ratio=0.2,
@@ -41,23 +42,22 @@ def build_network(input_data,
                   peepholes=False,
                   learn_init=True,
                   grad_clipping=0.0,
-                  gradient_steps=-1,
-                  use_projection=False):
+                  gradient_steps=-1):
 
-    network = deep_bidir_lstm_model(input_var=input_data,
-                                    mask_var=input_mask,
-                                    num_inputs=num_inputs,
-                                    num_units_list=num_units_list,
-                                    num_outputs=num_outputs,
-                                    dropout_ratio=dropout_ratio,
-                                    weight_noise=weight_noise,
-                                    use_layer_norm=use_layer_norm,
-                                    peepholes=peepholes,
-                                    learn_init=learn_init,
-                                    grad_clipping=grad_clipping,
-                                    gradient_steps=gradient_steps,
-                                    use_softmax=False,
-                                    use_projection=use_projection)
+    network = deep_bidir_lstm_prj_model(input_var=input_data,
+                                        mask_var=input_mask,
+                                        num_inputs=num_inputs,
+                                        num_prj_list=num_prj_list,
+                                        num_units_list=num_units_list,
+                                        num_outputs=num_outputs,
+                                        dropout_ratio=dropout_ratio,
+                                        weight_noise=weight_noise,
+                                        use_layer_norm=use_layer_norm,
+                                        peepholes=peepholes,
+                                        learn_init=learn_init,
+                                        grad_clipping=grad_clipping,
+                                        gradient_steps=gradient_steps,
+                                        use_softmax=False)
     return network
 
 def set_network_trainer(input_data,
@@ -219,6 +219,7 @@ def main(options):
     network = build_network(input_data=input_data,
                             input_mask=input_mask,
                             num_inputs=options['num_inputs'],
+                            num_prj_list=options['num_prj_list'],
                             num_units_list=options['num_units_list'],
                             num_outputs=options['num_outputs'],
                             dropout_ratio=options['dropout_ratio'],
@@ -227,8 +228,7 @@ def main(options):
                             peepholes=options['peepholes'],
                             learn_init=options['learn_init'],
                             grad_clipping=options['grad_clipping'],
-                            gradient_steps=options['gradient_steps'],
-                            use_projection=options['use_projection'])
+                            gradient_steps=options['gradient_steps'])
 
     network_params = get_all_params(network, trainable=True)
 
@@ -383,7 +383,6 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--weight_noise', action='store', help='weight noise', default=0.0)
     parser.add_argument('-p', '--peepholes', action='store', help='peepholes', default=1)
     parser.add_argument('-r', '--reg_l2', action='store', help='l2 regularizer', default=5)
-    parser.add_argument('-j', '--projection', action='store', help='projection layer', default=0)
 
     args = parser.parse_args()
     batch_size = int(args.batch_size)
@@ -395,13 +394,12 @@ if __name__ == '__main__':
     weight_noise = float(args.weight_noise)
     peepholes = int(args.peepholes)
     l2_lambda = int(args.reg_l2)
-    use_projection = int(args.projection)
 
     options = OrderedDict()
     options['num_inputs'] = 123
+    options['num_prj_list'] = [250]*num_layers
     options['num_units_list'] = [500]*num_layers
     options['num_outputs'] = 3436
-    options['use_projection'] = True if use_projection==1 else False
 
     options['dropout_ratio'] = 0.0
     options['weight_noise'] = weight_noise
@@ -427,7 +425,7 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
 
-    options['save_path'] = './wsj_deep_lstm' + \
+    options['save_path'] = './wsj_deep_lstm_prj' + \
                            '_lr' + str(int(learn_rate)) + \
                            '_gn' + str(int(grad_norm)) + \
                            '_gc' + str(int(grad_clipping)) + \
@@ -435,7 +433,6 @@ if __name__ == '__main__':
                            '_nl' + str(int(num_layers)) + \
                            '_rg' + str(int(l2_lambda)) + \
                            '_p' + str(int(peepholes)) + \
-                           '_j' + str(int(use_projection)) + \
                            '_b' + str(int(batch_size))
 
 
