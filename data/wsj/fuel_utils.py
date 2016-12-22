@@ -6,13 +6,15 @@ from fuel.transformers import Padding, FilterSources
 from data.transformers import ConcatenateTransformer, TruncateTransformer
 
 
-def get_feat_stream(path, which_set='test_eval92', batch_size=1, use_ivectors=False):
+def get_feat_stream(path, which_set='test_eval92', batch_size=1, use_ivectors=False, truncate_ivectors=False, ivector_dim=100):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     iterator_scheme = SequentialScheme(examples=wsj_dataset.num_examples, batch_size=batch_size)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
     if use_ivectors:
         fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors'])
+        if truncate_ivectors:
+            fs = TruncateTransformer(fs, 'ivectors', ivector_dim)
         fs = ConcatenateTransformer(fs, ['features', 'ivectors'], 'features')
     else:
         fs = FilterSources(data_stream=base_stream, sources=['features'])
