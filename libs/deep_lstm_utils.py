@@ -45,6 +45,7 @@ def get_arg_parser():
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
     parser.add_argument('--train-dataset', help='dataset for training', default='train_si84')
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
+    parser.add_argument('--truncate-ivectors', help='truncate ivectors', action='store_true')
 
     return parser
 

@@ -7,11 +7,13 @@ from collections import OrderedDict, namedtuple
 
 from libs.deep_lstm_utils import *
 from libs.lasagne_libs.updates import momentum
-from libs.utils import StopWatch
-from models.deep_bidir_lstm import deep_bidir_lstm_alex
 
-from data.wsj.fuel_utils import get_feat_stream, get_uttid_stream, get_datastream
+import libs.utils as utils
+import models.deep_bidir_lstm as models
+import data.wsj.fuel_utils as fuel_utils
 
+import data.transformers as trans
+from fuel.transformers import Padding
 
 def main(args):
     args.save_path = './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
@@ -39,7 +41,7 @@ def main(args):
     target_mask = T.fmatrix('target_mask')
 
     
-    network = deep_bidir_lstm_alex(input_var=input_data,
+    network = models.deep_bidir_lstm_alex(input_var=input_data,
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
                                     num_units_list=[args.num_nodes]*args.num_layers,
@@ -59,7 +61,7 @@ def main(args):
         pretrain_total_epoch_cnt = 0
 
     print('Build trainer')
-    sw = StopWatch()
+    sw = utils.StopWatch()
     training_fn, trainer_params = trainer(
               input_data=input_data,
               input_mask=input_mask,
@@ -83,13 +85,19 @@ def main(args):
 
     sw.print_elapsed()
     print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
-    train_ds = get_datastream(path=args.data_path,
-                                      which_set=args.train_dataset,
-                                      batch_size=args.batch_size, use_ivectors=args.use_ivectors)
-    valid_ds = get_datastream(path=args.data_path,
-                                      which_set=args.valid_dataset,
-                                      batch_size=args.batch_size, use_ivectors=args.use_ivectors)
-
+    
+    train_ds = fuel_utils.get_datastream(path=args.data_path,
+                                  which_set=args.train_dataset,
+                                  batch_size=args.batch_size, 
+                                  use_ivectors=args.use_ivectors, 
+                                  truncate_ivectors=args.truncate_ivectors, 
+                                  ivector_dim=args.ivector_dim)
+    valid_ds = fuel_utils.get_datastream(path=args.data_path,
+                                  which_set=args.valid_dataset,
+                                  batch_size=args.batch_size, 
+                                  use_ivectors=args.use_ivectors,
+                                  truncate_ivectors=args.truncate_ivectors,
+                                  ivector_dim=args.ivector_dim)
 
     print('Start training')
     EvalRecord = namedtuple('EvalRecord', ['ce_frame', 'fer'])
@@ -104,7 +112,7 @@ def main(args):
             print('Skip Epoch {}'.format(e_idx))
             continue
 
-        epoch_sw = StopWatch()
+        epoch_sw = utils.StopWatch()
         print('--')
         print('Epoch {} starts'.format(e_idx))
         print('--')
@@ -132,7 +140,7 @@ def main(args):
         epoch_sw.print_elapsed()
         
         print('Evaluating the network on the validation dataset')
-        eval_sw = StopWatch()
+        eval_sw = utils.StopWatch()
         #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
         valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds)
         eval_sw.print_elapsed()

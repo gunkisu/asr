@@ -11,7 +11,8 @@ from picklable_itertools.extras import equizip
 from six import iteritems
 
 class ConcatenateTransformer(Transformer):
-    '''Concatenate data sources into one data source'''
+    '''Concatenate data sources into one data source.
+    The order of the data sources will be the same'''
     def __init__(self, data_stream, concat_sources, new_source=None, **kwargs):
         if data_stream.produces_examples:
                  raise ValueError('the wrapped data stream must produce batches of '
@@ -49,6 +50,33 @@ class ConcatenateTransformer(Transformer):
         batch = [d for i, d in enumerate(batch) if i not in src_indices]
         batch.insert(insert_pos, trans_data)
         return numpy.asarray(batch)
+
+class TruncateTransformer(Transformer):
+    '''Truncate the dimension of a specific data source from the begining'''
+    def __init__(self, data_stream, target_source, dim, **kwargs):
+        if data_stream.produces_examples:
+                 raise ValueError('the wrapped data stream must produce batches of '
+                                                      'examples, not examples')
+        if target_source not in data_stream.sources:
+            raise ValueError("source must be contained in "
+                             "data_stream.sources")
+
+        super(TruncateTransformer, self).__init__(
+            data_stream=data_stream,
+            produces_examples=False,
+            **kwargs)
+
+        self.target_source = target_source
+        self.dim = dim
+       
+    def transform_batch(self, batch):
+        trans_data = []
+        src_idx = self.data_stream.sources.index(self.target_source)
+        for ex in batch[src_idx]:
+            trans_data.append(ex[:,:self.dim])
+        batch[src_idx] = trans_data
+        return numpy.asarray(batch)
+
 
 class MaximumFrameCache(Transformer):
     """Cache examples, and create batches of maximum number of frames.
