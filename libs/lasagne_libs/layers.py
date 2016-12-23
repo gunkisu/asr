@@ -2,7 +2,7 @@ import numpy
 import theano
 from theano import tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-from lasagne.layers import Layer, MergeLayer, Gate, ConcatLayer
+from lasagne.layers import Layer, MergeLayer, ConcatLayer
 from lasagne import nonlinearities, init
 from lasagne.layers import get_output
 from lasagne.utils import unroll_scan
@@ -10,6 +10,25 @@ from lasagne.random import get_rng
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
+
+class Gate(object):
+    def __init__(self,
+                 W_in=init.Uniform(0.1),
+                 W_hid=init.Uniform(0.1),
+                 W_cell=init.Uniform(0.1),
+                 b=init.Constant(0.),
+                 nonlinearity=nonlinearities.sigmoid):
+        self.W_in = W_in
+        self.W_hid = W_hid
+        # Don't store a cell weight vector when cell is None
+        if W_cell is not None:
+            self.W_cell = W_cell
+        self.b = b
+        # For the nonlinearity, if None is supplied, use identity
+        if nonlinearity is None:
+            self.nonlinearity = nonlinearities.identity
+        else:
+            self.nonlinearity = nonlinearity
 
 class SequenceLayerNormLayer(Layer):
     def __init__(self,
@@ -98,7 +117,7 @@ class LSTMLayer(MergeLayer):
                  incoming,
                  num_units,
                  ingate=Gate(),
-                 forgetgate=Gate(b=init.Constant(1.)),
+                 forgetgate=Gate(init.Constant(1.)),
                  cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
                  outgate=Gate(),
                  nonlinearity=nonlinearities.tanh,

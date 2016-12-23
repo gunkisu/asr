@@ -382,7 +382,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
     parser.add_argument('-w', '--weight_noise', action='store', help='weight noise', default=0.0)
     parser.add_argument('-p', '--peepholes', action='store', help='peepholes', default=1)
-    parser.add_argument('-r', '--reg_l2', action='store', help='l2 regularizer', default=5)
+    parser.add_argument('-r', '--reg_l2', action='store', help='l2 regularizer', default=0)
     parser.add_argument('-j', '--projection', action='store', help='projection layer', default=0)
 
     args = parser.parse_args()
