@@ -117,7 +117,7 @@ def set_network_trainer(input_data,
                                             load_params_dict=load_updater_params)
 
     for rand_layer in rand_layer_list:
-        train_updates.updates(rand_layer.rand_updates)
+        train_updates.update(rand_layer.rand_updates)
 
     # get training (update) function
     training_fn = theano.function(inputs=[input_data,
