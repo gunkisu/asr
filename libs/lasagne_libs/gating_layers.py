@@ -305,7 +305,7 @@ class SkipLSTMLayer(MergeLayer):
 
         [cell_out, hid_out, skip_comp], updates = theano.scan(fn=step_fun,
                                                               sequences=sequences,
-                                                              outputs_info=[cell_init, hid_init],
+                                                              outputs_info=[cell_init, hid_init, None],
                                                               go_backwards=self.backwards,
                                                               truncate_gradient=self.gradient_steps,
                                                               non_sequences=non_seqs,
