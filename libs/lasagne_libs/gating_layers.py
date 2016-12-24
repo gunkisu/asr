@@ -211,11 +211,12 @@ class SkipLSTMLayer(MergeLayer):
             skip_comp = T.dot(skip_comp,  self.W_skip) + self.b_post_skip
             skip_comp = T.nnet.sigmoid(skip_comp)
 
-            # if deterministic:
-            #     skip_comp = T.round(skip_comp)
-            # else:
-            #     stochastic_sample = self.uniform(size=T.shape(skip_comp), dtype=floatX)
-            #     skip_comp += theano.gradient.disconnected_grad(T.lt(stochastic_sample, skip_comp) - skip_comp)
+            if deterministic:
+                skip_comp = T.round(skip_comp)
+            else:
+                stochastic_sample = self.uniform(size=T.shape(skip_comp), dtype=floatX)
+                epsilon = theano.gradient.disconnected_grad(T.lt(stochastic_sample, skip_comp) - skip_comp)
+                skip_comp = skip_comp + epsilon
 
             ####################
             # lstm computation #
@@ -302,13 +303,14 @@ class SkipLSTMLayer(MergeLayer):
                      self.b_pre_skip,
                      self.b_post_skip]
 
-        cell_out, hid_out = theano.scan(fn=step_fun,
-                                        sequences=sequences,
-                                        outputs_info=[cell_init, hid_init],
-                                        go_backwards=self.backwards,
-                                        truncate_gradient=self.gradient_steps,
-                                        non_sequences=non_seqs,
-                                        strict=True)[0]
+        [cell_out, hid_out], updates = theano.scan(fn=step_fun,
+                                                   sequences=sequences,
+                                                   outputs_info=[cell_init, hid_init],
+                                                   go_backwards=self.backwards,
+                                                   truncate_gradient=self.gradient_steps,
+                                                   non_sequences=non_seqs,
+                                                   strict=True)
+        print updates
 
         if self.only_return_final:
             hid_out = hid_out[-1]
