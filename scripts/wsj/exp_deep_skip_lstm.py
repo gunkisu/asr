@@ -315,10 +315,10 @@ def main(options):
                 network_grads_norm = train_output[1]
                 skip_values = train_output[2]
                 print float(numpy.where(skip_values==1)[0].shape[0])/float(input_data.shape[1])
-                pdb.set_trace()
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
+                    pdb.set_trace()
                     best_idx = numpy.asarray(evaluation_history)[:, 1, 2].argmin()
                     print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
