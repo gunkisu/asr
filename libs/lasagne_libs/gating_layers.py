@@ -259,7 +259,7 @@ class SkipLSTMLayer(MergeLayer):
             cell = (1-skip_comp)*cell + skip_comp*cell_previous
             hid = (1-skip_comp)*hid + skip_comp*hid_previous
 
-            return [cell, hid]
+            return [cell, hid,skip_comp]
 
         def step_masked(input_data_n,
                         input_diff_n,
@@ -267,15 +267,15 @@ class SkipLSTMLayer(MergeLayer):
                         cell_previous,
                         hid_previous,
                         *args):
-            cell, hid = step(input_data_n,
-                             input_diff_n,
-                             cell_previous,
-                             hid_previous,
-                             *args)
+            cell, hid, skip_comp = step(input_data_n,
+                                        input_diff_n,
+                                        cell_previous,
+                                        hid_previous,
+                                        *args)
 
             cell = T.switch(input_mask_n, cell, cell_previous)
             hid = T.switch(input_mask_n, hid, hid_previous)
-            return [cell, hid]
+            return [cell, hid, skip_comp]
 
         sequences = [input_data,
                      input_diff,
@@ -303,15 +303,16 @@ class SkipLSTMLayer(MergeLayer):
                      self.b_pre_skip,
                      self.b_post_skip]
 
-        [cell_out, hid_out], updates = theano.scan(fn=step_fun,
-                                                   sequences=sequences,
-                                                   outputs_info=[cell_init, hid_init],
-                                                   go_backwards=self.backwards,
-                                                   truncate_gradient=self.gradient_steps,
-                                                   non_sequences=non_seqs,
-                                                   strict=True)
+        [cell_out, hid_out, skip_comp], updates = theano.scan(fn=step_fun,
+                                                              sequences=sequences,
+                                                              outputs_info=[cell_init, hid_init],
+                                                              go_backwards=self.backwards,
+                                                              truncate_gradient=self.gradient_steps,
+                                                              non_sequences=non_seqs,
+                                                              strict=True)
 
         self.rand_updates = updates
+        self.skip_comp = skip_comp
 
         if self.only_return_final:
             hid_out = hid_out[-1]
