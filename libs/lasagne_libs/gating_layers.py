@@ -310,7 +310,8 @@ class SkipLSTMLayer(MergeLayer):
                                                    truncate_gradient=self.gradient_steps,
                                                    non_sequences=non_seqs,
                                                    strict=True)
-        print updates
+
+        self.rand_updates = updates
 
         if self.only_return_final:
             hid_out = hid_out[-1]

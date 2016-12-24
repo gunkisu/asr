@@ -4,6 +4,8 @@ from lasagne.layers import (InputLayer,
                             ConcatLayer)
 from libs.lasagne_libs.layers import SequenceDenseLayer
 from libs.lasagne_libs.gating_layers import SkipLSTMLayer
+from collections import OrderedDict
+
 
 def deep_bidir_skip_lstm_model(input_var,
                                mask_var,
@@ -19,6 +21,9 @@ def deep_bidir_skip_lstm_model(input_var,
                                gradient_steps=-1,
                                use_softmax=True,
                                use_projection=False):
+
+    rand_updates = OrderedDict()
+
     ###############
     # input layer #
     ###############
@@ -44,6 +49,7 @@ def deep_bidir_skip_lstm_model(input_var,
                                        gradient_steps=gradient_steps,
                                        grad_clipping=grad_clipping,
                                        backwards=False)
+        rand_updates.update(lstm_fwd_layer.rand_updates)
 
         # backward lstm
         lstm_bwd_layer = SkipLSTMLayer(input_data_layer=prev_input_layer,
@@ -52,6 +58,7 @@ def deep_bidir_skip_lstm_model(input_var,
                                        gradient_steps=gradient_steps,
                                        grad_clipping=grad_clipping,
                                        backwards=True)
+        rand_updates.update(lstm_bwd_layer.rand_updates)
 
         # concatenate forward/backward
         prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
@@ -69,4 +76,5 @@ def deep_bidir_skip_lstm_model(input_var,
     output_layer = SequenceDenseLayer(incoming=output_layer,
                                       num_outputs=num_outputs,
                                       nonlinearity=nonlinearities.softmax if use_softmax else None)
-    return output_layer
+
+    return output_layer, rand_updates
