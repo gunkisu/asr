@@ -114,7 +114,7 @@ class SkipLSTMLayer(MergeLayer):
         self.W_skip = self.add_param(spec=init.Orthogonal(0.1),
                                      shape=(num_units, 1),
                                      name="W_skip")
-        self.b_post_skip = self.add_param(spec=init.Constant(3.0),
+        self.b_post_skip = self.add_param(spec=init.Constant(-3.0),
                                           shape=(num_units,),
                                           name="b_post_skip",
                                           regularizable=False)
@@ -122,16 +122,20 @@ class SkipLSTMLayer(MergeLayer):
         if isinstance(cell_init, Layer):
             self.cell_init = cell_init
         else:
-            self.cell_init = self.add_param(
-                cell_init, (1, num_units), name="cell_init",
-                trainable=learn_init, regularizable=False)
+            self.cell_init = self.add_param(spec=cell_init,
+                                            shape=(1, num_units),
+                                            name="cell_init",
+                                            trainable=learn_init,
+                                            regularizable=False)
 
         if isinstance(hid_init, Layer):
             self.hid_init = hid_init
         else:
-            self.hid_init = self.add_param(
-                hid_init, (1, self.num_units), name="hid_init",
-                trainable=learn_init, regularizable=False)
+            self.hid_init = self.add_param(spec=hid_init,
+                                           shape=(1, self.num_units),
+                                           name="hid_init",
+                                           trainable=learn_init,
+                                           regularizable=False)
 
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
@@ -163,6 +167,7 @@ class SkipLSTMLayer(MergeLayer):
         input_data = input_data.dimshuffle(1, 0, 2)
         input_diff = input_diff.dimshuffle(1, 0, 2)
         input_mask = input_mask.dimshuffle(1, 0, 'x')
+
         seq_len, num_batch, num_inputs = input_data.shape
 
         W_in_stacked = T.concatenate([self.W_in_to_ingate,
@@ -194,7 +199,7 @@ class SkipLSTMLayer(MergeLayer):
             ####################
             # skip computation #
             ####################
-            skip_comp = T.dot(hid_previous, self.W_hid_to_skip)*T.dot(input_data_n, self.W_in_to_skip)
+            skip_comp = T.dot(input_data_n, self.W_in_to_skip)*T.dot(hid_previous, self.W_hid_to_skip)
             skip_comp += T.dot(input_diff_n, self.W_diff_to_skip)
             skip_comp += self.b_pre_skip
 
@@ -250,8 +255,9 @@ class SkipLSTMLayer(MergeLayer):
             outgate = T.nnet.sigmoid(outgate)
             hid = outgate*T.tanh(cell)
 
-            cell = T.switch(skip_comp, cell, cell_previous)
-            hid = T.switch(skip_comp, hid, hid_previous)
+            cell = (1-skip_comp)*cell + skip_comp*cell_previous
+            hid = (1-skip_comp)*hid + skip_comp*hid_previous
+
             return [cell, hid]
 
         def step_masked(input_data_n,
@@ -307,10 +313,7 @@ class SkipLSTMLayer(MergeLayer):
         if self.only_return_final:
             hid_out = hid_out[-1]
         else:
-            # dimshuffle back to (n_batch, n_time_steps, n_features))
             hid_out = hid_out.dimshuffle(1, 0, 2)
-
-            # if scan is backward reverse the output
             if self.backwards:
                 hid_out = hid_out[:, ::-1]
 
