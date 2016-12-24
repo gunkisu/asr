@@ -211,11 +211,11 @@ class SkipLSTMLayer(MergeLayer):
             skip_comp = T.dot(skip_comp,  self.W_skip) + self.b_post_skip
             skip_comp = T.nnet.sigmoid(skip_comp)
 
-            if deterministic:
-                skip_comp = T.round(skip_comp)
-            else:
-                stochastic_sample = self.uniform(size=T.shape(skip_comp), dtype=floatX)
-                skip_comp += theano.gradient.disconnected_grad(T.lt(stochastic_sample, skip_comp) - skip_comp)
+            # if deterministic:
+            #     skip_comp = T.round(skip_comp)
+            # else:
+            #     stochastic_sample = self.uniform(size=T.shape(skip_comp), dtype=floatX)
+            #     skip_comp += theano.gradient.disconnected_grad(T.lt(stochastic_sample, skip_comp) - skip_comp)
 
             ####################
             # lstm computation #

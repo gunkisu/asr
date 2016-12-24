@@ -5,7 +5,7 @@ from collections import OrderedDict
 from models.deep_bidir_lstm import deep_bidir_lstm_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
-from lasagne.layers import get_output, get_all_params
+from lasagne.layers import get_output, get_all_params, count_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.updates import total_norm_constraint
 from lasagne.random import set_rng
@@ -231,6 +231,8 @@ def main(options):
                             use_projection=options['use_projection'])
 
     network_params = get_all_params(network, trainable=True)
+
+    print("number of parameters in model: %d" % count_params(network, trainable=True))
 
     if options['reload_model']:
         print('Loading Parameters...')
