@@ -44,21 +44,21 @@ def build_network(input_data,
                   gradient_steps=-1,
                   use_projection=False):
 
-    network, rand_updates = deep_bidir_skip_lstm_model(input_var=input_data,
-                                                       mask_var=input_mask,
-                                                       num_inputs=num_inputs,
-                                                       num_units_list=num_units_list,
-                                                       num_outputs=num_outputs,
-                                                       dropout_ratio=dropout_ratio,
-                                                       weight_noise=weight_noise,
-                                                       use_layer_norm=use_layer_norm,
-                                                       peepholes=peepholes,
-                                                       learn_init=learn_init,
-                                                       grad_clipping=grad_clipping,
-                                                       gradient_steps=gradient_steps,
-                                                       use_softmax=False,
-                                                       use_projection=use_projection)
-    return network, rand_updates
+    network, rand_layer_list = deep_bidir_skip_lstm_model(input_var=input_data,
+                                                          mask_var=input_mask,
+                                                          num_inputs=num_inputs,
+                                                          num_units_list=num_units_list,
+                                                          num_outputs=num_outputs,
+                                                          dropout_ratio=dropout_ratio,
+                                                          weight_noise=weight_noise,
+                                                          use_layer_norm=use_layer_norm,
+                                                          peepholes=peepholes,
+                                                          learn_init=learn_init,
+                                                          grad_clipping=grad_clipping,
+                                                          gradient_steps=gradient_steps,
+                                                          use_softmax=False,
+                                                          use_projection=use_projection)
+    return network, rand_layer_list
 
 def set_network_trainer(input_data,
                         input_mask,
@@ -66,7 +66,7 @@ def set_network_trainer(input_data,
                         target_mask,
                         num_outputs,
                         network,
-                        rand_updates,
+                        rand_layer_list,
                         updater,
                         learning_rate,
                         grad_max_norm=10.,
@@ -116,7 +116,8 @@ def set_network_trainer(input_data,
                                             learning_rate=train_lr,
                                             load_params_dict=load_updater_params)
 
-    train_updates.update(rand_updates)
+    for rand_layer in rand_layer_list:
+        train_updates.updates(rand_layer.rand_updates)
 
     # get training (update) function
     training_fn = theano.function(inputs=[input_data,
@@ -219,19 +220,19 @@ def main(options):
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    network, rand_updates = build_network(input_data=input_data,
-                                          input_mask=input_mask,
-                                          num_inputs=options['num_inputs'],
-                                          num_units_list=options['num_units_list'],
-                                          num_outputs=options['num_outputs'],
-                                          dropout_ratio=options['dropout_ratio'],
-                                          weight_noise=options['weight_noise'],
-                                          use_layer_norm=options['use_layer_norm'],
-                                          peepholes=options['peepholes'],
-                                          learn_init=options['learn_init'],
-                                          grad_clipping=options['grad_clipping'],
-                                          gradient_steps=options['gradient_steps'],
-                                          use_projection=options['use_projection'])
+    network, rand_layer_list = build_network(input_data=input_data,
+                                             input_mask=input_mask,
+                                             num_inputs=options['num_inputs'],
+                                             num_units_list=options['num_units_list'],
+                                             num_outputs=options['num_outputs'],
+                                             dropout_ratio=options['dropout_ratio'],
+                                             weight_noise=options['weight_noise'],
+                                             use_layer_norm=options['use_layer_norm'],
+                                             peepholes=options['peepholes'],
+                                             learn_init=options['learn_init'],
+                                             grad_clipping=options['grad_clipping'],
+                                             gradient_steps=options['gradient_steps'],
+                                             use_projection=options['use_projection'])
 
     network_params = get_all_params(network, trainable=True)
 
@@ -252,7 +253,7 @@ def main(options):
                                                       target_mask=target_mask,
                                                       num_outputs=options['num_outputs'],
                                                       network=network,
-                                                      rand_updates=rand_updates,
+                                                      rand_layer_list=rand_layer_list,
                                                       updater=options['updater'],
                                                       learning_rate=options['lr'],
                                                       grad_max_norm=options['grad_norm'],
