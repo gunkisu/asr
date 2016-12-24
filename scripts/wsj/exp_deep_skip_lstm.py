@@ -314,7 +314,7 @@ def main(options):
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
                 skip_values = train_output[2]
-                print numpy.where(skip_values==1)[0].shape
+                print float(numpy.where(skip_values==1)[0].shape[0])/float(input_data.shape[1])
                 pdb.set_trace()
 
                 # show intermediate result

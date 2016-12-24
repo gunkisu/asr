@@ -114,7 +114,7 @@ class SkipLSTMLayer(MergeLayer):
         self.W_skip = self.add_param(spec=init.Orthogonal(0.1),
                                      shape=(num_units, 1),
                                      name="W_skip")
-        self.b_post_skip = self.add_param(spec=init.Constant(3.0),
+        self.b_post_skip = self.add_param(spec=init.Constant(0.0),
                                           shape=(1,),
                                           name="b_post_skip",
                                           regularizable=False)
