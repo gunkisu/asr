@@ -36,7 +36,8 @@ class SkipLSTMLayer(MergeLayer):
             incomings.append(hid_init)
             self.hid_init_incoming_index = len(incomings)-1
 
-        # init cell        self.cell_init_incoming_index = -1
+        # init cell
+        self.cell_init_incoming_index = -1
         if isinstance(cell_init, Layer):
             incomings.append(cell_init)
             self.cell_init_incoming_index = len(incomings)-1
@@ -193,7 +194,7 @@ class SkipLSTMLayer(MergeLayer):
             ####################
             # skip computation #
             ####################
-            skip_comp = T.dot(hid_previous, self.W_hid_to_skip)*T.dot(input_n, self.W_in_to_skip)
+            skip_comp = T.dot(hid_previous, self.W_hid_to_skip)*T.dot(input_data_n, self.W_in_to_skip)
             skip_comp += T.dot(input_diff_n, self.W_diff_to_skip)
             skip_comp += self.b_pre_skip
 
