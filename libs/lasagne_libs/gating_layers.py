@@ -256,8 +256,10 @@ class SkipLSTMLayer(MergeLayer):
             outgate = T.nnet.sigmoid(outgate)
             hid = outgate*T.tanh(cell)
 
-            cell = (1-skip_comp)*cell + skip_comp*cell_previous
-            hid = (1-skip_comp)*hid + skip_comp*hid_previous
+            skip_comp = T.flatten(skip_comp)
+
+            cell = T.switch(skip_comp[:, None], cell_previous, cell)
+            hid = T.switch(skip_comp[:, None], hid_previous, hid)
 
             return [cell, hid,skip_comp]
 
