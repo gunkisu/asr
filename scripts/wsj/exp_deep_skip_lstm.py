@@ -319,7 +319,8 @@ def main(options):
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
                 skip_values = train_output[2]
-                # print float(numpy.where(skip_values==1)[0].shape[0])/float(input_data.shape[1])
+
+                current_skips = float(numpy.where(skip_values==1)[0].shape[0])/float(input_data.shape[1])
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
@@ -332,6 +333,9 @@ def main(options):
                     print '--------------------------------------------------------------------------------------------'
                     print 'Prediction Cost: ', str(train_predict_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
+                    print '--------------------------------------------------------------------------------------------'
+                    print 'Skip Ratio: ', str(current_skips)
+                    print 'Skip Scale: ', str(skip_scale.get_value())
                     print '--------------------------------------------------------------------------------------------'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
