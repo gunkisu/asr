@@ -46,8 +46,15 @@ def get_arg_parser():
     parser.add_argument('--train-dataset', help='dataset for training', default='train_si84')
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--truncate-ivectors', help='truncate ivectors', action='store_true')
+    parser.add_argument('--reload-model', help='model to load')
 
     return parser
+
+
+def get_save_path(args):
+    return './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
+            args.learn_rate, args.grad_norm, args.grad_clipping, args.grad_steps, args.num_layers, args.num_nodes, 
+            args.batch_size, args.ivector_dim if args.use_ivectors else 0)
 
 def trainer(input_data,
                         input_mask,

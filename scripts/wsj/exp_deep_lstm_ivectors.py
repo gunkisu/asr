@@ -16,18 +16,14 @@ import data.transformers as trans
 from fuel.transformers import Padding
 
 def main(args):
-    args.save_path = './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
-            args.learn_rate, args.grad_norm, args.grad_clipping, args.grad_steps, args.num_layers, args.num_nodes, 
-            args.batch_size, args.ivector_dim if args.use_ivectors else 0)
-    
-    reload_path = args.save_path + '_last_model.pkl'
+    args.save_path = get_save_path(args)
+    if not args.reload_model:
+        reload_path = args.save_path + '_last_model.pkl'
 
-    if os.path.exists(reload_path):
-        print('Previously trained model detected: {}'.format(reload_path))
-        print('Training will continue with the model')
-        args.reload_model = reload_path
-    else:
-        args.reload_model = None
+        if os.path.exists(reload_path):
+            print('Previously trained model detected: {}'.format(reload_path))
+            print('Training will continue with the model')
+            args.reload_model = reload_path
 
     if args.use_ivectors:
         args.input_dim = args.input_dim + args.ivector_dim
@@ -50,7 +46,7 @@ def main(args):
     network_params = get_all_params(network, trainable=True)
 
     if args.reload_model:
-        print('Loading Parameters...')
+        print('Loading the model: {}'.format(args.reload_model))
         with open(args.reload_model, 'rb') as f:
             pretrain_network_params_val,  pretrain_update_params_val, \
                     pretrain_total_epoch_cnt = pickle.load(f)
