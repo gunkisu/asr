@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
-from models.deep_bidir_lstm import deep_bidir_lstm_model
+from models.deep_bidir_lstm import deep_bidir_lstm_share_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params, count_params
@@ -44,20 +44,20 @@ def build_network(input_data,
                   gradient_steps=-1,
                   use_projection=False):
 
-    network = deep_bidir_lstm_model(input_var=input_data,
-                                    mask_var=input_mask,
-                                    num_inputs=num_inputs,
-                                    num_units_list=num_units_list,
-                                    num_outputs=num_outputs,
-                                    dropout_ratio=dropout_ratio,
-                                    weight_noise=weight_noise,
-                                    use_layer_norm=use_layer_norm,
-                                    peepholes=peepholes,
-                                    learn_init=learn_init,
-                                    grad_clipping=grad_clipping,
-                                    gradient_steps=gradient_steps,
-                                    use_softmax=False,
-                                    use_projection=use_projection)
+    network = deep_bidir_lstm_share_model(input_var=input_data,
+                                          mask_var=input_mask,
+                                          num_inputs=num_inputs,
+                                          num_units_list=num_units_list,
+                                          num_outputs=num_outputs,
+                                          dropout_ratio=dropout_ratio,
+                                          weight_noise=weight_noise,
+                                          use_layer_norm=use_layer_norm,
+                                          peepholes=peepholes,
+                                          learn_init=learn_init,
+                                          grad_clipping=grad_clipping,
+                                          gradient_steps=gradient_steps,
+                                          use_softmax=False,
+                                          use_projection=use_projection)
     return network
 
 def set_network_trainer(input_data,
@@ -429,7 +429,7 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
 
-    options['save_path'] = './wsj_deep_lstm' + \
+    options['save_path'] = './wsj_deep_lstm_share' + \
                            '_lr' + str(int(learn_rate)) + \
                            '_gn' + str(int(grad_norm)) + \
                            '_gc' + str(int(grad_clipping)) + \

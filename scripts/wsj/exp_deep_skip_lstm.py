@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
-from models.deep_bidir_lstm import deep_bidir_lstm_model
+from models.skip_nets import deep_bidir_skip_lstm_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params, count_params
@@ -19,6 +19,8 @@ floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
 set_rng(numpy.random.RandomState(111))
+
+import pdb
 
 def get_datastream(path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
@@ -44,21 +46,21 @@ def build_network(input_data,
                   gradient_steps=-1,
                   use_projection=False):
 
-    network = deep_bidir_lstm_model(input_var=input_data,
-                                    mask_var=input_mask,
-                                    num_inputs=num_inputs,
-                                    num_units_list=num_units_list,
-                                    num_outputs=num_outputs,
-                                    dropout_ratio=dropout_ratio,
-                                    weight_noise=weight_noise,
-                                    use_layer_norm=use_layer_norm,
-                                    peepholes=peepholes,
-                                    learn_init=learn_init,
-                                    grad_clipping=grad_clipping,
-                                    gradient_steps=gradient_steps,
-                                    use_softmax=False,
-                                    use_projection=use_projection)
-    return network
+    network, rand_layer_list = deep_bidir_skip_lstm_model(input_var=input_data,
+                                                          mask_var=input_mask,
+                                                          num_inputs=num_inputs,
+                                                          num_units_list=num_units_list,
+                                                          num_outputs=num_outputs,
+                                                          dropout_ratio=dropout_ratio,
+                                                          weight_noise=weight_noise,
+                                                          use_layer_norm=use_layer_norm,
+                                                          peepholes=peepholes,
+                                                          learn_init=learn_init,
+                                                          grad_clipping=grad_clipping,
+                                                          gradient_steps=gradient_steps,
+                                                          use_softmax=False,
+                                                          use_projection=use_projection)
+    return network, rand_layer_list
 
 def set_network_trainer(input_data,
                         input_mask,
@@ -66,6 +68,7 @@ def set_network_trainer(input_data,
                         target_mask,
                         num_outputs,
                         network,
+                        rand_layer_list,
                         updater,
                         learning_rate,
                         grad_max_norm=10.,
@@ -115,13 +118,18 @@ def set_network_trainer(input_data,
                                             learning_rate=train_lr,
                                             load_params_dict=load_updater_params)
 
+    skip_comp_list = []
+    for rand_layer in rand_layer_list:
+        train_updates.update(rand_layer.rand_updates)
+        skip_comp_list.append(rand_layer.skip_comp)
+
     # get training (update) function
     training_fn = theano.function(inputs=[input_data,
                                           input_mask,
                                           target_data,
                                           target_mask],
                                   outputs=[train_frame_cost,
-                                           network_grads_norm],
+                                           network_grads_norm] + skip_comp_list,
                                   updates=train_updates)
     return training_fn, trainer_params
 
@@ -216,19 +224,19 @@ def main(options):
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    network = build_network(input_data=input_data,
-                            input_mask=input_mask,
-                            num_inputs=options['num_inputs'],
-                            num_units_list=options['num_units_list'],
-                            num_outputs=options['num_outputs'],
-                            dropout_ratio=options['dropout_ratio'],
-                            weight_noise=options['weight_noise'],
-                            use_layer_norm=options['use_layer_norm'],
-                            peepholes=options['peepholes'],
-                            learn_init=options['learn_init'],
-                            grad_clipping=options['grad_clipping'],
-                            gradient_steps=options['gradient_steps'],
-                            use_projection=options['use_projection'])
+    network, rand_layer_list = build_network(input_data=input_data,
+                                             input_mask=input_mask,
+                                             num_inputs=options['num_inputs'],
+                                             num_units_list=options['num_units_list'],
+                                             num_outputs=options['num_outputs'],
+                                             dropout_ratio=options['dropout_ratio'],
+                                             weight_noise=options['weight_noise'],
+                                             use_layer_norm=options['use_layer_norm'],
+                                             peepholes=options['peepholes'],
+                                             learn_init=options['learn_init'],
+                                             grad_clipping=options['grad_clipping'],
+                                             gradient_steps=options['gradient_steps'],
+                                             use_projection=options['use_projection'])
 
     network_params = get_all_params(network, trainable=True)
 
@@ -251,6 +259,7 @@ def main(options):
                                                       target_mask=target_mask,
                                                       num_outputs=options['num_outputs'],
                                                       network=network,
+                                                      rand_layer_list=rand_layer_list,
                                                       updater=options['updater'],
                                                       learning_rate=options['lr'],
                                                       grad_max_norm=options['grad_norm'],
@@ -304,9 +313,12 @@ def main(options):
                                            target_mask)
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
+                skip_values = train_output[2]
+                # print float(numpy.where(skip_values==1)[0].shape[0])/float(input_data.shape[1])
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
+                    # pdb.set_trace()
                     best_idx = numpy.asarray(evaluation_history)[:, 1, 2].argmin()
                     print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
@@ -429,7 +441,7 @@ if __name__ == '__main__':
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
 
-    options['save_path'] = './wsj_deep_lstm' + \
+    options['save_path'] = './wsj_deep_skip_lstm' + \
                            '_lr' + str(int(learn_rate)) + \
                            '_gn' + str(int(grad_norm)) + \
                            '_gc' + str(int(grad_clipping)) + \
