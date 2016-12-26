@@ -115,10 +115,9 @@ def set_network_trainer(input_data,
         network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
 
     # set updater
-    train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
     train_updates, trainer_params = updater(loss_or_grads=network_grads,
                                             params=network_params,
-                                            learning_rate=train_lr,
+                                            learning_rate=learning_rate,
                                             load_params_dict=load_updater_params)
 
     # get training (update) function
