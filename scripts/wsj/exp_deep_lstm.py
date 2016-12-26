@@ -9,23 +9,29 @@ from lasagne.layers import get_output, get_all_params, count_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.updates import total_norm_constraint
 from lasagne.random import set_rng
+from lasagne.utils import floatX as convert_to_floatX
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme
 from fuel.transformers import Padding, FilterSources
+from data.transformers import Normalize
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
 set_rng(numpy.random.RandomState(111))
 
-def get_datastream(path, which_set='train_si84', batch_size=1):
+def get_datastream(path, norm_path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
+    data_mean_std = numpy.load(norm_path)
+
     print path, which_set
+
     iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
+    base_stream = Normalize(data_stream=base_stream, means=data_mean_std['mean'], stds=data_mean_std['std'])
     fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
     padded_stream = Padding(data_stream=fs)
     return padded_stream
@@ -208,7 +214,6 @@ def network_evaluation(predict_fn,
 
     return total_nll, total_bpc, total_fer
 
-
 def main(options):
     print 'Build and compile network'
     input_data = T.ftensor3('input_data')
@@ -245,6 +250,7 @@ def main(options):
         pretrain_total_batch_cnt = 0
 
     print 'Build network trainer'
+    lr = theano.shared(convert_to_floatX(options['lr']))
     training_fn, trainer_params = set_network_trainer(input_data=input_data,
                                                       input_mask=input_mask,
                                                       target_data=target_data,
@@ -252,7 +258,7 @@ def main(options):
                                                       num_outputs=options['num_outputs'],
                                                       network=network,
                                                       updater=options['updater'],
-                                                      learning_rate=options['lr'],
+                                                      learning_rate=lr,
                                                       grad_max_norm=options['grad_norm'],
                                                       l2_lambda=options['l2_lambda'],
                                                       load_updater_params=pretrain_update_params_val)
@@ -268,6 +274,7 @@ def main(options):
 
     print 'Load data stream'
     train_datastream = get_datastream(path=options['data_path'],
+                                      norm_path=options['norm_data_path'],
                                       which_set='train_si84',
                                       batch_size=options['batch_size'])
 
@@ -286,6 +293,10 @@ def main(options):
             # for each batch
             for b_idx, data in enumerate(train_datastream.get_epoch_iterator()):
                 total_batch_cnt += 1
+
+                # if total_batch_cnt%options['lr_decay_freq']:
+                #     lr.set_value(floatX(lr.get_value() * options['lr_decay_ratio']))
+
                 if pretrain_total_batch_cnt>=total_batch_cnt:
                     continue
 
@@ -316,6 +327,8 @@ def main(options):
                     print 'Prediction Cost: ', str(train_predict_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
                     print '--------------------------------------------------------------------------------------------'
+                    print 'Learn Rate: ', str(lr.get_value())
+                    print '--------------------------------------------------------------------------------------------'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
                     print '--------------------------------------------------------------------------------------------'
@@ -324,9 +337,11 @@ def main(options):
                 # evaluation
                 if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
                     train_eval_datastream = get_datastream(path=options['data_path'],
+                                                           norm_path=options['norm_data_path'],
                                                            which_set='train_si84',
                                                            batch_size=options['eval_batch_size'])
                     valid_eval_datastream = get_datastream(path=options['data_path'],
+                                                           norm_path=options['norm_data_path'],
                                                            which_set='test_dev93',
                                                            batch_size=options['eval_batch_size'])
                     train_nll, train_bpc, train_fer = network_evaluation(predict_fn,
@@ -428,6 +443,7 @@ if __name__ == '__main__':
     options['train_save_freq'] = 100
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
+    options['norm_data_path'] = '/home/kimts/data/speech/wsj_fbank123_norm_data.npz'
 
     options['save_path'] = './wsj_deep_lstm' + \
                            '_lr' + str(int(learn_rate)) + \
