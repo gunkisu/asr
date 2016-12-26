@@ -9,6 +9,7 @@ from lasagne.layers import get_output, get_all_params, count_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.updates import total_norm_constraint
 from lasagne.random import set_rng
+from lasagne.utils import floatX as convert_to_floatX
 
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
@@ -224,7 +225,7 @@ def main(options):
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    skip_scale = theano.shared(floatX(options['skip_scale']))
+    skip_scale = theano.shared(convert_to_floatX(options['skip_scale']))
 
     network, rand_layer_list = build_network(input_data=input_data,
                                              input_mask=input_mask,
