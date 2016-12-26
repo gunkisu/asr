@@ -180,10 +180,13 @@ class SkipLSTMLayer(MergeLayer):
         if input_data.ndim > 3:
             input_data = T.flatten(input_data, 3)
 
+
         input_data = input_data.dimshuffle(1, 0, 2)
         input_mask = input_mask.dimshuffle(1, 0, 'x')
 
         seq_len, num_batch, num_inputs = input_data.shape
+
+        stochastic_samples = self.uniform(size=(seq_len, 1), dtype=floatX)
 
         W_in_stacked = T.concatenate([self.W_in_to_ingate,
                                       self.W_in_to_forgetgate,
@@ -207,6 +210,7 @@ class SkipLSTMLayer(MergeLayer):
             return x[:, n*self.num_units:(n+1)*self.num_units]
 
         def step(input_data_n,
+                 sample_data_n,
                  cell_previous,
                  hid_previous,
                  *args):
@@ -227,8 +231,7 @@ class SkipLSTMLayer(MergeLayer):
             if deterministic:
                 skip_comp = T.round(skip_comp)
             else:
-                stochastic_sample = self.uniform(size=T.shape(skip_comp), dtype=floatX)
-                epsilon = theano.gradient.disconnected_grad(T.lt(stochastic_sample, skip_comp) - skip_comp)
+                epsilon = theano.gradient.disconnected_grad(T.lt(sample_data_n, skip_comp) - skip_comp)
                 skip_comp = skip_comp + epsilon
 
             ####################
@@ -278,10 +281,12 @@ class SkipLSTMLayer(MergeLayer):
 
         def step_masked(input_data_n,
                         input_mask_n,
+                        sample_data_n,
                         cell_previous,
                         hid_previous,
                         *args):
             cell, hid, skip_comp = step(input_data_n,
+                                        sample_data_n,
                                         cell_previous,
                                         hid_previous,
                                         *args)
@@ -291,7 +296,8 @@ class SkipLSTMLayer(MergeLayer):
             return [cell, hid, skip_comp]
 
         sequences = [input_data,
-                     input_mask]
+                     input_mask,
+                     sample_data_n]
         step_fun = step_masked
 
         ones = T.ones((num_batch, 1))
@@ -319,16 +325,15 @@ class SkipLSTMLayer(MergeLayer):
 
         non_seqs += [self.skip_scale]
 
-        [cell_out, hid_out, skip_comp], updates = theano.scan(fn=step_fun,
-                                                              sequences=sequences,
-                                                              outputs_info=[cell_init, hid_init, None],
-                                                              go_backwards=self.backwards,
-                                                              truncate_gradient=self.gradient_steps,
-                                                              non_sequences=non_seqs,
-                                                              n_steps=seq_len,
-                                                              strict=True)
+        cell_out, hid_out, skip_comp = theano.scan(fn=step_fun,
+                                                   sequences=sequences,
+                                                   outputs_info=[cell_init, hid_init, None],
+                                                   go_backwards=self.backwards,
+                                                   truncate_gradient=self.gradient_steps,
+                                                   non_sequences=non_seqs,
+                                                   n_steps=seq_len,
+                                                   strict=True)[0]
 
-        self.rand_updates = updates
         self.skip_comp = skip_comp
 
         if self.only_return_final:

@@ -121,7 +121,6 @@ def set_network_trainer(input_data,
 
     skip_comp_list = []
     for rand_layer in rand_layer_list:
-        train_updates.update(rand_layer.rand_updates)
         skip_comp_list.append(rand_layer.skip_comp)
 
     # get training (update) function
