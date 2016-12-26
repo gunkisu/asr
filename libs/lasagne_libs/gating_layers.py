@@ -297,7 +297,7 @@ class SkipLSTMLayer(MergeLayer):
 
         sequences = [input_data,
                      input_mask,
-                     sample_data_n]
+                     stochastic_samples]
         step_fun = step_masked
 
         ones = T.ones((num_batch, 1))
