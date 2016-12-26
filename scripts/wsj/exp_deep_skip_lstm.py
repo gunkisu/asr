@@ -20,8 +20,6 @@ eps = numpy.finfo(floatX).eps
 
 set_rng(numpy.random.RandomState(111))
 
-import pdb
-
 def get_datastream(path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     print path, which_set
