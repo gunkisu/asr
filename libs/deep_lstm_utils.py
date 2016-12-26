@@ -47,6 +47,7 @@ def get_arg_parser():
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--truncate-ivectors', help='truncate ivectors', action='store_true')
     parser.add_argument('--reload-model', help='model to load')
+    parser.add_argument('--norm-path', help='normalization data')
 
     return parser
 
