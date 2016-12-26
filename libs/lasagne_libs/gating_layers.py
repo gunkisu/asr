@@ -221,8 +221,8 @@ class SkipLSTMLayer(MergeLayer):
                                                       -self.grad_clipping,
                                                       self.grad_clipping)
             skip_comp = T.tanh(skip_comp)
-            skip_comp = T.dot(skip_comp,  self.W_skip) + self.b_skip
-            skip_comp = T.nnet.sigmoid(self.skip_scale*skip_comp)
+            skip_comp = T.dot(skip_comp,  self.W_skip)
+            skip_comp = T.nnet.sigmoid(self.skip_scale*skip_comp + self.b_skip)
 
             if deterministic:
                 skip_comp = T.round(skip_comp)
