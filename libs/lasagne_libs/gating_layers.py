@@ -20,6 +20,7 @@ class SkipLSTMLayer(MergeLayer):
                  hid_init=init.Constant(0.),
                  learn_init=False,
                  # options
+                 skip_scale=T.ones(shape=(1,), dtype=floatX),
                  backwards=False,
                  gradient_steps=-1,
                  grad_clipping=0,
@@ -46,6 +47,7 @@ class SkipLSTMLayer(MergeLayer):
         super(SkipLSTMLayer, self).__init__(incomings, **kwargs)
 
         # set options
+        self.skip_scale = skip_scale
         self.learn_init = learn_init
         self.num_units = num_units
         self.backwards = backwards
@@ -76,20 +78,28 @@ class SkipLSTMLayer(MergeLayer):
                                    regularizable=False))
 
         ##### in gate #####
-        (self.W_in_to_ingate, self.W_hid_to_ingate, self.b_ingate) = add_gate_params('ingate')
+        (self.W_in_to_ingate,
+         self.W_hid_to_ingate,
+         self.b_ingate) = add_gate_params('ingate')
         self.W_cell_to_ingate = self.add_param(spec=init.Uniform(0.1),
                                                shape=(num_units,),
                                                name="W_cell_to_ingate")
         ##### forget gate #####
-        (self.W_in_to_forgetgate, self.W_hid_to_forgetgate, self.b_forgetgate) = add_gate_params('forgetgate')
+        (self.W_in_to_forgetgate,
+         self.W_hid_to_forgetgate,
+         self.b_forgetgate) = add_gate_params('forgetgate')
         self.W_cell_to_forgetgate = self.add_param(spec=init.Uniform(0.1),
                                                    shape=(num_units,),
                                                    name="W_cell_to_forgetgate")
         ##### cell #####
-        (self.W_in_to_cell, self.W_hid_to_cell, self.b_cell) = add_gate_params('cell')
+        (self.W_in_to_cell,
+         self.W_hid_to_cell,
+         self.b_cell) = add_gate_params('cell')
 
         ##### out gate #####
-        (self.W_in_to_outgate, self.W_hid_to_outgate, self.b_outgate) = add_gate_params('outgate')
+        (self.W_in_to_outgate,
+         self.W_hid_to_outgate,
+         self.b_outgate) = add_gate_params('outgate')
         self.W_cell_to_outgate = self.add_param(spec=init.Uniform(0.1),
                                                 shape=(num_units,),
                                                 name="W_cell_to_outgate")
@@ -98,26 +108,37 @@ class SkipLSTMLayer(MergeLayer):
         ###################
         # skip parameters #
         ###################
+        self.W_cell_to_skip = self.add_param(spec=init.Orthogonal(0.1),
+                                             shape=(num_units, num_units),
+                                             name="W_cell_to_skip")
+        self.b_cell_to_skip = self.add_param(spec=init.Constant(1.0),
+                                             shape=(num_units,),
+                                             name="b_cell_to_skip",
+                                             regularizable=False)
+
         self.W_hid_to_skip = self.add_param(spec=init.Orthogonal(0.1),
                                             shape=(num_units, num_units),
                                             name="W_hid_to_skip")
+        self.b_hid_to_skip = self.add_param(spec=init.Constant(1.0),
+                                            shape=(num_units,),
+                                            name="b_hid_to_skip",
+                                            regularizable=False)
+
         self.W_in_to_skip = self.add_param(spec=init.Orthogonal(0.1),
                                            shape=(num_inputs, num_units),
                                            name="W_in_to_skip")
-        self.W_diff_to_skip = self.add_param(spec=init.Orthogonal(0.1),
-                                             shape=(num_inputs, num_units),
-                                             name="W_diff_to_skip")
-        self.b_pre_skip = self.add_param(spec=init.Constant(0.0),
-                                         shape=(num_units,),
-                                         name="b_pre_skip",
-                                         regularizable=False)
-        self.W_skip = self.add_param(spec=init.Orthogonal(0.1),
+        self.b_in_to_skip = self.add_param(spec=init.Constant(1.0),
+                                           shape=(num_units,),
+                                           name="b_in_to_skip",
+                                            regularizable=False)
+
+        self.W_skip = self.add_param(spec=init.Uniform(0.1),
                                      shape=(num_units, 1),
                                      name="W_skip")
-        self.b_post_skip = self.add_param(spec=init.Constant(0.0),
-                                          shape=(1,),
-                                          name="b_post_skip",
-                                          regularizable=False)
+        self.b_skip = self.add_param(spec=init.Constant(0.0),
+                                     shape=(1,),
+                                     name="b_post_skip",
+                                     regularizable=False)
 
         if isinstance(cell_init, Layer):
             self.cell_init = cell_init
@@ -132,7 +153,7 @@ class SkipLSTMLayer(MergeLayer):
             self.hid_init = hid_init
         else:
             self.hid_init = self.add_param(spec=hid_init,
-                                           shape=(1, self.num_units),
+                                           shape=(1, num_units),
                                            name="hid_init",
                                            trainable=learn_init,
                                            regularizable=False)
@@ -159,13 +180,7 @@ class SkipLSTMLayer(MergeLayer):
         if input_data.ndim > 3:
             input_data = T.flatten(input_data, 3)
 
-        prev_input = T.concatenate([T.zeros(shape=(input_data.shape[0], 1, input_data.shape[2])),
-                                    input_data[:, :-1, :]],
-                                   axis=1)
-        input_diff = input_data - prev_input
-
         input_data = input_data.dimshuffle(1, 0, 2)
-        input_diff = input_diff.dimshuffle(1, 0, 2)
         input_mask = input_mask.dimshuffle(1, 0, 'x')
 
         seq_len, num_batch, num_inputs = input_data.shape
@@ -192,24 +207,22 @@ class SkipLSTMLayer(MergeLayer):
             return x[:, n*self.num_units:(n+1)*self.num_units]
 
         def step(input_data_n,
-                 input_diff_n,
                  cell_previous,
                  hid_previous,
                  *args):
             ####################
             # skip computation #
             ####################
-            skip_comp = T.dot(input_data_n, self.W_in_to_skip)*T.dot(hid_previous, self.W_hid_to_skip)
-            skip_comp += T.dot(input_diff_n, self.W_diff_to_skip)
-            skip_comp += self.b_pre_skip
-
+            skip_comp = (T.dot(input_data_n, self.W_in_to_skip) + self.b_in_to_skip)
+            skip_comp *=(T.dot(cell_previous, self.W_cell_to_skip) + self.b_cell_to_skip)
+            skip_comp *=(T.dot(hid_previous, self.W_hid_to_skip) + self.b_hid_to_skip)
             if self.grad_clipping:
                 skip_comp = theano.gradient.grad_clip(skip_comp,
                                                       -self.grad_clipping,
                                                       self.grad_clipping)
             skip_comp = T.tanh(skip_comp)
-            skip_comp = T.dot(skip_comp,  self.W_skip) + self.b_post_skip
-            skip_comp = T.nnet.sigmoid(skip_comp)
+            skip_comp = T.dot(skip_comp,  self.W_skip) + self.b_skip
+            skip_comp = T.nnet.sigmoid(self.skip_scale*skip_comp)
 
             if deterministic:
                 skip_comp = T.round(skip_comp)
@@ -261,16 +274,14 @@ class SkipLSTMLayer(MergeLayer):
             cell = T.switch(skip_comp[:, None], cell_previous, cell)
             hid = T.switch(skip_comp[:, None], hid_previous, hid)
 
-            return [cell, hid,skip_comp]
+            return [cell, hid, skip_comp]
 
         def step_masked(input_data_n,
-                        input_diff_n,
                         input_mask_n,
                         cell_previous,
                         hid_previous,
                         *args):
             cell, hid, skip_comp = step(input_data_n,
-                                        input_diff_n,
                                         cell_previous,
                                         hid_previous,
                                         *args)
@@ -280,7 +291,6 @@ class SkipLSTMLayer(MergeLayer):
             return [cell, hid, skip_comp]
 
         sequences = [input_data,
-                     input_diff,
                      input_mask]
         step_fun = step_masked
 
@@ -299,11 +309,15 @@ class SkipLSTMLayer(MergeLayer):
                      self.W_cell_to_outgate]
 
         non_seqs += [self.W_in_to_skip,
+                     self.b_in_to_skip,
                      self.W_hid_to_skip,
-                     self.W_diff_to_skip,
+                     self.b_hid_to_skip,
+                     self.W_cell_to_skip,
+                     self.b_cell_to_skip,
                      self.W_skip,
-                     self.b_pre_skip,
-                     self.b_post_skip]
+                     self.b_skip]
+
+        non_seqs += [self.skip_scale]
 
         [cell_out, hid_out, skip_comp], updates = theano.scan(fn=step_fun,
                                                               sequences=sequences,
@@ -311,6 +325,7 @@ class SkipLSTMLayer(MergeLayer):
                                                               go_backwards=self.backwards,
                                                               truncate_gradient=self.gradient_steps,
                                                               non_sequences=non_seqs,
+                                                              n_steps=seq_len,
                                                               strict=True)
 
         self.rand_updates = updates
