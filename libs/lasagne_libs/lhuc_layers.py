@@ -22,14 +22,13 @@ class LHUCLayer(MergeLayer):
         m_batch, n_time_steps, n_features = self.input_shapes[0]
         self.num_speakers = num_speakers
         self.num_units = n_features 
-        self.W = self.add_param(W, (num_speakers, num_units), name='W')
+        self.W = self.add_param(W, (self.num_speakers, self.num_units), name='W_LHUC', speaker_dependent=True)
         self.psi = psi
     
     def get_output_shape_for(self, input_shapes):
         return input_shapes[0]
 
     def get_output_for(self, inputs, **kwargs):
-        # Currently only supports exp for the psi function.
         prev_layer_input, speaker_input = inputs
         scaled_W = self.psi(self.W[speaker_input])
 

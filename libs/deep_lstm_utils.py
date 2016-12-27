@@ -11,17 +11,21 @@ from lasagne.objectives import categorical_crossentropy
 
 from six import iteritems
 import itertools
-
 from models.deep_bidir_lstm import deep_bidir_lstm_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
-from libs.param_utils import set_model_param_value
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
-def get_arg_parser():
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+def uniq(seq): 
+   # order preserving
+   checked = []
+   for e in seq:
+       if e not in checked:
+           checked.append(e)
+   return checked
 
+def add_deep_lstm_params(parser):
     parser.add_argument('--batch-size', default=1, help='batch size', type=int)
     parser.add_argument('--num-nodes', default=500, help='number of hidden nodes', type=int)
     parser.add_argument('--num-layers', default=5, help='number of layers', type=int)
@@ -48,14 +52,21 @@ def get_arg_parser():
     parser.add_argument('--truncate-ivectors', help='truncate ivectors', action='store_true')
     parser.add_argument('--reload-model', help='model to load')
     parser.add_argument('--norm-path', help='normalization data')
-
+    
+def get_arg_parser():
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    add_deep_lstm_params(parser)
     return parser
+
+def add_lhuc_params(parser):
+    parser.add_argument('simodel', help='speaker independent model for LHUC')
 
 
 def get_save_path(args):
     return './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
             args.learn_rate, args.grad_norm, args.grad_clipping, args.grad_steps, args.num_layers, args.num_nodes, 
             args.batch_size, args.ivector_dim if args.use_ivectors else 0)
+
 
 def trainer(input_data,
                         input_mask,
@@ -98,6 +109,48 @@ def trainer(input_data,
                                   updates=train_updates)
     return training_fn, trainer_params
 
+def trainer_lhuc(input_data,
+                        input_mask,
+                        target_data,
+                        target_mask,
+                        num_outputs,
+                        speaker_data,
+                        network,
+                        updater,
+                        learning_rate,
+                        load_updater_params=None):
+    
+    o = get_output(network, deterministic=False)
+    num_seqs = o.shape[0]
+    ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
+            targets=T.flatten(target_data, 1))
+
+    ce = ce * T.flatten(target_mask, 1)
+
+    ce_cost = ce.sum()/num_seqs
+    ce_frame = ce.sum()/target_mask.sum()
+
+    network_params = get_all_params(network, trainable=True, speaker_independent=False)
+    network_grads = theano.grad(cost=ce_cost,
+                                wrt=network_params)
+
+    network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
+
+    train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
+    train_updates, trainer_params = updater(loss_or_grads=network_grads,
+                                            params=network_params,
+                                            learning_rate=train_lr,
+                                            load_params_dict=load_updater_params)
+
+    training_fn = theano.function(inputs=[input_data,
+                                          input_mask,
+                                          target_data,
+                                          target_mask, speaker_data],
+                                  outputs=[ce_frame,
+                                           network_grads_norm],
+                                  updates=train_updates)
+    return training_fn, trainer_params
+
 def predictor(input_data,
                           input_mask,
                           target_data,
@@ -120,6 +173,29 @@ def predictor(input_data,
                                          target_mask],
                                  outputs=[pred_idx,
                                           ce_frame])
+def predictor_lhuc(input_data,
+                          input_mask,
+                          target_data,
+                          target_mask,
+                          speaker_data,
+                          num_outputs,
+                          network):
+    o = get_output(network, deterministic=False)
+    num_seqs = o.shape[0]
+    ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
+            targets=T.flatten(target_data, 1))
+
+    pred_idx = T.argmax(o, axis=-1)
+    ce = ce * T.flatten(target_mask, 1)
+
+    ce_frame = ce.sum()/target_mask.sum()
+
+    return theano.function(inputs=[input_data,
+                                         input_mask,
+                                         target_data,
+                                         target_mask, speaker_data],
+                                 outputs=[pred_idx,
+                                          ce_frame])
 
 def eval_net(predict_fn,
                        data_stream):
@@ -140,6 +216,35 @@ def eval_net(predict_fn,
                                     input_mask,
                                     target_data,
                                     target_mask)
+        predict_idx = predict_output[0]
+        predict_cost = predict_output[1]
+
+        match_data = (target_data == predict_idx)*target_mask
+        match_avg = numpy.sum(match_data)/numpy.sum(target_mask)
+
+        total_nll += predict_cost
+        total_fer += (1.0 - match_avg)
+
+    total_nll /= batch_cnt 
+    total_fer /= batch_cnt
+
+    return total_nll, total_fer
+
+def eval_net_lhuc(predict_fn,
+                       data_stream, spk_stream, spk_list):
+
+    total_nll = 0.
+    total_fer = 0.
+
+    for batch_cnt, lhuc_data in enumerate(itertools.izip(data_stream.get_epoch_iterator(),
+            spk_stream.get_epoch_iterator()), start=1):
+        data, spk_data = lhuc_data
+        input_data, input_mask, target_data, target_mask = data
+
+        predict_output = predict_fn(input_data,
+                                    input_mask,
+                                    target_data,
+                                    target_mask, fuel_utils.spk_to_ids(spk_list, spk_data[0]))
         predict_idx = predict_output[0]
         predict_cost = predict_output[1]
 
