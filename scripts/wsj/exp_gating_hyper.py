@@ -5,7 +5,7 @@ from collections import OrderedDict
 from models.gating_hyper_nets import deep_gating_hyper_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
-from lasagne.layers import get_output, get_all_params
+from lasagne.layers import get_output, get_all_params, count_params
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.updates import total_norm_constraint
 from lasagne.random import set_rng
@@ -14,18 +14,23 @@ from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme
 from fuel.transformers import Padding, FilterSources
+from data.transformers import Normalize
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
 set_rng(numpy.random.RandomState(111))
 
-def get_datastream(path, which_set='train_si84', batch_size=1):
+def get_datastream(path, norm_path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
+    data_mean_std = numpy.load(norm_path)
+
     print path, which_set
+
     iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
+    base_stream = Normalize(data_stream=base_stream, means=data_mean_std['mean'], stds=data_mean_std['std'])
     fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
     padded_stream = Padding(data_stream=fs)
     return padded_stream
@@ -236,6 +241,8 @@ def main(options):
 
     network_params = get_all_params(network, trainable=True)
 
+    print("number of parameters in model: %d" % count_params(network, trainable=True))
+
     if options['reload_model']:
         print('Loading Parameters...')
         pretrain_network_params_val,  pretrain_update_params_val, pretrain_total_batch_cnt = pickle.load(open(options['reload_model'], 'rb'))
@@ -270,8 +277,9 @@ def main(options):
 
     print 'Load data stream'
     train_datastream = get_datastream(path=options['data_path'],
-                                                  which_set='train_si84',
-                                                  batch_size=options['batch_size'])
+                                      norm_path=options['norm_data_path'],
+                                      which_set='train_si84',
+                                      batch_size=options['batch_size'])
 
     print 'Start training'
     if os.path.exists(options['save_path'] + '_eval_history.npz'):
@@ -326,9 +334,11 @@ def main(options):
                 # evaluation
                 if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
                     train_eval_datastream = get_datastream(path=options['data_path'],
+                                                           norm_path=options['norm_data_path'],
                                                            which_set='train_si84',
                                                            batch_size=options['eval_batch_size'])
                     valid_eval_datastream = get_datastream(path=options['data_path'],
+                                                           norm_path=options['norm_data_path'],
                                                            which_set='test_dev93',
                                                            batch_size=options['eval_batch_size'])
                     train_nll, train_bpc, train_fer = network_evaluation(predict_fn,
@@ -430,6 +440,7 @@ if __name__ == '__main__':
     options['train_save_freq'] = 100
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
+    options['norm_data_path'] = '/home/kimts/data/speech/wsj_fbank123_norm_data.npz'
 
     options['save_path'] = './wsj_gating_hyper' + \
                            '_lr' + str(int(learn_rate)) + \

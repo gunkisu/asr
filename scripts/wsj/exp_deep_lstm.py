@@ -417,7 +417,7 @@ if __name__ == '__main__':
     options['num_inputs'] = 123
     options['num_units_list'] = [500]*num_layers
     options['num_outputs'] = 3436
-    options['use_projection'] = True if use_projection==1 else False
+    options['use_projection'] = False
 
     options['dropout_ratio'] = 0.0
     options['weight_noise'] = weight_noise
@@ -452,7 +452,6 @@ if __name__ == '__main__':
                            '_nl' + str(int(num_layers)) + \
                            '_rg' + str(int(l2_lambda)) + \
                            '_p' + str(int(peepholes)) + \
-                           '_j' + str(int(use_projection)) + \
                            '_b' + str(int(batch_size))
 
 

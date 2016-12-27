@@ -15,18 +15,21 @@ from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme
 from fuel.transformers import Padding, FilterSources
+from data.transformers import Normalize
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
 set_rng(numpy.random.RandomState(111))
 
-def get_datastream(path, which_set='train_si84', batch_size=1):
+def get_datastream(path, norm_path, which_set='train_si84', batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    print path, which_set
+    data_mean_std = numpy.load(norm_path)
+
     iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
+    base_stream = Normalize(data_stream=base_stream, means=data_mean_std['mean'], stds=data_mean_std['std'])
     fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
     padded_stream = Padding(data_stream=fs)
     return padded_stream
@@ -280,6 +283,7 @@ def main(options):
 
     print 'Load data stream'
     train_datastream = get_datastream(path=options['data_path'],
+                                      norm_path=options['norm_data_path'],
                                       which_set='train_si84',
                                       batch_size=options['batch_size'])
 
@@ -343,9 +347,11 @@ def main(options):
                 # evaluation
                 if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
                     train_eval_datastream = get_datastream(path=options['data_path'],
+                                                           norm_path=options['norm_data_path'],
                                                            which_set='train_si84',
                                                            batch_size=options['eval_batch_size'])
                     valid_eval_datastream = get_datastream(path=options['data_path'],
+                                                           norm_path=options['norm_data_path'],
                                                            which_set='test_dev93',
                                                            batch_size=options['eval_batch_size'])
                     train_nll, train_bpc, train_fer = network_evaluation(predict_fn,
@@ -452,6 +458,7 @@ if __name__ == '__main__':
     options['train_save_freq'] = 100
 
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
+    options['norm_data_path'] = '/home/kimts/data/speech/wsj_fbank123_norm_data.npz'
 
     options['save_path'] = './wsj_deep_skip_lstm' + \
                            '_lr' + str(int(learn_rate)) + \
