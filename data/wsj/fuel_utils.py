@@ -5,9 +5,15 @@ from fuel.transformers import Padding, FilterSources
 
 from data.transformers import ConcatenateTransformer, TruncateTransformer, Normalize
 
-from libs.deep_lstm_utils import uniq
-
 import numpy
+
+def uniq(seq): 
+   # order preserving
+   checked = []
+   for e in seq:
+       if e not in checked:
+           checked.append(e)
+   return checked
 
 def spk_to_ids(spk_list, spks):
     return numpy.asarray([spk_list.index(s) for s in spks], dtype='int32')

@@ -13,6 +13,7 @@ from six import iteritems
 import itertools
 from models.deep_bidir_lstm import deep_bidir_lstm_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
+import data.wsj.fuel_utils as fuel_utils
 
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
