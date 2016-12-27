@@ -438,7 +438,7 @@ if __name__ == '__main__':
     options['data_path'] = '/home/kimts/data/speech/wsj_fbank123.h5'
     options['norm_data_path'] = '/home/kimts/data/speech/wsj_fbank123_norm_data.npz'
 
-    options['save_path'] = './wsj_gating_hyper' + \
+    options['save_path'] = './wsj_scaling_hyper' + \
                            '_lr' + str(int(learn_rate)) + \
                            '_gn' + str(int(grad_norm)) + \
                            '_gc' + str(int(grad_clipping)) + \
