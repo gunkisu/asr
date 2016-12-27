@@ -29,6 +29,26 @@ def main(args):
         args.input_dim = args.input_dim + args.ivector_dim
 
     print(args)
+    
+    print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
+    if args.norm_path: 
+        print('Use normalization data from {}'.format(args.norm_path))
+    
+    train_ds = fuel_utils.get_datastream(path=args.data_path,
+                                  which_set=args.train_dataset,
+                                  batch_size=args.batch_size, 
+                                  norm_path=args.norm_path,
+                                  use_ivectors=args.use_ivectors, 
+                                  truncate_ivectors=args.truncate_ivectors, 
+                                  ivector_dim=args.ivector_dim)
+    valid_ds = fuel_utils.get_datastream(path=args.data_path,
+                                  which_set=args.valid_dataset,
+                                  batch_size=args.batch_size, 
+                                  norm_path=args.norm_path,
+                                  use_ivectors=args.use_ivectors,
+                                  truncate_ivectors=args.truncate_ivectors,
+                                  ivector_dim=args.ivector_dim)
+
 
     print('Build and compile network')
     input_data = T.ftensor3('input_data')
@@ -80,21 +100,6 @@ def main(args):
                                        network=network)
 
     sw.print_elapsed()
-    print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
-    
-    train_ds = fuel_utils.get_datastream(path=args.data_path,
-                                  which_set=args.train_dataset,
-                                  batch_size=args.batch_size, 
-                                  use_ivectors=args.use_ivectors, 
-                                  truncate_ivectors=args.truncate_ivectors, 
-                                  ivector_dim=args.ivector_dim)
-    valid_ds = fuel_utils.get_datastream(path=args.data_path,
-                                  which_set=args.valid_dataset,
-                                  batch_size=args.batch_size, 
-                                  use_ivectors=args.use_ivectors,
-                                  truncate_ivectors=args.truncate_ivectors,
-                                  ivector_dim=args.ivector_dim)
-
     print('Start training')
     EvalRecord = namedtuple('EvalRecord', ['ce_frame', 'fer'])
 
