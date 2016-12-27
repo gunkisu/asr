@@ -116,7 +116,7 @@ def main(args):
         
         train_ce_frame_sum = 0.0
         for b_idx, lhuc_data in enumerate(itertools.izip(valid_ds.get_epoch_iterator(), 
-                valid_spkid_ds.get_epoch_iterator())):
+                valid_spkid_ds.get_epoch_iterator()), start=1):
             data, spk_data = lhuc_data
             input_data, input_mask, target_data, target_mask = data
             train_output = training_fn(input_data,
