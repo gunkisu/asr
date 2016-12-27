@@ -2,24 +2,23 @@ from lasagne import nonlinearities
 from libs.lasagne_libs.layers import SequenceDenseLayer
 from lasagne.layers import InputLayer, DropoutLayer, ConcatLayer, SliceLayer
 from libs.lasagne_libs.layers import LSTMLayer
-from libs.lasagne_libs.hyper_layers import GatingHyperLSTMLayer, ExternalHyperLSTMLayer
+from libs.lasagne_libs.hyper_layers import ScalingHyperLSTMLayer, ExternalHyperLSTMLayer
 
-def deep_gating_hyper_model(input_var,
-                            mask_var,
-                            num_inputs,
-                            num_inner_units_list,
-                            num_factor_units_list,
-                            num_outer_units_list,
-                            num_outputs,
-                            dropout_ratio=0.2,
-                            use_layer_norm=True,
-                            gating_nonlinearity=None,
-                            weight_noise=0.0,
-                            peepholes=False,
-                            learn_init=False,
-                            get_inner_hid=False,
-                            grad_clipping=1.0,
-                            use_softmax=True,):
+def deep_scaling_hyper_model(input_var,
+                             mask_var,
+                             num_inputs,
+                             num_inner_units_list,
+                             num_factor_units_list,
+                             num_outer_units_list,
+                             num_outputs,
+                             dropout_ratio=0.2,
+                             use_layer_norm=True,
+                             scale_nonlinearity=None,
+                             weight_noise=0.0,
+                             learn_init=False,
+                             get_inner_hid=False,
+                             grad_clipping=1.0,
+                             use_softmax=True,):
     ###############
     # input layer #
     ###############
@@ -40,21 +39,20 @@ def deep_gating_hyper_model(input_var,
                                         p=dropout_ratio)
 
         # forward
-        prev_fwd_layer = GatingHyperLSTMLayer(inner_incoming=prev_input_layer,
-                                              outer_incoming=prev_input_layer,
-                                              mask_input=mask_layer,
-                                              num_inner_units=num_inner_units,
-                                              num_factor_units=num_factor_units,
-                                              num_outer_units=num_outer_units,
-                                              gating_nonlinearity=gating_nonlinearity,
-                                              dropout_ratio=dropout_ratio,
-                                              use_layer_norm=use_layer_norm,
-                                              weight_noise=weight_noise,
-                                              peepholes=peepholes,
-                                              learn_init=learn_init,
-                                              grad_clipping=grad_clipping,
-                                              backwards=False,
-                                              output_inner_hid=True)
+        prev_fwd_layer = ScalingHyperLSTMLayer(inner_incoming=prev_input_layer,
+                                               outer_incoming=prev_input_layer,
+                                               mask_incoming=mask_layer,
+                                               num_inner_units=num_inner_units,
+                                               num_factor_units=num_factor_units,
+                                               num_outer_units=num_outer_units,
+                                               scale_nonlinearity=scale_nonlinearity,
+                                               dropout_ratio=dropout_ratio,
+                                               use_layer_norm=use_layer_norm,
+                                               weight_noise=weight_noise,
+                                               learn_init=learn_init,
+                                               grad_clipping=grad_clipping,
+                                               backwards=False,
+                                               only_return_outer=True)
 
         # inner loop hidden
         prev_fwd_inner_layer = SliceLayer(incoming=prev_fwd_layer,
@@ -66,21 +64,20 @@ def deep_gating_hyper_model(input_var,
                                           axis=-1)
 
         # backward
-        prev_bwd_layer = GatingHyperLSTMLayer(inner_incoming=prev_input_layer,
-                                              outer_incoming=prev_input_layer,
-                                              mask_input=mask_layer,
-                                              num_inner_units=num_inner_units,
-                                              num_factor_units=num_factor_units,
-                                              num_outer_units=num_outer_units,
-                                              gating_nonlinearity=gating_nonlinearity,
-                                              dropout_ratio=dropout_ratio,
-                                              use_layer_norm=use_layer_norm,
-                                              weight_noise=weight_noise,
-                                              peepholes=peepholes,
-                                              learn_init=learn_init,
-                                              grad_clipping=grad_clipping,
-                                              backwards=True,
-                                              output_inner_hid=True)
+        prev_bwd_layer = ScalingHyperLSTMLayer(inner_incoming=prev_input_layer,
+                                               outer_incoming=prev_input_layer,
+                                               mask_incoming=mask_layer,
+                                               num_inner_units=num_inner_units,
+                                               num_factor_units=num_factor_units,
+                                               num_outer_units=num_outer_units,
+                                               scale_nonlinearity=scale_nonlinearity,
+                                               dropout_ratio=dropout_ratio,
+                                               use_layer_norm=use_layer_norm,
+                                               weight_noise=weight_noise,
+                                               learn_init=learn_init,
+                                               grad_clipping=grad_clipping,
+                                               backwards=True,
+                                               only_return_outer=True)
         # inner loop hidden
         prev_bwd_inner_layer = SliceLayer(incoming=prev_bwd_layer,
                                           indices=slice(0, num_inner_units),

@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
-from models.gating_hyper_nets import deep_gating_hyper_model
+from models.gating_hyper_nets import deep_scaling_hyper_model
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
 from libs.param_utils import set_model_param_value
 from lasagne.layers import get_output, get_all_params, count_params
@@ -42,7 +42,7 @@ def build_network(input_data,
                   num_factor_units_list,
                   num_outer_units_list,
                   num_outputs,
-                  gating_nonlinearity=None,
+                  scale_nonlinearity=None,
                   dropout_ratio=0.2,
                   weight_noise=0.0,
                   use_layer_norm=True,
@@ -50,21 +50,21 @@ def build_network(input_data,
                   learn_init=True,
                   grad_clipping=0.0):
 
-    network = deep_gating_hyper_model(input_var=input_data,
-                                      mask_var=input_mask,
-                                      num_inputs=num_inputs,
-                                      num_inner_units_list=num_inner_units_list,
-                                      num_factor_units_list=num_factor_units_list,
-                                      num_outer_units_list=num_outer_units_list,
-                                      num_outputs=num_outputs,
-                                      gating_nonlinearity=gating_nonlinearity,
-                                      dropout_ratio=dropout_ratio,
-                                      weight_noise=weight_noise,
-                                      use_layer_norm=use_layer_norm,
-                                      peepholes=peepholes,
-                                      learn_init=learn_init,
-                                      grad_clipping=grad_clipping,
-                                      use_softmax=False)
+    network = deep_scaling_hyper_model(input_var=input_data,
+                                       mask_var=input_mask,
+                                       num_inputs=num_inputs,
+                                       num_inner_units_list=num_inner_units_list,
+                                       num_factor_units_list=num_factor_units_list,
+                                       num_outer_units_list=num_outer_units_list,
+                                       num_outputs=num_outputs,
+                                       scale_nonlinearity=scale_nonlinearity,
+                                       dropout_ratio=dropout_ratio,
+                                       weight_noise=weight_noise,
+                                       use_layer_norm=use_layer_norm,
+                                       learn_init=learn_init,
+                                       grad_clipping=grad_clipping,
+                                       get_inner_hid=False,
+                                       use_softmax=False)
     return network
 
 def set_network_trainer(input_data,
@@ -231,11 +231,10 @@ def main(options):
                             num_factor_units_list=options['num_factor_units_list'],
                             num_outer_units_list=options['num_outer_units_list'],
                             num_outputs=options['num_outputs'],
-                            gating_nonlinearity=options['gating_nonlinearity'],
+                            scale_nonlinearity=options['scale_nonlinearity'],
                             dropout_ratio=options['dropout_ratio'],
                             weight_noise=options['weight_noise'],
                             use_layer_norm=options['use_layer_norm'],
-                            peepholes=options['peepholes'],
                             learn_init=options['learn_init'],
                             grad_clipping=options['grad_clipping'])
 
@@ -395,7 +394,6 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--grad_clipping', action='store', help='gradient clipping', default=1.0)
     parser.add_argument('-s', '--grad_steps', action='store', help='gradient steps', default=-1)
     parser.add_argument('-w', '--weight_noise', action='store', help='weight noise', default=0.0)
-    parser.add_argument('-p', '--peepholes', action='store', help='peepholes', default=1)
     parser.add_argument('-r', '--reg_l2', action='store', help='l2 regularizer', default=5)
 
     args = parser.parse_args()
@@ -406,7 +404,6 @@ if __name__ == '__main__':
     grad_clipping = float(args.grad_clipping)
     gradient_steps = int(args.grad_steps)
     weight_noise = float(args.weight_noise)
-    peepholes = int(args.peepholes)
     l2_lambda = int(args.reg_l2)
 
     options = OrderedDict()
@@ -419,9 +416,8 @@ if __name__ == '__main__':
     options['dropout_ratio'] = 0.0
     options['weight_noise'] = weight_noise
     options['use_layer_norm'] = False
-    options['gating_nonlinearity'] = None
+    options['scale_nonlinearity'] = None
 
-    options['peepholes'] = True if peepholes==1 else False
     options['learn_init'] = False
 
     options['updater'] = momentum
@@ -449,7 +445,6 @@ if __name__ == '__main__':
                            '_gs' + str(int(gradient_steps)) + \
                            '_nl' + str(int(num_layers)) + \
                            '_rg' + str(int(l2_lambda)) + \
-                           '_p' + str(int(peepholes)) + \
                            '_b' + str(int(batch_size))
 
 
