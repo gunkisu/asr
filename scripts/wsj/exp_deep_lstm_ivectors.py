@@ -17,6 +17,7 @@ from fuel.transformers import Padding
 
 def main(args):
     args.save_path = get_save_path(args)
+    
     if not args.reload_model:
         reload_path = args.save_path + '_last_model.pkl'
 
