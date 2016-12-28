@@ -386,7 +386,8 @@ def main(options):
                     pickle.dump([cur_network_params_val, cur_trainer_params_val, cur_total_batch_cnt],
                                 open(options['save_path'] + '_last_model.pkl', 'wb'))
 
-            skip_scale.set_value(convert_to_floatX(skip_scale.get_value() * 1.1))
+                if total_batch_cnt % 1000 == 0 and total_batch_cnt != 0:
+                    skip_scale.set_value(convert_to_floatX(skip_scale.get_value() * 1.01))
 
             if early_stop_flag:
                 break
