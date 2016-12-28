@@ -439,7 +439,9 @@ class LSTMLayer(MergeLayer):
                 outgate = theano.gradient.grad_clip(outgate,
                                                     -self.grad_clipping,
                                                     self.grad_clipping)
-
+                cell = theano.gradient.grad_clip(cell,
+                                                 -self.grad_clipping,
+                                                 self.grad_clipping)
             outgate = self.nonlinearity_outgate(outgate)
 
             # Compute new hidden unit activation
@@ -802,7 +804,9 @@ class LSTMPLayer(MergeLayer):
                 outgate = theano.gradient.grad_clip(outgate,
                                                     -self.grad_clipping,
                                                     self.grad_clipping)
-
+                cell = theano.gradient.grad_clip(cell,
+                                                 -self.grad_clipping,
+                                                 self.grad_clipping)
             outgate = self.nonlinearity_outgate(outgate)
 
             # Compute new hidden unit activation
