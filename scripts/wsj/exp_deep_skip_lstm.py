@@ -124,7 +124,7 @@ def set_network_trainer(input_data,
 
     skip_comp_list = []
     for rand_layer in rand_layer_list:
-        skip_comp_list.append(rand_layer.skip_comp)
+        skip_comp_list.append(T.sum(rand_layer.skip_comp*input_mask)/T.sum(input_mask))
 
     # get training (update) function
     training_fn = theano.function(inputs=[input_data,
@@ -320,9 +320,7 @@ def main(options):
                                            target_mask)
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
-                skip_values = train_output[2]
-
-                current_skips = float(numpy.where(skip_values==1)[0].shape[0])/float(input_data.shape[1])
+                skip_means = train_output[2:]
 
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
@@ -336,7 +334,7 @@ def main(options):
                     print 'Prediction Cost: ', str(train_predict_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
                     print '--------------------------------------------------------------------------------------------'
-                    print 'Skip Ratio: ', str(current_skips)
+                    print 'Skip Ratio: ', skip_means
                     print 'Skip Scale: ', str(skip_scale.get_value())
                     print '--------------------------------------------------------------------------------------------'
                     print 'Train NLL: ', str(evaluation_history[-1][0][0]), ', BPC: ', str(evaluation_history[-1][0][1]), ', FER: ', str(evaluation_history[-1][0][2])
