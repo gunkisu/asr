@@ -13,9 +13,9 @@ eps = numpy.finfo(floatX).eps
 
 class Gate(object):
     def __init__(self,
-                 W_in=init.Uniform(0.1),
-                 W_hid=init.Uniform(0.1),
-                 W_cell=init.Uniform(0.1),
+                 W_in=init.Orthogonal(0.1),
+                 W_hid=init.Orthogonal(0.1),
+                 W_cell=init.Orthogonal(0.1),
                  b=init.Constant(0.),
                  nonlinearity=nonlinearities.sigmoid):
         self.W_in = W_in

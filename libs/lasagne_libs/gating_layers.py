@@ -334,7 +334,7 @@ class SkipLSTMLayer(MergeLayer):
                                                    n_steps=seq_len,
                                                    strict=True)[0]
 
-        self.skip_comp = skip_comp
+        self.skip_comp = skip_comp.dimshuffle(1, 0)
 
         if self.only_return_final:
             hid_out = hid_out[-1]
