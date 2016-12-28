@@ -248,15 +248,15 @@ class ScalingHyperLSTMLayer(MergeLayer):
         ###################
         def add_fact2outer_params(gate_name):
             return (#### fact-to-outer input ####
-                    self.add_param(init.Orthogonal(0.1),
+                    self.add_param(init.Constant(0.1/num_outer_units),
                                    shape=(num_factor_units, num_outer_units),
                                    name="W_fact_to_in_{}".format(gate_name)),
                     #### fact-to-outer hidden ####
-                    self.add_param(init.Orthogonal(0.1),
+                    self.add_param(init.Constant(0.1/num_outer_units),
                                    shape=(num_factor_units, num_outer_units),
                                    name="W_fact_to_hid_{}".format(gate_name)),
                     #### fact-to-outer bias ####
-                    self.add_param(init.Constant(0.0),
+                    self.add_param(init.Constant(0.1/num_outer_units),
                                    shape=(num_factor_units, num_outer_units),
                                    name="W_fact_to_b_{}".format(gate_name)))
 
@@ -286,11 +286,11 @@ class ScalingHyperLSTMLayer(MergeLayer):
         ##############
         def add_outer_gate_params(gate_name):
             return (#### outer input-to-hidden ####
-                    self.add_param(init.Constant(0.1/num_outer_units),
+                    self.add_param(init.Orthogonal(0.1),
                                    shape=(num_outer_inputs, num_outer_units),
                                    name="W_outer_in_to_{}".format(gate_name)),
                     #### outer hidden-to-hidden ####
-                    self.add_param(init.Constant(0.1/num_outer_units),
+                    self.add_param(init.Orthogonal(0.1),
                                    shape=(num_outer_units, num_outer_units),
                                    name="W_outer_hid_to_{}".format(gate_name)))
 
