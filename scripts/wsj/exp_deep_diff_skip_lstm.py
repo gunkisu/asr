@@ -40,6 +40,7 @@ def build_network(input_data,
                   num_units_list,
                   num_outputs,
                   skip_scale,
+                  stochastic,
                   dropout_ratio=0.2,
                   weight_noise=0.0,
                   use_layer_norm=True,
@@ -54,6 +55,7 @@ def build_network(input_data,
                                                                num_inputs=num_inputs,
                                                                num_units_list=num_units_list,
                                                                num_outputs=num_outputs,
+                                                               stochastic=stochastic,
                                                                skip_scale=skip_scale,
                                                                dropout_ratio=dropout_ratio,
                                                                weight_noise=weight_noise,
@@ -234,6 +236,7 @@ def main(options):
                                              num_inputs=options['num_inputs'],
                                              num_units_list=options['num_units_list'],
                                              num_outputs=options['num_outputs'],
+                                             stochastic=options['stochastic'],
                                              skip_scale=skip_scale,
                                              dropout_ratio=options['dropout_ratio'],
                                              weight_noise=options['weight_noise'],
@@ -427,7 +430,8 @@ if __name__ == '__main__':
 
     options = OrderedDict()
 
-    options['skip_scale'] = 0.5
+    options['skip_scale'] = 1.0
+    options['stochastic'] = False
 
     options['num_inputs'] = 123
     options['num_units_list'] = [500]*num_layers
