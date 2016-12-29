@@ -473,12 +473,12 @@ class DiffSkipLSTMLayer(MergeLayer):
         self.W_in_to_skip = self.add_param(spec=init.Orthogonal(0.1),
                                            shape=(num_inputs, num_units),
                                            name="W_in_to_skip")
-        self.b_in_to_skip = self.add_param(spec=init.Constant(0.0),
+        self.b_in_to_skip = self.add_param(spec=init.Constant(1.0),
                                            shape=(num_units,),
                                            name="b_in_to_skip",
                                            regularizable=False)
 
-        self.W_skip = self.add_param(spec=init.Constant(0.0),
+        self.W_skip = self.add_param(spec=init.Orthogonal(0.1),
                                      shape=(num_units, 1),
                                      name="W_skip")
         self.b_skip = self.add_param(spec=init.Constant(0.0),
