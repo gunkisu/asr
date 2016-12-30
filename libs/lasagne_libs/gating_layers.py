@@ -334,7 +334,7 @@ class SkipLSTMLayer(MergeLayer):
                                                    n_steps=seq_len,
                                                    strict=True)[0]
 
-        self.skip_comp = skip_comp
+        self.skip_comp = skip_comp.dimshuffle(1, 0)
 
         if self.only_return_final:
             hid_out = hid_out[-1]
@@ -357,6 +357,7 @@ class DiffSkipLSTMLayer(MergeLayer):
                  hid_init=init.Constant(0.),
                  learn_init=False,
                  # options
+                 stochastic=False,
                  skip_scale=T.ones(shape=(1,), dtype=floatX),
                  backwards=False,
                  gradient_steps=-1,
@@ -391,6 +392,7 @@ class DiffSkipLSTMLayer(MergeLayer):
         super(DiffSkipLSTMLayer, self).__init__(incomings, **kwargs)
 
         # set options
+        self.stochastic = stochastic
         self.skip_scale = skip_scale
         self.learn_init = learn_init
         self.num_units = num_units
@@ -471,15 +473,15 @@ class DiffSkipLSTMLayer(MergeLayer):
         self.W_in_to_skip = self.add_param(spec=init.Orthogonal(0.1),
                                            shape=(num_inputs, num_units),
                                            name="W_in_to_skip")
-        self.b_in_to_skip = self.add_param(spec=init.Constant(0.0),
+        self.b_in_to_skip = self.add_param(spec=init.Constant(1.0),
                                            shape=(num_units,),
                                            name="b_in_to_skip",
                                            regularizable=False)
 
-        self.W_skip = self.add_param(spec=init.Constant(0.0),
+        self.W_skip = self.add_param(spec=init.Orthogonal(0.1),
                                      shape=(num_units, 1),
                                      name="W_skip")
-        self.b_skip = self.add_param(spec=init.Constant(-3.0),
+        self.b_skip = self.add_param(spec=init.Constant(0.0),
                                      shape=(1,),
                                      name="b_skip",
                                      regularizable=False)
@@ -615,9 +617,13 @@ class DiffSkipLSTMLayer(MergeLayer):
 
             if deterministic:
                 skip_comp = T.round(skip_comp)
-            else:
+            elif self.stochastic:
                 epsilon = theano.gradient.disconnected_grad(T.lt(sample_data_n, skip_comp) - skip_comp)
                 skip_comp = skip_comp + epsilon
+            else:
+                epsilon = theano.gradient.disconnected_grad(T.lt(0.5, skip_comp) - skip_comp)
+                skip_comp = skip_comp + epsilon
+
 
             ####################
             # lstm computation #

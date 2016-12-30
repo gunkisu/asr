@@ -13,8 +13,8 @@ eps = numpy.finfo(floatX).eps
 
 class Gate(object):
     def __init__(self,
-                 W_in=init.Uniform(0.1),
-                 W_hid=init.Uniform(0.1),
+                 W_in=init.Orthogonal(0.1),
+                 W_hid=init.Orthogonal(0.1),
                  W_cell=init.Uniform(0.1),
                  b=init.Constant(0.),
                  nonlinearity=nonlinearities.sigmoid):
@@ -439,7 +439,9 @@ class LSTMLayer(MergeLayer):
                 outgate = theano.gradient.grad_clip(outgate,
                                                     -self.grad_clipping,
                                                     self.grad_clipping)
-
+                cell = theano.gradient.grad_clip(cell,
+                                                 -self.grad_clipping,
+                                                 self.grad_clipping)
             outgate = self.nonlinearity_outgate(outgate)
 
             # Compute new hidden unit activation
@@ -662,7 +664,7 @@ class LSTMPLayer(MergeLayer):
                                                     name="W_cell_to_outgate")
 
         #### hidden projection ####
-        self.W_hid_projection = self.add_param(spec=init.Orthogonal(0.1),
+        self.W_hid_projection = self.add_param(spec=init.Orthogonal(),
                                                shape=(num_units, num_prj),
                                                name="W_cell_to_outgate")
 
@@ -802,7 +804,9 @@ class LSTMPLayer(MergeLayer):
                 outgate = theano.gradient.grad_clip(outgate,
                                                     -self.grad_clipping,
                                                     self.grad_clipping)
-
+                cell = theano.gradient.grad_clip(cell,
+                                                 -self.grad_clipping,
+                                                 self.grad_clipping)
             outgate = self.nonlinearity_outgate(outgate)
 
             # Compute new hidden unit activation
