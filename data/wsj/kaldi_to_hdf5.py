@@ -2,8 +2,11 @@ import kaldi_io
 import numpy
 import h5py
 from fuel.datasets.hdf5 import H5PYDataset
+import os.path as path
 
 f = h5py.File('/u/songinch/song/data/speech/wsj_fbank123.h5', 'a')
+
+exp_dir = '/u/songinch/song/kaldi/egs/wsj/s5/exp/hyperud'
 
 # Create datasets
 features = f.create_dataset('features', (38230,), dtype=h5py.special_dtype(vlen=numpy.float32), maxshape=(None,))
@@ -42,34 +45,39 @@ ivectors_shapes_labels[...] = ['frame'.encode('utf8'), 'feature'.encode('utf8')]
 ivectors.dims.create_scale(ivectors_shapes_labels, 'shape_labels')
 ivectors.dims[0].attach_scale(ivectors_shapes_labels)
 
+all_targets_txt = path.join(exp_dir, 'all_targets.txt')
+fbank41_scp = path.join(exp_dir, 'fbank41.scp')
+utt2spk = path.join(exp_dir, 'utt2spk')
+
 # Add target information
-tmp = [l.strip().split(None, 1) for l in open('exp/hyperud/all_targets.txt')]
-tmp_uttid = [(a, b.split()) for a, b in tmp]
-   
-for num_utt, (uttid, value) in enumerate(tmp_uttid):
-    int_value = [int(v) for v in value]
-    targets_shapes[num_utt,:] = len(int_value) 
-    targets[num_utt] = numpy.asarray(int_value).ravel()
+with open(all_targets) as f:
+    tmp = [l.strip().split(None, 1) for l in f]
+    tmp_uttid = [(a, b.split()) for a, b in tmp]
+       
+    for num_utt, (uttid, value) in enumerate(tmp_uttid):
+        int_value = [int(v) for v in value]
+        targets_shapes[num_utt,:] = len(int_value) 
+        targets[num_utt] = numpy.asarray(int_value).ravel()
 
 # Add uttid information
-uttids = [l.strip().split(None, 1)[0] for l in open('exp/hyperud/fbank41.scp')]
-for row_idx, uttid in enumerate(uttids):
-    uttids_ds[row_idx] = uttid
+with open(fbank41_scp) as f:
+    uttids = [l.strip().split(None, 1)[0] for l in f]
+    for row_idx, uttid in enumerate(uttids):
+        uttids_ds[row_idx] = uttid
 
 # Add spk information
-utt2spk = [l.strip().split(None, 1)[1] for l in open('exp/hyperud/utt2spk')]
-for row_idx, spk in enumerate(utt2spk):
-    spks_ds[row_idx] = spk
+with open(utt2spk) as f:
+    utt2spk = [l.strip().split(None, 1)[1] for l in f]
+    for row_idx, spk in enumerate(utt2spk):
+        spks_ds[row_idx] = spk
 
 # Add features (deltas added and globally normalized on the fly)
-reader = kaldi_io.SequentialBaseFloatMatrixReader('ark:add-detlas scp:exp/hyperud/fbank41.scp ark:- | apply-global-cmvn.py --global-stats=ark:exp/hyperud/cmvn-g.stats ark:- ark:-|')
-for row_idx, (uttid, value) in enumerate(reader):
+for row_idx, (uttid, value) in enumerate(kaldi_io.SequentialBaseFloatMatrixReader('ark:add-detlas scp:exp/hyperud/fbank41.scp ark:- | apply-global-cmvn.py --global-stats=ark:exp/hyperud/cmvn-g.stats ark:- ark:-|')):
     features_shapes[row_idx,:] = value.shape
     features[row_idx] = value.ravel()
 
 # Add ivectors
-reader = kaldi_io.SequentialBaseFloatMatrixReader('scp:exp/hyperud/ivectors_all.scp')
-for row_idx, (uttid, value) in enumerate(reader):
+for row_idx, (uttid, value) in enumerate(kaldi_io.SequentialBaseFloatMatrixReader('ark:apply-global-cmvn.py --global-stats=ark:exp/hyperud/ivector-cmvn-g.stats scp:exp/hyperud/ivectors_all.scp ark:-|')):
     ivectors_shapes[row_idx,:] = value.shape
     ivectors[row_idx] = value.ravel()
 
