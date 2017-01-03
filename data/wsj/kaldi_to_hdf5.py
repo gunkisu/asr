@@ -77,9 +77,10 @@ for row_idx, (uttid, value) in enumerate(kaldi_io.SequentialBaseFloatMatrixReade
     features[row_idx] = value.ravel()
 
 # Add ivectors
-for row_idx, (uttid, value) in enumerate(kaldi_io.SequentialBaseFloatMatrixReader('ark:apply-global-cmvn.py --global-stats=ark:exp/hyperud/ivector-cmvn-g.stats scp:exp/hyperud/ivectors_all.scp ark:-|')):
-    ivectors_shapes[row_idx,:] = value.shape
-    ivectors[row_idx] = value.ravel()
+for row_idx, (uttid, value) in enumerate(kaldi_io.SequentialBaseFloatVectorReader('ark:apply-global-cmvn-vector.py ark:exp/hyperud/spk_ivectors_cmvn_g scp:exp/hyperud/spk_ivectors.scp ark:-|')):
+    frame_wise_value = numpy.tile(value, (features_shapes[row_idx][0], 1))
+    ivectors_shapes[row_idx,:] = frame_wise_value.shape
+    ivectors[row_idx] = frame_wise_value.ravel()
 
 # Split information
 split_dict = {
