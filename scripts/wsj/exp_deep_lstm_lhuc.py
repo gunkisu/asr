@@ -18,7 +18,11 @@ import data.transformers as trans
 import itertools
 from fuel.transformers import Padding
 
-def main(args):
+if __name__ == '__main__':
+    parser = deep_lstm_utils.get_arg_parser()
+    deep_lstm_utils.add_lhuc_params(parser)
+    args = parser.parse_args()
+
     args.save_path = get_save_path(args)    
     args.save_path = '{}_lhuc'.format(args.save_path)
 
@@ -159,10 +163,5 @@ def main(args):
             print('Training early stopped')
             break
 
-if __name__ == '__main__':
-    parser = deep_lstm_utils.get_arg_parser()
-    deep_lstm_utils.add_lhuc_params(parser)
-    args = parser.parse_args()
-    main(args)
 
 

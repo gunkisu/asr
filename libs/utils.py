@@ -13,6 +13,6 @@ class StopWatch():
         return time.time() - self.start_time
     
     def print_elapsed(self):
-        time_diff = time.time() - self.start_time
+        time_diff = self.elapsed()
 
         print('Took {:.1f}s ({:.1f}m; {:.1f}h)'.format(time_diff, time_diff / 60, time_diff / 3600))

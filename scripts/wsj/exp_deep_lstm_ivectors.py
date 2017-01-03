@@ -15,7 +15,10 @@ import data.wsj.fuel_utils as fuel_utils
 import data.transformers as trans
 from fuel.transformers import Padding
 
-def main(args):
+if __name__ == '__main__':
+    parser = get_arg_parser()
+    args = parser.parse_args()
+
     args.save_path = get_save_path(args)
     
     if not args.reload_model:
@@ -121,12 +124,7 @@ def main(args):
         
         train_ce_frame_sum = 0.0
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
-            input_data = data[0].astype(floatX)
-            input_mask = data[1].astype(floatX)
-
-            target_data = data[2]
-            target_mask = data[3].astype(floatX)
-
+            input_data, input_mask, target_data, target_mask = data
             train_output = training_fn(input_data,
                                        input_mask,
                                        target_data,
@@ -166,10 +164,5 @@ def main(args):
         if early_stop_cnt>10:
             print('Training early stopped')
             break
-
-if __name__ == '__main__':
-    parser = get_arg_parser()
-    args = parser.parse_args()
-    main(args)
 
 
