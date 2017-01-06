@@ -33,6 +33,13 @@ if __name__ == '__main__':
         args.input_dim = args.input_dim + args.ivector_dim
 
     print(args)
+
+    sw = utils.StopWatch()
+    print('Copying data to local machine...')
+    do_rsync(args.data_path, args.tmpdir)
+    sw.print_elapsed()
+
+    args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
     
     print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
     if args.norm_path: 
@@ -81,7 +88,6 @@ if __name__ == '__main__':
         pretrain_total_epoch_cnt = 0
 
     print('Build trainer')
-    sw = utils.StopWatch()
     training_fn, trainer_params = trainer(
               input_data=input_data,
               input_mask=input_mask,
