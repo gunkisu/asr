@@ -215,7 +215,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    shape=(num_inner_units, num_outer_units),
                                    name="W_inner_hid_to_outer_in_{}".format(gate_name)),
                     self.add_param(init.Constant(1.0),
-                                   shape=(num_outer_units),
+                                   shape=(num_outer_units,),
                                    name="W_inner_hid_to_outer_in_{}".format(gate_name)),
 
                     #### outer hidden-to-hidden ####
@@ -227,7 +227,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    shape=(num_inner_units, num_outer_units),
                                    name="W_inner_hid_to_outer_hid_{}".format(gate_name)),
                     self.add_param(init.Constant(1.0),
-                                   shape=(num_outer_units),
+                                   shape=(num_outer_units,),
                                    name="W_inner_hid_to_outer_hid_{}".format(gate_name)),
 
                     #### inner hidden-to-outer cell scale ####
@@ -236,7 +236,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    name="W_inner_hid_to_outer_cell_{}".format(gate_name),
                                    trainable=cell_trainable),
                     self.add_param(init.Constant(1.0) if cell_trainable else init.Constant(0.0),
-                                   shape=(num_outer_units),
+                                   shape=(num_outer_units,),
                                    name="W_inner_hid_to_outer_cell_{}".format(gate_name),
                                    trainable=cell_trainable),
 
@@ -245,7 +245,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    shape=(num_inner_units, num_outer_units),
                                    name="W_inner_hid_to_outer_bias_{}".format(gate_name)),
                     self.add_param(init.Constant(bias_const),
-                                   shape=(num_outer_units),
+                                   shape=(num_outer_units,),
                                    name="W_inner_hid_to_outer_bias_{}".format(gate_name)))
 
         ####ingate####
