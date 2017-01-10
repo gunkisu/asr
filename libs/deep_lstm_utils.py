@@ -34,7 +34,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--num-layers', default=5, help='number of layers', type=int)
     parser.add_argument('--learn-rate', default=0.0001, help='learning rate', type=float)
     parser.add_argument('--grad-norm', default=0.0, help='gradient norm', type=float)
-    parser.add_argument('--grad-clipping', default=10.0, help='gradient clipping', type=float)
+    parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
     parser.add_argument('--grad-steps', default=-1, help='gradient steps', type=int)
     parser.add_argument('--use-ivectors', help='whether to use ivectors', action='store_true')
     parser.add_argument('--data-path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
@@ -71,39 +71,6 @@ def get_save_path(args):
     return './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
             args.learn_rate, args.grad_norm, args.grad_clipping, args.grad_steps, args.num_layers, args.num_nodes, 
             args.batch_size, args.ivector_dim if args.use_ivectors else 0)
-
-# Convenience function to reuse the defined env
-def pwrap(args, shell=False):
-    p = subprocess.Popen(args, shell=shell, stdout=subprocess.PIPE,
-                         stdin=subprocess.PIPE, stderr=subprocess.PIPE,
-                         universal_newlines=True)
-    return p
-
-# Print output
-# http://stackoverflow.com/questions/4417546/constantly-print-subprocess-output-while-process-is-running
-def execute(cmd, shell=False):
-    popen = pwrap(cmd, shell=shell)
-    for stdout_line in iter(popen.stdout.readline, ""):
-        yield stdout_line
-
-    popen.stdout.close()
-    return_code = popen.wait()
-    if return_code:
-        raise subprocess.CalledProcessError(return_code, cmd)
-
-
-def pe(cmd, shell=False):
-    """
-    Print and execute command on system
-    """
-    for line in execute(cmd, shell=shell):
-        print(line, end="")
-
-def do_rsync(src, dst):
-    if not os.path.exists(dst):
-        os.makedirs(dst)
-    cmd = "rsync -ahv {} {}".format(src, dst)
-    pe(cmd, shell=True)
 
 def trainer(input_data,
                         input_mask,
