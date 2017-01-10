@@ -8,6 +8,8 @@ from lasagne.layers import get_output
 from lasagne.utils import unroll_scan
 from lasagne.random import get_rng
 
+from lasagne.layers import DenseLayer, ReshapeLayer, reshape
+
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
@@ -882,3 +884,10 @@ class LSTMPLayer(MergeLayer):
                     cell_out = cell_out[:, ::-1]
 
             return T.concatenate([hid_out, cell_out], axis=-1)
+
+
+def build_sequence_dense_layer(input_var, input_layer, output_dim):
+    n_batch, n_time_steps, _ = input_var.shape
+    dense_layer = DenseLayer(reshape(input_layer, (-1, [2])), 
+            num_units=output_dim, nonlinearity=nonlinearities.softmax)
+    return reshape(dense_layer, (n_batch, n_time_steps, output_dim))

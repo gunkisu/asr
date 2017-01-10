@@ -8,12 +8,7 @@ from lasagne.layers import LSTMLayer as LasagneLSTMLayer
 from lasagne.layers import DenseLayer, ReshapeLayer, reshape, Gate
 from lasagne.layers import get_output_shape
 from libs.lasagne_libs.lhuc_layers import LHUCLayer, exp, two_sigmoid
-
-def build_sequence_dense_layer(input_var, input_layer, output_dim):
-    n_batch, n_time_steps, _ = input_var.shape
-    dense_layer = DenseLayer(reshape(input_layer, (-1, [2])), 
-            num_units=output_dim, nonlinearity=nonlinearities.softmax)
-    return reshape(dense_layer, (n_batch, n_time_steps, output_dim))
+from libs.lasagne_libs.layers import build_sequence_dense_layer
 
 def deep_bidir_lstm_model(input_var,
                           mask_var,

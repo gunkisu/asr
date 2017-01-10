@@ -36,8 +36,8 @@ if __name__ == '__main__':
 
     sw = utils.StopWatch()
     print('Copying data to local machine...')
-    rsync_wrapper = utils.RsyncWrapper(args.tmpdir)
-    rsync_wrapper.rsync(args.data_path)
+    rsync_wrapper = utils.Rsync(args.tmpdir)
+    rsync_wrapper.sync(args.data_path)
     sw.print_elapsed()
 
     args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
