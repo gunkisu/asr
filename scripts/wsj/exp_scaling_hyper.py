@@ -115,7 +115,7 @@ def set_network_trainer(input_data,
     # set updater
     train_updates, trainer_params = updater(loss_or_grads=network_grads,
                                             params=network_params,
-                                            learning_rate=train_lr,
+                                            learning_rate=learning_rate,
                                             load_params_dict=load_updater_params)
 
     # get training (update) function
