@@ -20,13 +20,12 @@ class StopWatch():
 
         print('Took {:.1f}s ({:.1f}m; {:.1f}h)'.format(time_diff, time_diff / 60, time_diff / 3600))
 
-class RsyncWrapper():
-    def __init__(self, tmpdir):
-        
-        if not os.path.exists(tmpdir):
-            os.makedirs(tmpdir)
+class Rsync():
+    def __init__(self, dst_dir):
+        if not os.path.exists(dst_dir):
+            os.makedirs(dst_dir)
 
-        self.tmpdir = tmpdir
+        self.dst_dir = dst_dir
 
     # http://stackoverflow.com/questions/4417546/constantly-print-subprocess-output-while-process-is-running
     def execute(self, cmd, shell=False):
@@ -45,6 +44,6 @@ class RsyncWrapper():
         for line in self.execute(cmd, shell=shell):
             print(line, end="")
 
-    def rsync(self, src):
-        cmd = "rsync -ahv {} {}".format(src, self.tmpdir)
+    def sync(self, src):
+        cmd = "rsync -ahv {} {}".format(src, self.dst_dir)
         self.execute_and_print(cmd, shell=True)
