@@ -14,7 +14,7 @@ from lasagne.utils import floatX as convert_to_floatX
 from fuel.datasets.hdf5 import H5PYDataset
 from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme
-from fuel.transformers import Padding, FilterSources
+from fuel.transformers import Padding, FilterSources, Mapping, SortMapping
 from data.transformers import Normalize
 
 floatX = theano.config.floatX
@@ -292,9 +292,6 @@ def main(options):
             # for each batch
             for b_idx, data in enumerate(train_datastream.get_epoch_iterator()):
                 total_batch_cnt += 1
-
-                # if total_batch_cnt%options['lr_decay_freq']:
-                #     lr.set_value(floatX(lr.get_value() * options['lr_decay_ratio']))
 
                 if pretrain_total_batch_cnt>=total_batch_cnt:
                     continue

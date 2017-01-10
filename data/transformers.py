@@ -141,7 +141,7 @@ class MaximumFrameCache(Transformer):
     def _cache(self):
         data = next(self.child_epoch_iterator)
         indexes = range(len(data[0]))
-        self.rng.shuffle(indexes)
+        # self.rng.shuffle(indexes)
         data = [[dt[i] for i in indexes] for dt in data]
         self.cache = OrderedDict([(name, self.cache[name] + dt) for name, dt
                                   in equizip(self.data_stream.sources, data)])
