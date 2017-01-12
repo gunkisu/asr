@@ -12,6 +12,7 @@ class LSTMLayer(MergeLayer):
                  incoming,
                  mask_input,
                  num_units,
+                 num_factors=None,
                  backwards=False,
                  learn_init=False,
                  peepholes=False,
