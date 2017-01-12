@@ -188,7 +188,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
 
                     #### outer hidden-to-hidden ####
                     self.add_param(init.Orthogonal(),
-                                   shape=(num_outer_units, num_outer_units),
+                                   shape=(num_inner_units, num_outer_units),
                                    name="W_outer_hid_to_outer_{}".format(gate_name)),
                     #### inner hidden-to-outer hidden scale ####
                     self.add_param(init.Orthogonal(),
