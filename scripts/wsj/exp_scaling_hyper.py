@@ -305,6 +305,8 @@ def main(options):
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
 
+                print(total_batch_cnt, train_predict_cost, network_grads_norm)
+
                 if numpy.isnan(train_predict_cost) or numpy.isnan(network_grads_norm):
                     print('update cnt: ', total_batch_cnt)
                     print('NaN detected: ', train_predict_cost, network_grads_norm)
