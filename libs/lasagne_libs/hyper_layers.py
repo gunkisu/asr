@@ -591,6 +591,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                                           self.grad_clipping)
 
             outer_hid = outer_outgate*T.tanh(outer_outcell)
+            outer_hid = T.dot(outer_hid, self.W_outer_hid_prj)
             return [inner_cell,
                     inner_hid,
                     outer_cell,
@@ -651,7 +652,8 @@ class ScalingHyperLSTMLayer(MergeLayer):
                      W_inner_hid_to_outer_cell_concat,
                      b_inner_hid_to_outer_cell_concat,
                      W_inner_hid_to_outer_bias_concat,
-                     b_inner_hid_to_outer_bias_concat,]
+                     b_inner_hid_to_outer_bias_concat,
+                     self.W_outer_hid_prj]
 
         if self.use_layer_norm:
             non_seqs +=[self.W_inner_ln_ingate,
