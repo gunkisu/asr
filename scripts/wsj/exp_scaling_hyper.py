@@ -1,5 +1,6 @@
+import time
 from argparse import ArgumentParser
-import numpy, theano, lasagne, pickle, os
+import numpy, theano, pickle, os
 from theano import tensor as T
 from collections import OrderedDict
 from models.gating_hyper_nets import deep_scaling_hyper_model
@@ -277,6 +278,7 @@ def main(options):
         evaluation_history = [[[10.0, 10.0, 1.0], [10.0, 10.0, 1.0]]]
 
     total_batch_cnt = 0
+    start_time = time.time()
     try:
         # for each epoch
         for e_idx in range(options['num_epochs']):
@@ -303,13 +305,18 @@ def main(options):
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
 
+                if numpy.isnan(train_predict_cost) or numpy.isnan(network_grads_norm):
+                    print('update cnt: ', total_batch_cnt)
+                    print('NaN detected: ', train_predict_cost, network_grads_norm)
+                    raw_input()
+
                 # show intermediate result
                 if total_batch_cnt%options['train_disp_freq'] == 0 and total_batch_cnt!=0:
                     best_idx = numpy.asarray(evaluation_history)[:, 1, 2].argmin()
                     print '============================================================================================'
                     print 'Model Name: ', options['save_path'].split('/')[-1]
                     print '============================================================================================'
-                    print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt)
+                    print 'Epoch: ', str(e_idx), ', Update: ', str(total_batch_cnt), ', Time: ', str(time.time()-start_time)
                     print '--------------------------------------------------------------------------------------------'
                     print 'Prediction Cost: ', str(train_predict_cost)
                     print 'Gradient Norm: ', str(network_grads_norm)
@@ -320,6 +327,7 @@ def main(options):
                     print 'Valid NLL: ', str(evaluation_history[-1][1][0]), ', BPC: ', str(evaluation_history[-1][1][1]), ', FER: ', str(evaluation_history[-1][1][2])
                     print '--------------------------------------------------------------------------------------------'
                     print 'Best NLL: ', str(evaluation_history[best_idx][1][0]), ', BPC: ', str(evaluation_history[best_idx][1][1]), ', FER: ', str(evaluation_history[best_idx][1][2])
+                    start_time = time.time()
 
                 # # evaluation
                 # if total_batch_cnt%options['train_eval_freq'] == 0 and total_batch_cnt!=0:
@@ -420,6 +428,8 @@ if __name__ == '__main__':
                            '_lr' + str(int(learn_rate)) + \
                            '_gc' + str(int(grad_clip)) + \
                            '_nl' + str(int(num_layers)) + \
+                           '_ph' + str(int(use_peepholes)) + \
+                           '_ln' + str(int(use_layer_norm)) + \
                            '_b' + str(int(batch_size))
 
     if reload_model is False:

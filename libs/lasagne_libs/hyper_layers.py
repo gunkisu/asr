@@ -54,8 +54,8 @@ class ScalingHyperLSTMLayer(MergeLayer):
         # get size
         inner_input_shape = self.input_shapes[0]
         outer_input_shape = self.input_shapes[1]
-        num_inner_inputs = numpy.prod(inner_input_shape[2:])
-        num_outer_inputs = numpy.prod(outer_input_shape[2:])
+        num_inner_inputs = inner_input_shape[2]
+        num_outer_inputs = outer_input_shape[2]
 
         ##############
         # inner loop #
@@ -408,7 +408,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                                           self.b_inner_hid_to_outer_cell_cell,
                                                           self.b_inner_hid_to_outer_cell_outgate], axis=0)
 
-        # inner hid-to-outer cell scale
+        # inner hid-to-outer bias
         W_inner_hid_to_outer_bias_concat = T.concatenate([self.W_inner_hid_to_outer_bias_ingate,
                                                           self.W_inner_hid_to_outer_bias_forgetgate,
                                                           self.W_inner_hid_to_outer_bias_cell,
@@ -461,15 +461,16 @@ class ScalingHyperLSTMLayer(MergeLayer):
             inner_forgetgate = slice_inner(inner_gates, 1) + inner_cell_previous*self.W_inner_cell_to_inner_forgetgate
             inner_cell_input = slice_inner(inner_gates, 2) + inner_cell_previous*self.W_inner_cell_to_inner_cell
 
-            inner_ingate = self.layer_norm(input=inner_ingate,
-                                           alpha=self.W_inner_ln_ingate,
-                                           beta=self.b_inner_ln_ingate)
-            inner_forgetgate = self.layer_norm(input=inner_forgetgate,
-                                               alpha=self.W_inner_ln_forgetgate,
-                                               beta=self.b_inner_ln_forgetgate)
-            inner_cell_input = self.layer_norm(input=inner_cell_input,
-                                               alpha=self.W_inner_ln_cell,
-                                               beta=self.b_inner_ln_cell)
+            if self.use_layer_norm:
+                inner_ingate = self.layer_norm(input=inner_ingate,
+                                               alpha=self.W_inner_ln_ingate,
+                                               beta=self.b_inner_ln_ingate)
+                inner_forgetgate = self.layer_norm(input=inner_forgetgate,
+                                                   alpha=self.W_inner_ln_forgetgate,
+                                                   beta=self.b_inner_ln_forgetgate)
+                inner_cell_input = self.layer_norm(input=inner_cell_input,
+                                                   alpha=self.W_inner_ln_cell,
+                                                   beta=self.b_inner_ln_cell)
 
             if self.grad_clipping:
                 inner_ingate = theano.gradient.grad_clip(inner_ingate,
@@ -489,9 +490,10 @@ class ScalingHyperLSTMLayer(MergeLayer):
             inner_cell = inner_forgetgate*inner_cell_previous + inner_ingate*inner_cell_input
 
             inner_outgate = slice_inner(inner_gates, 3) + inner_cell*self.W_inner_cell_to_inner_outgate
-            inner_outgate = self.layer_norm(input=inner_outgate,
-                                            alpha=self.W_inner_ln_outgate,
-                                            beta=self.b_inner_ln_outgate)
+            if self.use_layer_norm:
+                inner_outgate = self.layer_norm(input=inner_outgate,
+                                                alpha=self.W_inner_ln_outgate,
+                                                beta=self.b_inner_ln_outgate)
             if self.grad_clipping:
                 inner_outgate = theano.gradient.grad_clip(inner_outgate,
                                                           -self.grad_clipping,
@@ -499,9 +501,10 @@ class ScalingHyperLSTMLayer(MergeLayer):
             inner_outgate = T.nnet.sigmoid(inner_outgate)
 
             inner_outcell = inner_cell
-            inner_outcell = self.layer_norm(input=inner_outcell,
-                                            alpha=self.W_inner_ln_outcell,
-                                            beta=self.b_inner_ln_outcell)
+            if self.use_layer_norm:
+                inner_outcell = self.layer_norm(input=inner_outcell,
+                                                alpha=self.W_inner_ln_outcell,
+                                                beta=self.b_inner_ln_outcell)
             if self.grad_clipping:
                 inner_outcell = theano.gradient.grad_clip(inner_outcell,
                                                           -self.grad_clipping,
@@ -529,15 +532,16 @@ class ScalingHyperLSTMLayer(MergeLayer):
             outer_forgetgate = slice_outer(outer_gates, 1) + outer_cell_previous*slice_outer(scale_outer_cell, 1)
             outer_cell_input = slice_outer(outer_gates, 2) + outer_cell_previous*slice_outer(scale_outer_cell, 2)
 
-            outer_ingate = self.layer_norm(input=outer_ingate,
-                                           alpha=self.W_outer_ln_ingate,
-                                           beta=self.b_outer_ln_ingate)
-            outer_forgetgate = self.layer_norm(input=outer_forgetgate,
-                                               alpha=self.W_outer_ln_forgetgate,
-                                               beta=self.b_outer_ln_forgetgate)
-            outer_cell_input = self.layer_norm(input=outer_cell_input,
-                                               alpha=self.W_outer_ln_cell,
-                                               beta=self.b_outer_ln_cell)
+            if self.use_layer_norm:
+                outer_ingate = self.layer_norm(input=outer_ingate,
+                                               alpha=self.W_outer_ln_ingate,
+                                               beta=self.b_outer_ln_ingate)
+                outer_forgetgate = self.layer_norm(input=outer_forgetgate,
+                                                   alpha=self.W_outer_ln_forgetgate,
+                                                   beta=self.b_outer_ln_forgetgate)
+                outer_cell_input = self.layer_norm(input=outer_cell_input,
+                                                   alpha=self.W_outer_ln_cell,
+                                                   beta=self.b_outer_ln_cell)
 
             if self.grad_clipping:
                 outer_ingate = theano.gradient.grad_clip(outer_ingate,
@@ -556,9 +560,11 @@ class ScalingHyperLSTMLayer(MergeLayer):
 
             outer_cell = outer_forgetgate*outer_cell_previous + outer_ingate*outer_cell_input
             outer_outgate = slice_outer(outer_gates, 3) + outer_cell*slice_outer(scale_outer_cell, 3)
-            outer_outgate = self.layer_norm(input=outer_outgate,
-                                            alpha=self.W_outer_ln_outgate,
-                                            beta=self.b_outer_ln_outgate)
+
+            if self.use_layer_norm:
+                outer_outgate = self.layer_norm(input=outer_outgate,
+                                                alpha=self.W_outer_ln_outgate,
+                                                beta=self.b_outer_ln_outgate)
 
             if self.grad_clipping:
                 outer_outgate = theano.gradient.grad_clip(outer_outgate,
@@ -567,16 +573,21 @@ class ScalingHyperLSTMLayer(MergeLayer):
             outer_outgate = T.nnet.sigmoid(outer_outgate)
 
             outer_outcell = outer_cell
-            outer_outcell = self.layer_norm(input=outer_outcell,
-                                            alpha=self.W_outer_ln_outcell,
-                                            beta=self.b_outer_ln_outcell)
+            if self.use_layer_norm:
+                outer_outcell = self.layer_norm(input=outer_outcell,
+                                                alpha=self.W_outer_ln_outcell,
+                                                beta=self.b_outer_ln_outcell)
 
             if self.grad_clipping:
                 outer_outcell = theano.gradient.grad_clip(outer_outcell,
                                                           -self.grad_clipping,
                                                           self.grad_clipping)
+
             outer_hid = outer_outgate*T.tanh(outer_outcell)
-            return [inner_cell, inner_hid, outer_cell, outer_hid]
+            return [inner_cell,
+                    inner_hid,
+                    outer_cell,
+                    outer_hid]
 
         def step_masked(inner_input_n,
                         outer_input_n,
@@ -635,27 +646,28 @@ class ScalingHyperLSTMLayer(MergeLayer):
                      W_inner_hid_to_outer_bias_concat,
                      b_inner_hid_to_outer_bias_concat,]
 
-        non_seqs +=[self.W_inner_ln_ingate,
-                    self.W_inner_ln_forgetgate,
-                    self.W_inner_ln_cell,
-                    self.W_inner_ln_outgate,
-                    self.W_inner_ln_outcell,
-                    self.b_inner_ln_ingate,
-                    self.b_inner_ln_forgetgate,
-                    self.b_inner_ln_cell,
-                    self.b_inner_ln_outgate,
-                    self.b_inner_ln_outcell,]
+        if self.use_layer_norm:
+            non_seqs +=[self.W_inner_ln_ingate,
+                        self.W_inner_ln_forgetgate,
+                        self.W_inner_ln_cell,
+                        self.W_inner_ln_outgate,
+                        self.W_inner_ln_outcell,
+                        self.b_inner_ln_ingate,
+                        self.b_inner_ln_forgetgate,
+                        self.b_inner_ln_cell,
+                        self.b_inner_ln_outgate,
+                        self.b_inner_ln_outcell,]
 
-        non_seqs +=[self.W_outer_ln_ingate,
-                    self.W_outer_ln_forgetgate,
-                    self.W_outer_ln_cell,
-                    self.W_outer_ln_outgate,
-                    self.W_outer_ln_outcell,
-                    self.b_outer_ln_ingate,
-                    self.b_outer_ln_forgetgate,
-                    self.b_outer_ln_cell,
-                    self.b_outer_ln_outgate,
-                    self.b_outer_ln_outcell,]
+            non_seqs +=[self.W_outer_ln_ingate,
+                        self.W_outer_ln_forgetgate,
+                        self.W_outer_ln_cell,
+                        self.W_outer_ln_outgate,
+                        self.W_outer_ln_outcell,
+                        self.b_outer_ln_ingate,
+                        self.b_outer_ln_forgetgate,
+                        self.b_outer_ln_cell,
+                        self.b_outer_ln_outgate,
+                        self.b_outer_ln_outcell,]
 
         [inner_cell_out,
          inner_hid_out,
