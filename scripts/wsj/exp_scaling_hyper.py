@@ -42,10 +42,8 @@ def build_network(input_data,
                   num_inner_units_list,
                   num_outer_units_list,
                   num_outputs,
-                  dropout_ratio=0.2,
-                  weight_noise=0.0,
+                  use_peepholes=False,
                   use_layer_norm=True,
-                  peepholes=False,
                   learn_init=True,
                   grad_clipping=0.0):
 
@@ -55,8 +53,7 @@ def build_network(input_data,
                                        num_inner_units_list=num_inner_units_list,
                                        num_outer_units_list=num_outer_units_list,
                                        num_outputs=num_outputs,
-                                       dropout_ratio=dropout_ratio,
-                                       weight_noise=weight_noise,
+                                       use_peepholes=use_peepholes,
                                        use_layer_norm=use_layer_norm,
                                        learn_init=learn_init,
                                        grad_clipping=grad_clipping,
@@ -225,8 +222,7 @@ def main(options):
                             num_inner_units_list=options['num_inner_units_list'],
                             num_outer_units_list=options['num_outer_units_list'],
                             num_outputs=options['num_outputs'],
-                            dropout_ratio=options['dropout_ratio'],
-                            weight_noise=options['weight_noise'],
+                            use_peepholes=options['use_peepholes'],
                             use_layer_norm=options['use_layer_norm'],
                             learn_init=options['learn_init'],
                             grad_clipping=options['grad_clip'])
@@ -259,13 +255,13 @@ def main(options):
                                                       l2_lambda=options['l2_lambda'],
                                                       load_updater_params=pretrain_update_params_val)
 
-    print 'Build network predictor'
-    predict_fn = set_network_predictor(input_data=input_data,
-                                       input_mask=input_mask,
-                                       target_data=target_data,
-                                       target_mask=target_mask,
-                                       num_outputs=options['num_outputs'],
-                                       network=network)
+    # print 'Build network predictor'
+    # predict_fn = set_network_predictor(input_data=input_data,
+    #                                    input_mask=input_mask,
+    #                                    target_data=target_data,
+    #                                    target_mask=target_mask,
+    #                                    num_outputs=options['num_outputs'],
+    #                                    network=network)
 
 
     print 'Load data stream'
@@ -376,6 +372,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_layers', action='store',help='num of layers', default=2)
     parser.add_argument('--learn_rate', action='store', help='learning rate', default=1)
     parser.add_argument('--grad_clip', action='store', help='gradient clipping', default=10)
+    parser.add_argument('--use_peepholes', action='store', help='use peepholes', default=0)
     parser.add_argument('--use_layer_norm', action='store', help='use layer norm', default=0)
     parser.add_argument('--reload_model', action='store', help='reload model', default=False)
 
@@ -397,6 +394,7 @@ if __name__ == '__main__':
     options['weight_noise'] = 0.0
     options['learn_init'] = False
 
+    options['use_peepholes'] = True if use_peepholes==1 else False
     options['use_layer_norm'] = True if use_layer_norm==1 else False
 
     options['updater'] = nesterov_momentum
