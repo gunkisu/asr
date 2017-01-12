@@ -65,33 +65,33 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                   use_layer_norm=False,
                                   bias_const=0.0):
             return (#### inner input-to-inner ####
-                    self.add_param(init.Orthogonal(),
+                    self.add_param(spec=init.Orthogonal(),
                                    shape=(num_inner_inputs, num_inner_units),
                                    name="W_inner_in_to_inner_{}".format(gate_name)),
                     #### inner hidden-to-inner ####
-                    self.add_param(init.Orthogonal(),
+                    self.add_param(spec=init.Orthogonal(),
                                    shape=(num_inner_units, num_inner_units),
                                    name="W_inner_hid_to_inner_{}".format(gate_name)),
                     #### inner cell-to-inner ####
-                    self.add_param(init.Uniform(0.1) if cell_trainable else init.Constant(0.0),
+                    self.add_param(spec=init.Uniform(0.1) if cell_trainable else init.Constant(0.0),
                                    shape=(num_inner_units,),
                                    name="W_inner_cell_to_inner_{}".format(gate_name),
                                    trainable=cell_trainable),
                     #### outer hidden-to-inner ####
-                    self.add_param(init.Orthogonal(),
+                    self.add_param(spec=init.Orthogonal(),
                                    shape=(num_inner_units, num_inner_units),
                                    name="W_outer_hid_to_inner_{}".format(gate_name)),
                     #### bias ####
-                    self.add_param(init.Constant(bias_const),
+                    self.add_param(spec=init.Constant(bias_const),
                                    shape=(num_inner_units,),
                                    name="b_inner_{}".format(gate_name),
                                    regularizable=False),
                     #### layer norm ####
-                    self.add_param(init.Constant(1.),
+                    self.add_param(spec=init.Constant(1.),
                                    shape=(num_inner_units,),
                                    name="W_inner_ln_{}".format(gate_name),
                                    trainable=use_layer_norm),
-                    self.add_param(init.Constant(0.),
+                    self.add_param(spec=init.Constant(0.),
                                    shape=(num_inner_units,),
                                    name="b_inner_ln_{}".format(gate_name),
                                    trainable=use_layer_norm,
@@ -184,7 +184,8 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    name="W_inner_hid_to_outer_in_{}".format(gate_name)),
                     self.add_param(init.Constant(1.0),
                                    shape=(num_outer_units,),
-                                   name="W_inner_hid_to_outer_in_{}".format(gate_name)),
+                                   name="W_inner_hid_to_outer_in_{}".format(gate_name),
+                                   regularizable=False),
 
                     #### outer hidden-to-hidden ####
                     self.add_param(init.Orthogonal(),
@@ -196,7 +197,8 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    name="W_inner_hid_to_outer_hid_{}".format(gate_name)),
                     self.add_param(init.Constant(1.0),
                                    shape=(num_outer_units,),
-                                   name="W_inner_hid_to_outer_hid_{}".format(gate_name)),
+                                   name="W_inner_hid_to_outer_hid_{}".format(gate_name),
+                                   regularizable=False),
 
                     #### inner hidden-to-outer cell scale ####
                     self.add_param(init.Orthogonal() if cell_trainable else init.Constant(0.0),
@@ -206,15 +208,17 @@ class ScalingHyperLSTMLayer(MergeLayer):
                     self.add_param(init.Constant(1.0) if cell_trainable else init.Constant(0.0),
                                    shape=(num_outer_units,),
                                    name="W_inner_hid_to_outer_cell_{}".format(gate_name),
-                                   trainable=cell_trainable),
+                                   trainable=cell_trainable,
+                                   regularizable=False),
 
-                    #### inner hidden-to-outer hide scale ####
+                    #### inner hidden-to-outer bias ####
                     self.add_param(init.Orthogonal(),
                                    shape=(num_inner_units, num_outer_units),
                                    name="W_inner_hid_to_outer_bias_{}".format(gate_name)),
                     self.add_param(init.Constant(bias_const),
                                    shape=(num_outer_units,),
-                                   name="W_inner_hid_to_outer_bias_{}".format(gate_name)),
+                                   name="W_inner_hid_to_outer_bias_{}".format(gate_name),
+                                   regularizable=False),
 
                     #### layer norm ####
                     self.add_param(init.Constant(1.),
