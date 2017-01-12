@@ -407,12 +407,12 @@ if __name__ == '__main__':
 
     from libs.lasagne_libs.recurrent_layers import *
     if rnn_layer=='LSTM':
-        options['rnn_layers'] = LSTMLayer
+        options['rnn_layer'] = LSTMLayer
     elif rnn_layer=='PLSTM':
-        options['rnn_layers'] = ProjectLSTMLayer
+        options['rnn_layer'] = ProjectLSTMLayer
 
     options['save_path'] = './WSJ_BIDIR_DEEP_' + \
-                           options['rnn_layers'].__name__ + \
+                           options['rnn_layer'].__name__ + \
                            '_nl' + str(int(num_layers)) + \
                            '_nu' + str(int(num_units)) + \
                            '_nf' + str(int(num_factors)) + \
