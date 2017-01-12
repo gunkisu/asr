@@ -433,7 +433,7 @@ if __name__ == '__main__':
     options['lr'] = 10**(-learn_rate)
     options['grad_norm'] = 0.0
     options['grad_clip'] = grad_clip
-    options['grad_steos'] = -1
+    options['grad_steps'] = -1
     options['l2_lambda'] = 10 ** (-weight_decay) if weight_decay > 0 else 0.0
 
     options['batch_size'] = batch_size
