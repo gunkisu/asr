@@ -382,6 +382,7 @@ if __name__ == '__main__':
     learn_rate= int(args.learn_rate)
     grad_clip = int(args.grad_clip)
     use_layer_norm = int(args.use_layer_norm)
+    use_peepholes = int(args.use_peepholes)
     reload_model = args.reload_model
 
     options = OrderedDict()
