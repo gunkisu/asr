@@ -392,7 +392,7 @@ if __name__ == '__main__':
     parser.add_argument('--reload_model', action='store', help='reload model', default=False)
 
     args = parser.parse_args()
-    rnn_layer = int(args.rnn_layer)
+    rnn_layer = args.rnn_layer
     batch_size = int(args.batch_size)
     num_layers = int(args.num_layers)
     num_units = int(args.num_units)
