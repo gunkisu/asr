@@ -381,9 +381,9 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', action='store',help='batch size', default=1)
     parser.add_argument('--num_layers', action='store',help='num of layers', default=2)
     parser.add_argument('--learn_rate', action='store', help='learning rate', default=1)
-    parser.add_argument('--grad_clip', action='store', help='gradient clipping', default=10)
+    parser.add_argument('--grad_clip', action='store', help='gradient clipping', default=0)
     parser.add_argument('--use_peepholes', action='store', help='use peepholes', default=0)
-    parser.add_argument('--use_layer_norm', action='store', help='use layer norm', default=0)
+    parser.add_argument('--use_layer_norm', action='store', help='use layer norm', default=1)
     parser.add_argument('--reload_model', action='store', help='reload model', default=False)
 
     args = parser.parse_args()

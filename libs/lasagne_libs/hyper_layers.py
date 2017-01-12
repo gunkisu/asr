@@ -79,7 +79,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    trainable=cell_trainable),
                     #### outer hidden-to-inner ####
                     self.add_param(init.Orthogonal(),
-                                   shape=(num_outer_units, num_inner_units),
+                                   shape=(num_inner_units, num_inner_units),
                                    name="W_outer_hid_to_inner_{}".format(gate_name)),
                     #### bias ####
                     self.add_param(init.Constant(bias_const),
@@ -203,7 +203,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    shape=(num_inner_units, num_outer_units),
                                    name="W_inner_hid_to_outer_cell_{}".format(gate_name),
                                    trainable=cell_trainable),
-                    self.add_param(init.Constant(0.0),
+                    self.add_param(init.Constant(1.0) if cell_trainable else init.Constant(0.0),
                                    shape=(num_outer_units,),
                                    name="W_inner_hid_to_outer_cell_{}".format(gate_name),
                                    trainable=cell_trainable),
@@ -215,6 +215,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                     self.add_param(init.Constant(bias_const),
                                    shape=(num_outer_units,),
                                    name="W_inner_hid_to_outer_bias_{}".format(gate_name)),
+
                     #### layer norm ####
                     self.add_param(init.Constant(1.),
                                    shape=(num_outer_units,),
@@ -302,6 +303,11 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                                   trainable=use_layer_norm,
                                                   regularizable=False)
 
+        ####hidden project#####
+        self.W_outer_hid_prj = self.add_param(init.Orthogonal(),
+                                              shape=(num_outer_units, num_inner_units),
+                                              name="W_outer_hid_prj")
+
         ####init_cell####
         self.outer_cell_init = self.add_param(outer_cell_init,
                                               shape=(1, num_outer_units),
@@ -311,7 +317,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
 
         ####init_hid####
         self.outer_hid_init = self.add_param(outer_hid_init,
-                                             shape=(1, num_outer_units),
+                                             shape=(1, num_inner_units),
                                              name="outer_hid_init",
                                              trainable=learn_init,
                                              regularizable=False)
@@ -324,9 +330,9 @@ class ScalingHyperLSTMLayer(MergeLayer):
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
         if self.only_return_outer:
-            num_outputs = self.num_outer_units
+            num_outputs = self.num_inner_units
         else:
-            num_outputs = self.num_inner_units + self.num_outer_units
+            num_outputs = self.num_inner_units*2
 
         return input_shape[0], input_shape[1], num_outputs
 
@@ -494,6 +500,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                 inner_outgate = self.layer_norm(input=inner_outgate,
                                                 alpha=self.W_inner_ln_outgate,
                                                 beta=self.b_inner_ln_outgate)
+
             if self.grad_clipping:
                 inner_outgate = theano.gradient.grad_clip(inner_outgate,
                                                           -self.grad_clipping,
