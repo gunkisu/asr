@@ -381,6 +381,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--batch_size', action='store',help='batch size', default=1)
     parser.add_argument('--num_layers', action='store',help='num of layers', default=2)
+    parser.add_argument('--num_units', action='store', help='num of units', default=500)
+    parser.add_argument('--num_factors', action='store', help='num of factors', default=250)
     parser.add_argument('--learn_rate', action='store', help='learning rate', default=1)
     parser.add_argument('--grad_clip', action='store', help='gradient clipping', default=0)
     parser.add_argument('--use_peepholes', action='store', help='use peepholes', default=0)
@@ -390,6 +392,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     batch_size = int(args.batch_size)
     num_layers = int(args.num_layers)
+    num_units = int(args.num_units)
+    num_factors = int(args.num_factors)
     learn_rate= int(args.learn_rate)
     grad_clip = int(args.grad_clip)
     use_layer_norm = int(args.use_layer_norm)
@@ -398,8 +402,8 @@ if __name__ == '__main__':
 
     options = OrderedDict()
     options['num_inputs'] = 123
-    options['num_inner_units_list'] = [125]*num_layers
-    options['num_outer_units_list'] = [500]*num_layers
+    options['num_inner_units_list'] = [num_factors]*num_layers
+    options['num_outer_units_list'] = [num_units]*num_layers
     options['num_outputs'] = 3436
 
     options['dropout_ratio'] = 0.0
@@ -431,6 +435,8 @@ if __name__ == '__main__':
                            '_lr' + str(int(learn_rate)) + \
                            '_gc' + str(int(grad_clip)) + \
                            '_nl' + str(int(num_layers)) + \
+                           '_nu' + str(int(num_units)) + \
+                           '_nf' + str(int(num_factors)) + \
                            '_ph' + str(int(use_peepholes)) + \
                            '_ln' + str(int(use_layer_norm)) + \
                            '_b' + str(int(batch_size))
