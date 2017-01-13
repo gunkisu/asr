@@ -419,6 +419,7 @@ if __name__ == '__main__':
                            '_lr' + str(int(learn_rate)) + \
                            '_gc' + str(int(grad_clip)) + \
                            '_ph' + str(int(use_peepholes)) + \
+                           '_wd' + str(int(weight_decay)) + \
                            '_b' + str(int(batch_size))
 
     options['num_inputs'] = 123

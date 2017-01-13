@@ -29,12 +29,6 @@ class ScalingHyperLSTMLayer(MergeLayer):
         incomings = [inner_incoming,
                      outer_incoming,
                      mask_incoming]
-        # init states
-        inner_cell_init = init.Constant(0.)
-        inner_hid_init = init.Constant(0.)
-        outer_cell_init = init.Constant(0.)
-        outer_hid_init = init.Constant(0.)
-
         # initialize
         super(ScalingHyperLSTMLayer, self).__init__(incomings, **kwargs)
 
@@ -68,24 +62,29 @@ class ScalingHyperLSTMLayer(MergeLayer):
                     self.add_param(spec=init.Orthogonal(),
                                    shape=(num_inner_inputs, num_inner_units),
                                    name="W_inner_in_to_inner_{}".format(gate_name)),
+
                     #### inner hidden-to-inner ####
                     self.add_param(spec=init.Orthogonal(),
                                    shape=(num_inner_units, num_inner_units),
                                    name="W_inner_hid_to_inner_{}".format(gate_name)),
+
                     #### inner cell-to-inner ####
                     self.add_param(spec=init.Uniform(0.1) if cell_trainable else init.Constant(0.0),
                                    shape=(num_inner_units,),
                                    name="W_inner_cell_to_inner_{}".format(gate_name),
                                    trainable=cell_trainable),
+
                     #### outer hidden-to-inner ####
                     self.add_param(spec=init.Orthogonal(),
                                    shape=(num_inner_units, num_inner_units),
                                    name="W_outer_hid_to_inner_{}".format(gate_name)),
+
                     #### bias ####
                     self.add_param(spec=init.Constant(bias_const),
                                    shape=(num_inner_units,),
                                    name="b_inner_{}".format(gate_name),
                                    regularizable=False),
+
                     #### layer norm ####
                     self.add_param(spec=init.Constant(1.),
                                    shape=(num_inner_units,),
@@ -154,14 +153,14 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                                   regularizable=False)
 
         ####init_cell####
-        self.inner_cell_init = self.add_param(inner_cell_init,
+        self.inner_cell_init = self.add_param(init.Constant(0.),
                                               shape=(1, num_inner_units),
                                               name="inner_cell_init",
                                               trainable=learn_init,
                                               regularizable=False)
 
         ####init_hidden####
-        self.inner_hid_init = self.add_param(inner_hid_init,
+        self.inner_hid_init = self.add_param(init.Constant(0.),
                                              shape=(1, num_inner_units),
                                              name="inner_hid_init",
                                              trainable=learn_init,
@@ -308,19 +307,19 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                                   regularizable=False)
 
         ####hidden project#####
-        self.W_outer_hid_prj = self.add_param(init.Orthogonal(),
+        self.W_outer_hid_prj = self.add_param(init.Orthogonal(0.1),
                                               shape=(num_outer_units, num_inner_units),
                                               name="W_outer_hid_prj")
 
         ####init_cell####
-        self.outer_cell_init = self.add_param(outer_cell_init,
+        self.outer_cell_init = self.add_param(init.Constant(0.),
                                               shape=(1, num_outer_units),
                                               name="outer_cell_init",
                                               trainable=learn_init,
                                               regularizable=False)
 
         ####init_hid####
-        self.outer_hid_init = self.add_param(outer_hid_init,
+        self.outer_hid_init = self.add_param(init.Constant(0.),
                                              shape=(1, num_inner_units),
                                              name="outer_hid_init",
                                              trainable=learn_init,

@@ -10,7 +10,6 @@ def deep_scaling_hyper_model(input_var,
                              num_inner_units_list,
                              num_outer_units_list,
                              num_outputs,
-                             dropout_ratio=0.0,
                              use_peepholes=False,
                              use_layer_norm=False,
                              learn_init=False,
@@ -32,10 +31,6 @@ def deep_scaling_hyper_model(input_var,
     inner_hid_layer_list = []
     prev_input_layer = input_layer
     for num_inner_units, num_outer_units  in zip(num_inner_units_list, num_outer_units_list):
-        # drop out
-        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
-                                        p=dropout_ratio)
-
         # forward
         prev_fwd_layer = ScalingHyperLSTMLayer(inner_incoming=prev_input_layer,
                                                outer_incoming=prev_input_layer,
@@ -91,11 +86,9 @@ def deep_scaling_hyper_model(input_var,
     ################
     # output layer #
     ################
-    output_layer = DropoutLayer(incoming=prev_input_layer,
-                                p=dropout_ratio)
-    output_layer = SequenceDenseLayer(incoming=output_layer,
-                                      num_outputs=num_outputs,
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
                                       mask_input=mask_layer,
+                                      num_outputs=num_outputs,
                                       nonlinearity=nonlinearities.softmax if use_softmax else None)
     if get_inner_hid:
         return inner_hid_layer_list + [output_layer,]
