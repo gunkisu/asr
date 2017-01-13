@@ -178,7 +178,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    shape=(num_outer_inputs, num_outer_units),
                                    name="W_outer_in_to_outer_{}".format(gate_name)),
                     #### inner hidden-to-outer in scale ####
-                    self.add_param(init.Orthogonal(),
+                    self.add_param(init.Orthogonal(0.01),
                                    shape=(num_inner_units, num_outer_units),
                                    name="W_inner_hid_to_outer_in_{}".format(gate_name)),
                     self.add_param(init.Constant(1.0),
@@ -191,7 +191,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    shape=(num_inner_units, num_outer_units),
                                    name="W_outer_hid_to_outer_{}".format(gate_name)),
                     #### inner hidden-to-outer hidden scale ####
-                    self.add_param(init.Orthogonal(),
+                    self.add_param(init.Orthogonal(0.01),
                                    shape=(num_inner_units, num_outer_units),
                                    name="W_inner_hid_to_outer_hid_{}".format(gate_name)),
                     self.add_param(init.Constant(1.0),
@@ -200,7 +200,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    regularizable=False),
 
                     #### inner hidden-to-outer cell scale ####
-                    self.add_param(init.Orthogonal() if cell_trainable else init.Constant(0.0),
+                    self.add_param(init.Orthogonal(0.01) if cell_trainable else init.Constant(0.0),
                                    shape=(num_inner_units, num_outer_units),
                                    name="W_inner_hid_to_outer_cell_{}".format(gate_name),
                                    trainable=cell_trainable),
@@ -211,7 +211,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                    regularizable=False),
 
                     #### inner hidden-to-outer bias ####
-                    self.add_param(init.Orthogonal(),
+                    self.add_param(init.Orthogonal(0.01),
                                    shape=(num_inner_units, num_outer_units),
                                    name="W_inner_hid_to_outer_bias_{}".format(gate_name)),
                     self.add_param(init.Constant(bias_const),
