@@ -40,9 +40,9 @@ def get_datastream(path, norm_path, which_set='train_si84', batch_size=1):
 def build_network(input_data,
                   input_mask,
                   num_inputs,
+                  num_outputs,
                   num_inner_units_list,
                   num_outer_units_list,
-                  num_outputs,
                   use_peepholes=False,
                   use_layer_norm=True,
                   learn_init=True,
@@ -51,9 +51,9 @@ def build_network(input_data,
     network = deep_scaling_hyper_model(input_var=input_data,
                                        mask_var=input_mask,
                                        num_inputs=num_inputs,
+                                       num_outputs=num_outputs,
                                        num_inner_units_list=num_inner_units_list,
                                        num_outer_units_list=num_outer_units_list,
-                                       num_outputs=num_outputs,
                                        use_peepholes=use_peepholes,
                                        use_layer_norm=use_layer_norm,
                                        learn_init=learn_init,
@@ -220,9 +220,9 @@ def main(options):
     network = build_network(input_data=input_data,
                             input_mask=input_mask,
                             num_inputs=options['num_inputs'],
+                            num_outputs=options['num_outputs'],
                             num_inner_units_list=options['num_inner_units_list'],
                             num_outer_units_list=options['num_outer_units_list'],
-                            num_outputs=options['num_outputs'],
                             use_peepholes=options['use_peepholes'],
                             use_layer_norm=options['use_layer_norm'],
                             learn_init=options['learn_init'],
@@ -234,7 +234,9 @@ def main(options):
 
     if options['reload_model']:
         print('Loading Parameters...')
-        pretrain_network_params_val,  pretrain_update_params_val, pretrain_total_batch_cnt = pickle.load(open(options['reload_model'], 'rb'))
+        [pretrain_network_params_val,
+         pretrain_update_params_val,
+         pretrain_total_batch_cnt] = pickle.load(open(options['reload_model'], 'rb'))
 
         print('Applying Parameters...')
         set_model_param_value(network_params, pretrain_network_params_val)
@@ -264,7 +266,6 @@ def main(options):
     #                                    num_outputs=options['num_outputs'],
     #                                    network=network)
 
-
     print 'Load data stream'
     train_datastream = get_datastream(path=options['data_path'],
                                       norm_path=options['norm_data_path'],
@@ -275,7 +276,7 @@ def main(options):
     if os.path.exists(options['save_path'] + '_eval_history.npz'):
         evaluation_history = numpy.load(options['save_path'] + '_eval_history.npz')['eval_history'].tolist()
     else:
-        evaluation_history = [[[10.0, 10.0, 1.0], [10.0, 10.0, 1.0]]]
+        evaluation_history = [[[100.0, 100.0, 1.0], [100.0, 100.0, 1.0]]]
 
     total_batch_cnt = 0
     start_time = time.time()

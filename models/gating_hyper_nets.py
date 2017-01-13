@@ -7,21 +7,20 @@ from libs.lasagne_libs.hyper_layers import ScalingHyperLSTMLayer, ExternalHyperL
 def deep_scaling_hyper_model(input_var,
                              mask_var,
                              num_inputs,
+                             num_outputs,
                              num_inner_units_list,
                              num_outer_units_list,
-                             num_outputs,
                              use_peepholes=False,
                              use_layer_norm=False,
                              learn_init=False,
-                             get_inner_hid=False,
                              grad_clipping=1.0,
+                             get_inner_hid=False,
                              use_softmax=True):
     ###############
     # input layer #
     ###############
     input_layer = InputLayer(shape=(None, None, num_inputs),
                              input_var=input_var)
-
     mask_layer = InputLayer(shape=(None, None),
                             input_var=mask_var)
 
@@ -43,7 +42,6 @@ def deep_scaling_hyper_model(input_var,
                                                grad_clipping=grad_clipping,
                                                backwards=False,
                                                only_return_outer=True)
-
         # inner loop hidden
         prev_fwd_inner_layer = SliceLayer(incoming=prev_fwd_layer,
                                           indices=slice(0, num_inner_units),
@@ -78,10 +76,10 @@ def deep_scaling_hyper_model(input_var,
         # concatenate bidirectional
         prev_input_layer = ConcatLayer(incomings=[prev_fwd_outer_layer, prev_bwd_outer_layer],
                                        axis=-1)
+
         # get inner loop hiddens
         inner_hid_layer_list.append(prev_fwd_inner_layer)
         inner_hid_layer_list.append(prev_bwd_inner_layer)
-
 
     ################
     # output layer #
