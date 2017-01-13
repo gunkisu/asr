@@ -55,6 +55,8 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--truncate-ivectors', help='truncate ivectors', action='store_true')
     parser.add_argument('--reload-model', help='model to load')
     parser.add_argument('--norm-path', help='normalization data')
+    parser.add_argument('--unidirectional', help='make the network unidirectional', action='store_true')
+    parser.add_argument('--noshuffle', help='do not shuffle the dataset every epoch', action='store_true')
 
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
     
@@ -68,9 +70,18 @@ def add_lhuc_params(parser):
 
 
 def get_save_path(args):
-    return './wsj_deep_lstm_lr{}_gn{}_gc{}_gs{}_nl{}_nn{}_b{}_iv{}'.format(
-            args.learn_rate, args.grad_norm, args.grad_clipping, args.grad_steps, args.num_layers, args.num_nodes, 
-            args.batch_size, args.ivector_dim if args.use_ivectors else 0)
+    fn = './wsj_deep_lstm_lr{}_gc{}_nl{}_nn{}_b{}'.format(
+            args.learn_rate, args.grad_clipping, args.num_layers, args.num_nodes, 
+            args.batch_size)
+    if args.use_ivectors:
+        fn = '{}_iv{}'.format(fn, args.ivector_dim)
+    if args.unidirectional:
+        fn = '{}_uni'.format(fn)
+    if args.noshuffle:
+        fn = '{}_noshuffle'.format(fn)
+
+    return fn
+
 
 def trainer(input_data,
                         input_mask,
@@ -86,6 +97,10 @@ def trainer(input_data,
     num_seqs = o.shape[0]
     ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
             targets=T.flatten(target_data, 1))
+    
+#    ce = categorical_crossentropy(predictions=o, 
+#            targets=T.flatten(target_data, 1))
+
 
     ce = ce * T.flatten(target_mask, 1)
 
