@@ -41,7 +41,7 @@ def deep_scaling_hyper_model(input_var,
                                                learn_init=learn_init,
                                                grad_clipping=grad_clipping,
                                                backwards=False,
-                                               only_return_outer=True)
+                                               only_return_outer=False)
         # inner loop hidden
         prev_fwd_inner_layer = SliceLayer(incoming=prev_fwd_layer,
                                           indices=slice(0, num_inner_units),
