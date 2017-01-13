@@ -891,3 +891,5 @@ def build_sequence_dense_layer(input_var, input_layer, output_dim):
     dense_layer = DenseLayer(reshape(input_layer, (-1, [2])), 
             num_units=output_dim, nonlinearity=nonlinearities.softmax)
     return reshape(dense_layer, (n_batch, n_time_steps, output_dim))
+
+

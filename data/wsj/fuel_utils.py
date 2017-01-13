@@ -66,9 +66,13 @@ def get_spkid_stream(path, which_set='test_eval92', batch_size=1):
     fs = FilterSources(data_stream=base_stream, sources=['spks'])
     return fs
 
-def get_datastream(path, which_set='train_si84', batch_size=1, norm_path=None, use_ivectors=False, truncate_ivectors=False, ivector_dim=100):
+def get_datastream(path, which_set='train_si84', batch_size=1, norm_path=None, 
+        use_ivectors=False, truncate_ivectors=False, ivector_dim=100, shuffled=True):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
-    iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
+    if shuffled:
+        iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
+    else:
+        iterator_scheme = SequentialScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
 

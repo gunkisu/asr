@@ -248,7 +248,7 @@ def deep_bidir_lstm_alex(input_var,
                           input_dim,
                           num_units_list,
                           output_dim,
-                          grad_clipping=1.0):
+                          grad_clipping=1.0, bidir=True):
     
     input_layer = InputLayer(shape=(None, None, input_dim),
                              input_var=input_var)
@@ -263,15 +263,20 @@ def deep_bidir_lstm_alex(input_var,
                                           num_units=num_units,
                                           grad_clipping=grad_clipping,
                                           backwards=False)
-        lstm_bwd_layer = LasagneLSTMLayer(incoming=prev_input_layer,
+        if bidir:
+            lstm_bwd_layer = LasagneLSTMLayer(incoming=prev_input_layer,
                                           mask_input=mask_layer,
                                           num_units=num_units,
                                           grad_clipping=grad_clipping,
                                           backwards=True)
 
-        prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
+            prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
                                        axis=-1)
+        else:
+            prev_input_layer = lstm_fwd_layer
 
+#    return DenseLayer(prev_input_layer, num_units=output_dim, 
+#            num_leading_axes=2, nonlinearity=nonlinearities.softmax)
 
     return build_sequence_dense_layer(input_var, prev_input_layer, output_dim)
 
