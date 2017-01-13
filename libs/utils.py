@@ -19,6 +19,12 @@ class StopWatch():
         time_diff = self.elapsed()
 
         print('Took {:.1f}s ({:.1f}m; {:.1f}h)'.format(time_diff, time_diff / 60, time_diff / 3600))
+   
+    def __enter__(self):
+        self.start_time = time.time()
+        
+    def __exit__(self,type,value,tb):
+        self.print_elapsed()
 
 class Rsync():
     def __init__(self, dst_dir):

@@ -33,12 +33,12 @@ if __name__ == '__main__':
         args.input_dim = args.input_dim + args.ivector_dim
 
     print(args)
-
     sw = utils.StopWatch()
-    print('Copying data to local machine...')
-    rsync_wrapper = utils.Rsync(args.tmpdir)
-    rsync_wrapper.sync(args.data_path)
-    sw.print_elapsed()
+
+    with sw:
+        print('Copying data to local machine...')
+        rsync_wrapper = utils.Rsync(args.tmpdir)
+        rsync_wrapper.sync(args.data_path)
 
     args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
     
@@ -52,14 +52,14 @@ if __name__ == '__main__':
                                   norm_path=args.norm_path,
                                   use_ivectors=args.use_ivectors, 
                                   truncate_ivectors=args.truncate_ivectors, 
-                                  ivector_dim=args.ivector_dim)
+                                  ivector_dim=args.ivector_dim, shuffled=not args.noshuffle)
     valid_ds = fuel_utils.get_datastream(path=args.data_path,
                                   which_set=args.valid_dataset,
                                   batch_size=args.batch_size, 
                                   norm_path=args.norm_path,
                                   use_ivectors=args.use_ivectors,
                                   truncate_ivectors=args.truncate_ivectors,
-                                  ivector_dim=args.ivector_dim)
+                                  ivector_dim=args.ivector_dim, shuffled=not args.noshuffle)
 
 
     print('Build and compile network')
@@ -73,7 +73,7 @@ if __name__ == '__main__':
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
                                     num_units_list=[args.num_nodes]*args.num_layers,
-                                    output_dim=args.output_dim)
+                                    output_dim=args.output_dim, bidir=not args.unidirectional)
 
     network_params = get_all_params(network, trainable=True)
 
@@ -89,6 +89,7 @@ if __name__ == '__main__':
         pretrain_total_epoch_cnt = 0
 
     print('Build trainer')
+    sw.reset()
     training_fn, trainer_params = trainer(
               input_data=input_data,
               input_mask=input_mask,
@@ -131,11 +132,13 @@ if __name__ == '__main__':
         
         train_ce_frame_sum = 0.0
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
+#            train_sw = utils.StopWatch()
             input_data, input_mask, target_data, target_mask = data
             train_output = training_fn(input_data,
                                        input_mask,
                                        target_data,
                                        target_mask)
+#            train_sw.print_elapsed()
             ce_frame = train_output[0]
             network_grads_norm = train_output[1]
 
