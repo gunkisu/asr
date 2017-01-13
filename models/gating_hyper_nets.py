@@ -42,6 +42,7 @@ def deep_scaling_hyper_model(input_var,
                                                grad_clipping=grad_clipping,
                                                backwards=False,
                                                only_return_outer=False)
+        print(prev_fwd_layer.output_shape)
         # inner loop hidden
         prev_fwd_inner_layer = SliceLayer(incoming=prev_fwd_layer,
                                           indices=slice(0, num_inner_units),
@@ -63,6 +64,7 @@ def deep_scaling_hyper_model(input_var,
                                                grad_clipping=grad_clipping,
                                                backwards=True,
                                                only_return_outer=False)
+        print(prev_bwd_layer.output_shape)
         # inner loop hidden
         prev_bwd_inner_layer = SliceLayer(incoming=prev_bwd_layer,
                                           indices=slice(0, num_inner_units),
@@ -84,6 +86,7 @@ def deep_scaling_hyper_model(input_var,
     ################
     # output layer #
     ################
+    print(prev_input_layer.output_shape)
     output_layer = SequenceDenseLayer(incoming=prev_input_layer,
                                       mask_input=mask_layer,
                                       num_outputs=num_outputs,
