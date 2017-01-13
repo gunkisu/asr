@@ -326,7 +326,7 @@ class ScalingHyperLSTMLayer(MergeLayer):
                                              regularizable=False)
 
     def layer_norm(self, input, alpha, beta):
-        output = (input - T.mean(input, axis=1, keepdims=True))/(T.sqrt(T.var(input, axis=1, keepdims=True)) + eps)
+        output = (input - T.mean(input, axis=1, keepdims=True))/(T.sqrt(T.var(input, axis=1, keepdims=True) + eps))
         output = alpha[None, :]*output + beta[None, :]
         return output
 
