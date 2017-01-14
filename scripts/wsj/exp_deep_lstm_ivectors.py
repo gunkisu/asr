@@ -7,6 +7,7 @@ from collections import OrderedDict, namedtuple
 
 from libs.deep_lstm_utils import *
 from libs.lasagne_libs.updates import momentum
+from libs.lasagne_libs.utils import set_model_param_value
 
 import libs.utils as utils
 import models.deep_bidir_lstm as models
@@ -14,6 +15,7 @@ import data.wsj.fuel_utils as fuel_utils
 
 import data.transformers as trans
 from fuel.transformers import Padding
+
 
 if __name__ == '__main__':
     parser = get_arg_parser()
