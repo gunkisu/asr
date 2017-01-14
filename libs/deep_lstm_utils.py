@@ -3,6 +3,7 @@ import argparse
 import sys
 import subprocess
 import numpy, theano, lasagne, pickle, os
+import operator
 
 from theano import tensor as T
 from collections import OrderedDict
@@ -280,10 +281,20 @@ def eval_net_lhuc(predict_fn,
 
 
 def save_network(network_params, trainer_params, epoch_cnt, save_path):
-    cur_network_params_val = get_model_param_values(network_params)
-    cur_trainer_params_val = get_update_params_values(trainer_params)
-    pickle.dump([cur_network_params_val, cur_trainer_params_val, epoch_cnt],
-                open(save_path, 'wb'))
+    with open(save_path, 'wb') as f:
+        cur_network_params_val = get_model_param_values(network_params)
+        cur_trainer_params_val = get_update_params_values(trainer_params)
+        pickle.dump([cur_network_params_val, cur_trainer_params_val, epoch_cnt],
+                    f)
+
+def save_eval_history(eval_history, save_path):
+    with open(save_path, 'wb') as f:
+        pickle.dump(eval_history, f)
+
+def best_fer(eval_history):
+    acopy = list(eval_history)
+    acopy.sort(key=operator.attrgetter('fer'))
+    return acopy[0].fer
 
 
 def show_status(save_path, ce_frame, network_grads_norm, batch_idx, batch_size, epoch_idx):

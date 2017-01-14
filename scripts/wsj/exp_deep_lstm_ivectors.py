@@ -30,7 +30,7 @@ if __name__ == '__main__':
             print('Previously trained model detected: {}'.format(reload_path))
             print('Training will continue with the model')
             args.reload_model = reload_path
-            args.eval_history_path = '{}_eval_history.npz'.format(args.save_path)
+            args.eval_history_path = '{}_eval_history.pkl'.format(args.save_path)
 
     if args.use_ivectors:
         args.input_dim = args.input_dim + args.ivector_dim
@@ -79,6 +79,8 @@ if __name__ == '__main__':
                                     output_dim=args.output_dim, bidir=not args.unidirectional)
 
     network_params = get_all_params(network, trainable=True)
+    
+    EvalRecord = namedtuple('EvalRecord', ['ce_frame', 'fer'])
 
     if args.reload_model:
         print('Loading the model: {}'.format(args.reload_model))
@@ -87,13 +89,14 @@ if __name__ == '__main__':
                     pretrain_total_epoch_cnt = pickle.load(f)
 
         set_model_param_value(network_params, pretrain_network_params_val)
-        with numpy.load(args.eval_history_path) as data:
-            eval_hist = data['eval_history']
+        with open(args.eval_history_path, 'rb') as f:
+            eval_history = pickle.load(f)
             print('Evaluation history: CE Frame, FER') 
-            print(eval_hist[1:])
+            print(eval_history[1:])
     else:
         pretrain_update_params_val = None
         pretrain_total_epoch_cnt = 0
+        eval_history =[EvalRecord(10.0, 1.0)]
 
     print('Build trainer')
     sw.reset()
@@ -120,11 +123,6 @@ if __name__ == '__main__':
 
     sw.print_elapsed()
     print('Start training')
-    EvalRecord = namedtuple('EvalRecord', ['ce_frame', 'fer'])
-
-    eval_history =[EvalRecord(10.0, 1.0)]
-    early_stop_flag = False
-    early_stop_cnt = 0
 
     # e_idx starts from 1
     for e_idx in range(1, args.num_epochs+1):
@@ -139,13 +137,11 @@ if __name__ == '__main__':
         
         train_ce_frame_sum = 0.0
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
-#            train_sw = utils.StopWatch()
             input_data, input_mask, target_data, target_mask = data
             train_output = training_fn(input_data,
                                        input_mask,
                                        target_data,
                                        target_mask)
-#            train_sw.print_elapsed()
             ce_frame = train_output[0]
             network_grads_norm = train_output[1]
 
@@ -160,26 +156,16 @@ if __name__ == '__main__':
         eval_sw = utils.StopWatch()
         #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
         valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds)
+        eval_history.append(EvalRecord(valid_ce_frame, valid_fer))
         eval_sw.print_elapsed()
 
-        if valid_fer>eval_history[-1].fer:
-            early_stop_cnt += 1.
-        else:
-            early_stop_cnt = 0.
+        if valid_fer<best_fer(eval_history):
             save_network(network_params, trainer_params, e_idx, args.save_path+'_best_model.pkl') 
 
         print('Train CE: {}'.format(train_ce_frame_sum / b_idx))
         print('Valid CE: {}, FER: {}'.format(valid_ce_frame, valid_fer))
 
         print('Saving the network and evaluation history')
-        eval_history.append(EvalRecord(valid_ce_frame, valid_fer))
-        numpy.savez(args.save_path + '_eval_history',
-                    eval_history=eval_history)
-
         save_network(network_params, trainer_params, e_idx, args.save_path + '_last_model.pkl')
+        save_eval_history(eval_history, args.save_path + '_eval_history.pkl')
         
-        if early_stop_cnt>10:
-            print('Training early stopped')
-            break
-
-

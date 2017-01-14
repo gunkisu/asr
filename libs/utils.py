@@ -7,7 +7,7 @@ import subprocess
 
 class StopWatch():
     def __init__(self):
-        self.start_time = time.time() 
+        self.reset()
 
     def reset(self):
         self.start_time = time.time()
@@ -21,7 +21,7 @@ class StopWatch():
         print('Took {:.1f}s ({:.1f}m; {:.1f}h)'.format(time_diff, time_diff / 60, time_diff / 3600))
    
     def __enter__(self):
-        self.start_time = time.time()
+        self.reset()
         
     def __exit__(self,type,value,tb):
         self.print_elapsed()
