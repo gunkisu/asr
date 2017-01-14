@@ -30,6 +30,7 @@ if __name__ == '__main__':
             print('Previously trained model detected: {}'.format(reload_path))
             print('Training will continue with the model')
             args.reload_model = reload_path
+            args.eval_history_path = '{}_eval_history.npz'.format(args.save_path)
 
     if args.use_ivectors:
         args.input_dim = args.input_dim + args.ivector_dim
@@ -86,6 +87,10 @@ if __name__ == '__main__':
                     pretrain_total_epoch_cnt = pickle.load(f)
 
         set_model_param_value(network_params, pretrain_network_params_val)
+        with numpy.load(args.eval_history_path) as data:
+            eval_hist = data['eval_history']
+            print('Evaluation history: CE Frame, FER') 
+            print(eval_hist[1:])
     else:
         pretrain_update_params_val = None
         pretrain_total_epoch_cnt = 0
