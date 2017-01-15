@@ -3,6 +3,7 @@ import argparse
 import sys
 import subprocess
 import numpy, theano, lasagne, pickle, os
+import operator
 
 from theano import tensor as T
 from collections import OrderedDict
@@ -47,13 +48,14 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--l2-lambda', help='l2 regularizer', default=0.0, type=float)
     parser.add_argument('--use-layer-norm', help='layer norm', action='store_true')
     parser.add_argument('--learn-init', help='whether to learn initial hidden states', action='store_true')
+    parser.add_argument('--reload-best', help='reload the best model', action='store_true')
     parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
     parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
     parser.add_argument('--train-dataset', help='dataset for training', default='train_si84')
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--truncate-ivectors', help='truncate ivectors', action='store_true')
-    parser.add_argument('--reload-model', help='model to load')
+    parser.add_argument('--reload-model', help='model path to load')
     parser.add_argument('--norm-path', help='normalization data')
     parser.add_argument('--unidirectional', help='make the network unidirectional', action='store_true')
     parser.add_argument('--noshuffle', help='do not shuffle the dataset every epoch', action='store_true')
@@ -280,10 +282,20 @@ def eval_net_lhuc(predict_fn,
 
 
 def save_network(network_params, trainer_params, epoch_cnt, save_path):
-    cur_network_params_val = get_model_param_values(network_params)
-    cur_trainer_params_val = get_update_params_values(trainer_params)
-    pickle.dump([cur_network_params_val, cur_trainer_params_val, epoch_cnt],
-                open(save_path, 'wb'))
+    with open(save_path, 'wb') as f:
+        cur_network_params_val = get_model_param_values(network_params)
+        cur_trainer_params_val = get_update_params_values(trainer_params)
+        pickle.dump([cur_network_params_val, cur_trainer_params_val, epoch_cnt],
+                    f)
+
+def save_eval_history(eval_history, save_path):
+    with open(save_path, 'wb') as f:
+        pickle.dump(eval_history, f)
+
+def best_fer(eval_history):
+    acopy = list(eval_history)
+    acopy.sort(key=operator.attrgetter('fer'))
+    return acopy[0].fer
 
 
 def show_status(save_path, ce_frame, network_grads_norm, batch_idx, batch_size, epoch_idx):

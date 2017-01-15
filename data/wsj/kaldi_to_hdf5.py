@@ -82,10 +82,15 @@ for row_idx, (uttid, value) in enumerate(kaldi_io.SequentialBaseFloatVectorReade
     ivectors_shapes[row_idx,:] = frame_wise_value.shape
     ivectors[row_idx] = frame_wise_value.ravel()
 
+f['train_si84_rand_indices'] = numpy.random.choice(37394, 7138, replace=False)
+train_si84_rand_ref = f['train_si84_rand_indices'].ref
+
+
 # Split information
 split_dict = {
         'train_si284': {'features': (0, 37394), 'targets': (0, 37394), 'ivectors': (0, 37394), 'uttids': (0, 37394), 'spks': (0, 37394)},
         'train_si84': {'features': (0, 7138), 'targets': (0, 7138), 'ivectors': (0, 7138), 'uttids': (0, 7138), 'spks': (0, 7138)},
+        'train_si84_rand': {'features': (-1, -1, train_si84_rand_ref), 'targets': (-1, -1, train_si84_rand_ref), 'ivectors': (-1, -1, train_si84_rand_ref), 'uttids': (-1, -1, train_si84_rand_ref), 'spks': (-1, -1, train_si84_rand_ref)}, 
         'test_eval92': {'features': (37394, 37394+333), 'targets': (37394, 37394+333), 'ivectors': (37394, 37394+333), 'uttids': (37394, 37394+333), 'spks': (37394, 37394+333)},
         'test_dev93': {'features': (37394+333, 37394+333+503), 'targets': (37394+333, 37394+333+503), 'ivectors': (37394+333, 37394+333+503), 'uttids': (37394+333, 37394+333+503), 'spks': (37394+333, 37394+333+503)}
         }
