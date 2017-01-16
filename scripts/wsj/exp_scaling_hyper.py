@@ -258,13 +258,32 @@ def main(options):
                                                       l2_lambda=options['l2_lambda'],
                                                       load_updater_params=pretrain_update_params_val)
 
-    # print 'Build network predictor'
-    # predict_fn = set_network_predictor(input_data=input_data,
-    #                                    input_mask=input_mask,
-    #                                    target_data=target_data,
-    #                                    target_mask=target_mask,
-    #                                    num_outputs=options['num_outputs'],
-    #                                    network=network)
+    print 'Build network predictor'
+    predict_fn = set_network_predictor(input_data=input_data,
+                                       input_mask=input_mask,
+                                       target_data=target_data,
+                                       target_mask=target_mask,
+                                       num_outputs=options['num_outputs'],
+                                       network=network)
+
+    # evaluation
+    if options['reload_model']:
+        train_eval_datastream = get_datastream(path=options['data_path'],
+                                               norm_path=options['norm_data_path'],
+                                               which_set='train_si84',
+                                               batch_size=options['eval_batch_size'])
+        valid_eval_datastream = get_datastream(path=options['data_path'],
+                                               norm_path=options['norm_data_path'],
+                                               which_set='test_dev93',
+                                               batch_size=options['eval_batch_size'])
+        train_nll, train_bpc, train_fer = network_evaluation(predict_fn,
+                                                             train_eval_datastream)
+        valid_nll, valid_bpc, valid_fer = network_evaluation(predict_fn,
+                                                             valid_eval_datastream)
+        print '======================================================='
+        print 'Train NLL: ', str(train_nll), ', FER: ', str(train_fer)
+        print 'Valid NLL: ', str(valid_nll), ', FER: ', str(valid_fer)
+        print '======================================================='
 
     print 'Load data stream'
     train_datastream = get_datastream(path=options['data_path'],
