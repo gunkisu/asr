@@ -5,6 +5,14 @@ import time
 import os
 import subprocess
 
+def run_and_wait_stderr(cmd, wait_str):
+    proc = subprocess.Popen('python -u data/fuel_server.py', shell=True, 
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    for line in iter(proc.stderr.readline, ""):
+        if wait_str in line:
+            break
+
 class StopWatch():
     def __init__(self):
         self.reset()

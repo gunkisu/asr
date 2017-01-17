@@ -5,12 +5,14 @@ import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict, namedtuple
 
+from socket import gethostname
+
 from libs.deep_lstm_utils import *
 from libs.lasagne_libs.updates import momentum
 from libs.lasagne_libs.utils import set_model_param_value
 
 import libs.utils as utils
-from libs.utils import StopWatch, Rsync
+from libs.utils import StopWatch, Rsync, run_and_wait_stderr
 import models.deep_bidir_lstm as models
 import data.wsj.fuel_utils as fuel_utils
 
@@ -50,9 +52,12 @@ if __name__ == '__main__':
         print('Use normalization data from {}'.format(args.norm_path))
     
     if args.parallel:
-        print('Reading data from a data processing server on {}'.format(args.host))
+        print('Launching a data processing server on {}'.format(gethostname()))
+        cmd = 'python -u data/fuel_sever.py --batch-size {}'.format(args.batch_size)
+        run_and_wait_stderr(cmd, 'server started')
+        
         train_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
-            produces_examples=False, host=args.host)
+            produces_examples=False, host=gethostname())
     else:
         train_ds = fuel_utils.get_datastream(path=args.data_path,
                                       which_set=args.train_dataset,
