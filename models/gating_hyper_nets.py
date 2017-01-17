@@ -1,8 +1,7 @@
 from lasagne import nonlinearities
 from libs.lasagne_libs.layers import SequenceDenseLayer
 from lasagne.layers import InputLayer, DropoutLayer, ConcatLayer, SliceLayer
-from libs.lasagne_libs.layers import LSTMLayer
-from libs.lasagne_libs.hyper_layers import ScalingHyperLSTMLayer, ExternalHyperLSTMLayer
+from libs.lasagne_libs.hyper_layers import ScalingHyperLSTMLayer
 
 def deep_scaling_hyper_model(input_var,
                              mask_var,
