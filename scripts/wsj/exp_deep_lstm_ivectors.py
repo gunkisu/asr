@@ -52,13 +52,20 @@ if __name__ == '__main__':
         print('Use normalization data from {}'.format(args.norm_path))
     
     if args.parallel:
-        print('Launching a data processing server on {}'.format(gethostname()))
-        cmd = 'python -u data/fuel_server.py --batch-size {}'.format(args.batch_size)
-        proc = run_and_wait_for_output(cmd, 'server started')
-        print('Server launched')
+        datasets = [args.train_dataset, args.valid_dataset]
+        ports = [5557, 5558]
+        for dataset, port in zip(datasets, ports):
+            print('Launching a data processing server for {} on {}:{}'.format(dataset, gethostname(), port))
+            cmd = 'python -u data/fuel_server.py --dataset {} --batch-size {} --port {}'.format(
+                            dataset, args.batch_size, port)
+            run_and_wait_for_output(cmd, 'server started')
         
+
+        train_port, valid_port = ports
         train_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
-            produces_examples=False, host=gethostname())
+            produces_examples=False, host=gethostname(), port=train_port)
+        valid_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
+            produces_examples=False, host=gethostname(), port=valid_port)
     else:
         train_ds = fuel_utils.get_datastream(path=args.data_path,
                                       which_set=args.train_dataset,
@@ -67,13 +74,13 @@ if __name__ == '__main__':
                                       use_ivectors=args.use_ivectors, 
                                       truncate_ivectors=args.truncate_ivectors, 
                                       ivector_dim=args.ivector_dim, shuffled=not args.noshuffle)
-    valid_ds = fuel_utils.get_datastream(path=args.data_path,
-                                  which_set=args.valid_dataset,
-                                  batch_size=args.batch_size, 
-                                  norm_path=args.norm_path,
-                                  use_ivectors=args.use_ivectors,
-                                  truncate_ivectors=args.truncate_ivectors,
-                                  ivector_dim=args.ivector_dim, shuffled=not args.noshuffle)
+        valid_ds = fuel_utils.get_datastream(path=args.data_path,
+                                      which_set=args.valid_dataset,
+                                      batch_size=args.batch_size, 
+                                      norm_path=args.norm_path,
+                                      use_ivectors=args.use_ivectors,
+                                      truncate_ivectors=args.truncate_ivectors,
+                                      ivector_dim=args.ivector_dim, shuffled=not args.noshuffle)
 
 
     print('Build and compile network')
