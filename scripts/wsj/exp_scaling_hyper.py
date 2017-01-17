@@ -99,6 +99,7 @@ def set_network_trainer(input_data,
     # get inner loop cost (num_batches x seq x features)
     train_sf_cost0 = T.var(inner_feats, axis=1).mean() # intra var low
     train_sf_cost1 = -T.var(T.mean(inner_feats, axis=1), axis=0).mean() # inter var high
+    train_sf_cost2 = T.sum(T.sqr(inner_feats[:, 1:, :]-inner_feats[:, :-1, :]), axis=-1).mean()
 
     # get l2 cost
     train_l2_cost = regularize_network_params(network, penalty=l2)*l2_lambda
@@ -131,7 +132,8 @@ def set_network_trainer(input_data,
                                   outputs=[train_frame_cost,
                                            network_grads_norm,
                                            train_sf_cost0,
-                                           train_sf_cost1],
+                                           train_sf_cost1,
+                                           train_sf_cost2],
                                   updates=train_updates)
     return training_fn, trainer_params
 
@@ -340,10 +342,11 @@ def main(options):
                 network_grads_norm = train_output[1]
                 train_sf_cost0 = train_output[2]
                 train_sf_cost1 = train_output[3]
+                train_sf_cost2 = train_output[4]
 
                 print('=====================================================')
                 print(total_batch_cnt, train_predict_cost, network_grads_norm)
-                print(train_sf_cost0, train_sf_cost1)
+                print(train_sf_cost0, train_sf_cost1, train_sf_cost2)
 
                 if numpy.isnan(train_predict_cost) or numpy.isnan(network_grads_norm):
                     print('update cnt: ', total_batch_cnt)
