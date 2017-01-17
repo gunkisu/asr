@@ -48,19 +48,19 @@ def build_network(input_data,
                   learn_init=True,
                   grad_clipping=0.0):
 
-    network = deep_scaling_hyper_model(input_var=input_data,
-                                       mask_var=input_mask,
-                                       num_inputs=num_inputs,
-                                       num_outputs=num_outputs,
-                                       num_inner_units_list=num_inner_units_list,
-                                       num_outer_units_list=num_outer_units_list,
-                                       use_peepholes=use_peepholes,
-                                       use_layer_norm=use_layer_norm,
-                                       learn_init=learn_init,
-                                       grad_clipping=grad_clipping,
-                                       get_inner_hid=False,
-                                       use_softmax=False)
-    return network
+    inner_loop_layers, network = deep_scaling_hyper_model(input_var=input_data,
+                                                          mask_var=input_mask,
+                                                          num_inputs=num_inputs,
+                                                          num_outputs=num_outputs,
+                                                          num_inner_units_list=num_inner_units_list,
+                                                          num_outer_units_list=num_outer_units_list,
+                                                          use_peepholes=use_peepholes,
+                                                          use_layer_norm=use_layer_norm,
+                                                          learn_init=learn_init,
+                                                          grad_clipping=grad_clipping,
+                                                          get_inner_hid=True,
+                                                          use_softmax=False)
+    return inner_loop_layers, network
 
 def set_network_trainer(input_data,
                         input_mask,
@@ -68,6 +68,7 @@ def set_network_trainer(input_data,
                         target_mask,
                         num_outputs,
                         network,
+                        inner_loop_layers,
                         updater,
                         learning_rate,
                         grad_max_norm=10.,
@@ -79,7 +80,9 @@ def set_network_trainer(input_data,
                                                  dtype=floatX)
 
     # get network output data
-    predict_data = get_output(network, deterministic=False)
+    network_outputs = get_output(inner_loop_layers + [network,], deterministic=False)
+    inner_feats = T.concatenate(network_outputs[:-1], axis=-1)
+    predict_data = network_outputs[-1]
     num_seqs = predict_data.shape[0]
 
     # get prediction cost
@@ -93,14 +96,18 @@ def set_network_trainer(input_data,
     train_model_cost = train_predict_cost.sum()/num_seqs
     train_frame_cost = train_predict_cost.sum()/target_mask.sum()
 
-    # get regularizer cost
-    train_regularizer_cost = regularize_network_params(network, penalty=l2)*l2_lambda
+    # get inner loop cost (num_batches x seq x features)
+    train_sf_cost0 = T.var(inner_feats, axis=1).mean() # intra var low
+    train_sf_cost1 = -T.var(T.mean(inner_feats, axis=1), axis=0).mean() # inter var high
+
+    # get l2 cost
+    train_l2_cost = regularize_network_params(network, penalty=l2)*l2_lambda
 
     # get network parameters
     network_params = get_all_params(network, trainable=True)
 
     # get network gradients
-    network_grads = theano.grad(cost=train_model_cost + train_regularizer_cost,
+    network_grads = theano.grad(cost=train_model_cost + train_l2_cost,
                                 wrt=network_params)
 
     if grad_max_norm>0.:
@@ -122,7 +129,9 @@ def set_network_trainer(input_data,
                                           target_data,
                                           target_mask],
                                   outputs=[train_frame_cost,
-                                           network_grads_norm],
+                                           network_grads_norm,
+                                           train_sf_cost0,
+                                           train_sf_cost1],
                                   updates=train_updates)
     return training_fn, trainer_params
 
@@ -217,16 +226,16 @@ def main(options):
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    network = build_network(input_data=input_data,
-                            input_mask=input_mask,
-                            num_inputs=options['num_inputs'],
-                            num_outputs=options['num_outputs'],
-                            num_inner_units_list=options['num_inner_units_list'],
-                            num_outer_units_list=options['num_outer_units_list'],
-                            use_peepholes=options['use_peepholes'],
-                            use_layer_norm=options['use_layer_norm'],
-                            learn_init=options['learn_init'],
-                            grad_clipping=options['grad_clip'])
+    inner_loop_layers, network = build_network(input_data=input_data,
+                                               input_mask=input_mask,
+                                               num_inputs=options['num_inputs'],
+                                               num_outputs=options['num_outputs'],
+                                               num_inner_units_list=options['num_inner_units_list'],
+                                               num_outer_units_list=options['num_outer_units_list'],
+                                               use_peepholes=options['use_peepholes'],
+                                               use_layer_norm=options['use_layer_norm'],
+                                               learn_init=options['learn_init'],
+                                               grad_clipping=options['grad_clip'])
 
     network_params = get_all_params(network, trainable=True)
 
@@ -252,11 +261,13 @@ def main(options):
                                                       target_mask=target_mask,
                                                       num_outputs=options['num_outputs'],
                                                       network=network,
+                                                      inner_loop_layers=inner_loop_layers,
                                                       updater=options['updater'],
                                                       learning_rate=train_lr,
                                                       grad_max_norm=options['grad_norm'],
                                                       l2_lambda=options['l2_lambda'],
                                                       load_updater_params=pretrain_update_params_val)
+
 
     print 'Build network predictor'
     predict_fn = set_network_predictor(input_data=input_data,
@@ -324,8 +335,12 @@ def main(options):
                                            target_mask)
                 train_predict_cost = train_output[0]
                 network_grads_norm = train_output[1]
+                train_sf_cost0 = train_output[2]
+                train_sf_cost1 = train_output[3]
 
+                print('=====================================================')
                 print(total_batch_cnt, train_predict_cost, network_grads_norm)
+                print(train_sf_cost0, train_sf_cost1)
 
                 if numpy.isnan(train_predict_cost) or numpy.isnan(network_grads_norm):
                     print('update cnt: ', total_batch_cnt)
