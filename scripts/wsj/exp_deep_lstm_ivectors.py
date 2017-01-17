@@ -12,7 +12,7 @@ from libs.lasagne_libs.updates import momentum
 from libs.lasagne_libs.utils import set_model_param_value
 
 import libs.utils as utils
-from libs.utils import StopWatch, Rsync, run_and_wait_stderr
+from libs.utils import StopWatch, Rsync, run_and_wait_for_output
 import models.deep_bidir_lstm as models
 import data.wsj.fuel_utils as fuel_utils
 
@@ -54,7 +54,8 @@ if __name__ == '__main__':
     if args.parallel:
         print('Launching a data processing server on {}'.format(gethostname()))
         cmd = 'python -u data/fuel_sever.py --batch-size {}'.format(args.batch_size)
-        run_and_wait_stderr(cmd, 'server started')
+        print(cmd)
+        run_and_wait_for_output(cmd, 'server started', 'stderr')
         
         train_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
             produces_examples=False, host=gethostname())
