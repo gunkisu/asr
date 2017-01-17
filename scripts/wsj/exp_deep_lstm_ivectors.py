@@ -166,11 +166,12 @@ if __name__ == '__main__':
         eval_sw = StopWatch()
         #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
         valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds)
-        eval_history.append(EvalRecord(valid_ce_frame, valid_fer))
         eval_sw.print_elapsed()
 
         if valid_fer<best_fer(eval_history):
             save_network(network_params, trainer_params, e_idx, args.save_path+'_best_model.pkl') 
+        
+        eval_history.append(EvalRecord(valid_ce_frame, valid_fer))
 
         print('Train CE: {}'.format(train_ce_frame_sum / b_idx))
         print('Valid CE: {}, FER: {}'.format(valid_ce_frame, valid_fer))
