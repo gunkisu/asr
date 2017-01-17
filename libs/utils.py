@@ -6,15 +6,16 @@ import os
 import subprocess
 from operator import attrgetter
 
-def run_and_wait_for_output(cmd, expected_str, on='stderr'):
+def run_and_wait_for_output(cmd, expected_str):
     proc = subprocess.Popen(cmd, shell=True, 
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    stream = attrgetter(on)(proc)
-
-    for line in iter(stream.readline, ""):
+    # http://stackoverflow.com/questions/4417546/constantly-print-subprocess-output-while-process-is-running
+    for line in iter(proc.stderr.readline, ""):
         if expected_str in line:
             break
+    
+    return proc 
 
 class StopWatch():
     def __init__(self):

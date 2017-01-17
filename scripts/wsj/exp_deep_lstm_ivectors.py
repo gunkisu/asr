@@ -53,9 +53,9 @@ if __name__ == '__main__':
     
     if args.parallel:
         print('Launching a data processing server on {}'.format(gethostname()))
-        cmd = 'python -u data/fuel_sever.py --batch-size {}'.format(args.batch_size)
-        print(cmd)
-        run_and_wait_for_output(cmd, 'server started', 'stderr')
+        cmd = 'python -u data/fuel_server.py --batch-size {}'.format(args.batch_size)
+        proc = run_and_wait_for_output(cmd, 'server started')
+        print('Server launched')
         
         train_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
             produces_examples=False, host=gethostname())
