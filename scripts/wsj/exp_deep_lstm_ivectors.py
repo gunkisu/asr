@@ -5,17 +5,20 @@ import numpy, theano, lasagne, pickle, os
 from theano import tensor as T
 from collections import OrderedDict, namedtuple
 
+from socket import gethostname
+
 from libs.deep_lstm_utils import *
 from libs.lasagne_libs.updates import momentum
 from libs.lasagne_libs.utils import set_model_param_value
 
 import libs.utils as utils
+from libs.utils import StopWatch, Rsync, run_and_wait_for_output
 import models.deep_bidir_lstm as models
 import data.wsj.fuel_utils as fuel_utils
 
 import data.transformers as trans
 from fuel.transformers import Padding
-
+from fuel.streams import ServerDataStream
 
 if __name__ == '__main__':
     parser = get_arg_parser()
@@ -35,12 +38,12 @@ if __name__ == '__main__':
         args.input_dim = args.input_dim + args.ivector_dim
 
     print(args)
-    sw = utils.StopWatch()
+    sw = StopWatch()
 
     with sw:
         print('Copying data to local machine...')
-        rsync_wrapper = utils.Rsync(args.tmpdir)
-        rsync_wrapper.sync(args.data_path)
+        rsync = Rsync(args.tmpdir)
+        rsync.sync(args.data_path)
 
     args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
     
@@ -48,13 +51,22 @@ if __name__ == '__main__':
     if args.norm_path: 
         print('Use normalization data from {}'.format(args.norm_path))
     
-    train_ds = fuel_utils.get_datastream(path=args.data_path,
-                                  which_set=args.train_dataset,
-                                  batch_size=args.batch_size, 
-                                  norm_path=args.norm_path,
-                                  use_ivectors=args.use_ivectors, 
-                                  truncate_ivectors=args.truncate_ivectors, 
-                                  ivector_dim=args.ivector_dim, shuffled=not args.noshuffle)
+    if args.parallel:
+        print('Launching a data processing server on {}'.format(gethostname()))
+        cmd = 'python -u data/fuel_server.py --batch-size {}'.format(args.batch_size)
+        proc = run_and_wait_for_output(cmd, 'server started')
+        print('Server launched')
+        
+        train_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
+            produces_examples=False, host=gethostname())
+    else:
+        train_ds = fuel_utils.get_datastream(path=args.data_path,
+                                      which_set=args.train_dataset,
+                                      batch_size=args.batch_size, 
+                                      norm_path=args.norm_path,
+                                      use_ivectors=args.use_ivectors, 
+                                      truncate_ivectors=args.truncate_ivectors, 
+                                      ivector_dim=args.ivector_dim, shuffled=not args.noshuffle)
     valid_ds = fuel_utils.get_datastream(path=args.data_path,
                                   which_set=args.valid_dataset,
                                   batch_size=args.batch_size, 
@@ -126,12 +138,13 @@ if __name__ == '__main__':
             print('Skip Epoch {}'.format(e_idx))
             continue
 
-        epoch_sw = utils.StopWatch()
+        epoch_sw = StopWatch()
         print('--')
         print('Epoch {} starts'.format(e_idx))
         print('--')
         
         train_ce_frame_sum = 0.0
+        status_sw = StopWatch()
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
             input_data, input_mask, target_data, target_mask = data
             train_output = training_fn(input_data,
@@ -143,20 +156,22 @@ if __name__ == '__main__':
 
             if b_idx%args.train_disp_freq == 0: 
                 show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size, e_idx)
+                status_sw.print_elapsed(); status_sw.reset()
             train_ce_frame_sum += ce_frame
 
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
         
         print('Evaluating the network on the validation dataset')
-        eval_sw = utils.StopWatch()
+        eval_sw = StopWatch()
         #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
         valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds)
-        eval_history.append(EvalRecord(valid_ce_frame, valid_fer))
         eval_sw.print_elapsed()
 
         if valid_fer<best_fer(eval_history):
             save_network(network_params, trainer_params, e_idx, args.save_path+'_best_model.pkl') 
+        
+        eval_history.append(EvalRecord(valid_ce_frame, valid_fer))
 
         print('Train CE: {}'.format(train_ce_frame_sum / b_idx))
         print('Valid CE: {}, FER: {}'.format(valid_ce_frame, valid_fer))

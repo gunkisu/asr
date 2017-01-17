@@ -4,6 +4,18 @@ import time
 
 import os
 import subprocess
+from operator import attrgetter
+
+def run_and_wait_for_output(cmd, expected_str):
+    proc = subprocess.Popen(cmd, shell=True, 
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    # http://stackoverflow.com/questions/4417546/constantly-print-subprocess-output-while-process-is-running
+    for line in iter(proc.stderr.readline, ""):
+        if expected_str in line:
+            break
+    
+    return proc 
 
 class StopWatch():
     def __init__(self):
@@ -15,9 +27,11 @@ class StopWatch():
     def elapsed(self):
         return time.time() - self.start_time
     
-    def print_elapsed(self):
+    def print_elapsed(self, msg=None):
         time_diff = self.elapsed()
 
+        if msg:
+            print('{} '.format(msg), end='')
         print('Took {:.1f}s ({:.1f}m; {:.1f}h)'.format(time_diff, time_diff / 60, time_diff / 3600))
    
     def __enter__(self):
