@@ -48,19 +48,19 @@ def build_network(input_data,
                   learn_init=True,
                   grad_clipping=0.0):
 
-    inner_loop_layers, network = deep_scaling_hyper_model(input_var=input_data,
-                                                          mask_var=input_mask,
-                                                          num_inputs=num_inputs,
-                                                          num_outputs=num_outputs,
-                                                          num_inner_units_list=num_inner_units_list,
-                                                          num_outer_units_list=num_outer_units_list,
-                                                          use_peepholes=use_peepholes,
-                                                          use_layer_norm=use_layer_norm,
-                                                          learn_init=learn_init,
-                                                          grad_clipping=grad_clipping,
-                                                          get_inner_hid=True,
-                                                          use_softmax=False)
-    return inner_loop_layers, network
+    network_outputs = deep_scaling_hyper_model(input_var=input_data,
+                                               mask_var=input_mask,
+                                               num_inputs=num_inputs,
+                                               num_outputs=num_outputs,
+                                               num_inner_units_list=num_inner_units_list,
+                                               num_outer_units_list=num_outer_units_list,
+                                               use_peepholes=use_peepholes,
+                                               use_layer_norm=use_layer_norm,
+                                               learn_init=learn_init,
+                                               grad_clipping=grad_clipping,
+                                               get_inner_hid=True,
+                                               use_softmax=False)
+    return network_outputs
 
 def set_network_trainer(input_data,
                         input_mask,
@@ -226,16 +226,19 @@ def main(options):
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    inner_loop_layers, network = build_network(input_data=input_data,
-                                               input_mask=input_mask,
-                                               num_inputs=options['num_inputs'],
-                                               num_outputs=options['num_outputs'],
-                                               num_inner_units_list=options['num_inner_units_list'],
-                                               num_outer_units_list=options['num_outer_units_list'],
-                                               use_peepholes=options['use_peepholes'],
-                                               use_layer_norm=options['use_layer_norm'],
-                                               learn_init=options['learn_init'],
-                                               grad_clipping=options['grad_clip'])
+    network_outputs = build_network(input_data=input_data,
+                                    input_mask=input_mask,
+                                    num_inputs=options['num_inputs'],
+                                    num_outputs=options['num_outputs'],
+                                    num_inner_units_list=options['num_inner_units_list'],
+                                    num_outer_units_list=options['num_outer_units_list'],
+                                    use_peepholes=options['use_peepholes'],
+                                    use_layer_norm=options['use_layer_norm'],
+                                    learn_init=options['learn_init'],
+                                    grad_clipping=options['grad_clip'])
+
+    network = network_outputs[-1]
+    inner_loop_layers = network_outputs[:-1]
 
     network_params = get_all_params(network, trainable=True)
 
