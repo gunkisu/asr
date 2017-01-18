@@ -108,7 +108,7 @@ def set_network_trainer(input_data,
     network_params = get_all_params(network, trainable=True)
 
     # get network gradients
-    network_grads = theano.grad(cost=train_model_cost + train_l2_cost + train_sf_cost0*100.0,
+    network_grads = theano.grad(cost=train_model_cost + train_l2_cost + train_sf_cost2*1.0,
                                 wrt=network_params)
 
     if grad_max_norm>0.:
