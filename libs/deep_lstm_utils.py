@@ -61,6 +61,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--norm-path', help='normalization data')
     parser.add_argument('--unidirectional', help='make the network unidirectional', action='store_true')
     parser.add_argument('--noshuffle', help='do not shuffle the dataset every epoch', action='store_true')
+    parser.add_argument('--copy-local', help='copy data from NFS to local machine', action='store_true')
 
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
     

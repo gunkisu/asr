@@ -11,12 +11,13 @@ def create_data_stream(args):
     print(args)
     sw = StopWatch()
 
-    with sw:
-        print('Copying data to local machine...')
-        rsync = Rsync(args.tmpdir)
-        rsync.sync(args.data_path)
+    if args.copy_local:
+        with sw:
+            print('Copying data to local machine...')
+            rsync = Rsync(args.tmpdir)
+            rsync.sync(args.data_path)
 
-    args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
+        args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
     return fuel_utils.get_datastream(path=args.data_path,
                                       which_set=args.dataset,
                                       batch_size=args.batch_size)
@@ -28,5 +29,6 @@ if __name__ == "__main__":
     parser.add_argument('--batch-size', default=1, help='batch size', type=int)
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
     parser.add_argument('--port', help='port number', default=5557, type=int)
+    parser.add_argument('--copy-local', help='copy data from NFS to the local machine', action='store_true')
     args = parser.parse_args()
     start_server(create_data_stream(args), port=args.port)

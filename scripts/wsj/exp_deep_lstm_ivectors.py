@@ -39,34 +39,35 @@ if __name__ == '__main__':
 
     print(args)
     sw = StopWatch()
-
-    with sw:
-        print('Copying data to local machine...')
-        rsync = Rsync(args.tmpdir)
-        rsync.sync(args.data_path)
-
-    args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
     
-    print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
     if args.norm_path: 
         print('Use normalization data from {}'.format(args.norm_path))
     
+    print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
     if args.parallel:
         datasets = [args.train_dataset, args.valid_dataset]
         ports = [5557, 5558]
         for dataset, port in zip(datasets, ports):
             print('Launching a data processing server for {} on {}:{}'.format(dataset, gethostname(), port))
-            cmd = 'python -u data/fuel_server.py --dataset {} --batch-size {} --port {}'.format(
-                            dataset, args.batch_size, port)
+            cmd = 'python -u data/fuel_server.py --dataset {} --tmpdir {} --data-path {} --batch-size {} --port {}'.format(
+                            dataset, args.tmpdir, args.data_path, args.batch_size, port)
+            if args.copy_local:
+                cmd = '{} --copy-local'.format(cmd)
+            print(cmd)
             run_and_wait_for_output(cmd, 'server started')
         
-
         train_port, valid_port = ports
         train_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
             produces_examples=False, host=gethostname(), port=train_port)
         valid_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
             produces_examples=False, host=gethostname(), port=valid_port)
     else:
+        with sw:
+            print('Copying data to local machine...')
+            rsync = Rsync(args.tmpdir)
+            rsync.sync(args.data_path)
+            args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
+
         train_ds = fuel_utils.get_datastream(path=args.data_path,
                                       which_set=args.train_dataset,
                                       batch_size=args.batch_size, 
@@ -81,6 +82,7 @@ if __name__ == '__main__':
                                       use_ivectors=args.use_ivectors,
                                       truncate_ivectors=args.truncate_ivectors,
                                       ivector_dim=args.ivector_dim, shuffled=not args.noshuffle)
+    
 
 
     print('Build and compile network')
