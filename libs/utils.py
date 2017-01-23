@@ -6,7 +6,7 @@ import os
 import subprocess
 from operator import attrgetter
 
-def run_and_wait_for_output(cmd, expected_str):
+def run_and_wait_for_output_on_stderr(cmd, expected_str):
     proc = subprocess.Popen(cmd, shell=True, 
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 

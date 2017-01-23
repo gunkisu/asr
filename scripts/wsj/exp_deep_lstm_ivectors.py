@@ -12,7 +12,7 @@ from libs.lasagne_libs.updates import momentum
 from libs.lasagne_libs.utils import set_model_param_value
 
 import libs.utils as utils
-from libs.utils import StopWatch, Rsync, run_and_wait_for_output
+from libs.utils import StopWatch, Rsync, run_and_wait_for_output_on_stderr
 import models.deep_bidir_lstm as models
 import data.wsj.fuel_utils as fuel_utils
 
@@ -54,7 +54,7 @@ if __name__ == '__main__':
             if args.copy_local:
                 cmd = '{} --copy-local'.format(cmd)
             print(cmd)
-            run_and_wait_for_output(cmd, 'server started')
+            run_and_wait_for_output_on_stderr(cmd, 'server started')
         
         train_port, valid_port = ports
         train_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
@@ -62,11 +62,12 @@ if __name__ == '__main__':
         valid_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
             produces_examples=False, host=gethostname(), port=valid_port)
     else:
-        with sw:
-            print('Copying data to local machine...')
-            rsync = Rsync(args.tmpdir)
-            rsync.sync(args.data_path)
-            args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
+        if args.copy_local:
+            with sw:
+                print('Copying data to local machine...')
+                rsync = Rsync(args.tmpdir)
+                rsync.sync(args.data_path)
+                args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
 
         train_ds = fuel_utils.get_datastream(path=args.data_path,
                                       which_set=args.train_dataset,
