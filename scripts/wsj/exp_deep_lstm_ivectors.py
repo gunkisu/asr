@@ -51,8 +51,8 @@ if __name__ == '__main__':
             print('Launching a data processing server for {} on {}:{}'.format(dataset, gethostname(), port))
             cmd = 'python -u data/fuel_server.py --dataset {} --tmpdir {} --data-path {} --batch-size {} --port {}'.format(
                             dataset, args.tmpdir, args.data_path, args.batch_size, port)
-            if args.copy_local:
-                cmd = '{} --copy-local'.format(cmd)
+            if args.no_copyl:
+                cmd = '{} --no-copy'.format(cmd)
             print(cmd)
             run_and_wait_for_output_on_stderr(cmd, 'server started')
         
@@ -62,7 +62,7 @@ if __name__ == '__main__':
         valid_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
             produces_examples=False, host=gethostname(), port=valid_port)
     else:
-        if args.copy_local:
+        if not args.no_copy:
             with sw:
                 print('Copying data to local machine...')
                 rsync = Rsync(args.tmpdir)
