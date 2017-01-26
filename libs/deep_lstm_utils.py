@@ -2,7 +2,11 @@ from __future__ import print_function
 import argparse
 import sys
 import subprocess
-import numpy, theano, lasagne, pickle, os
+import numpy
+import theano
+import lasagne
+import pickle
+import os
 import operator
 
 from theano import tensor as T
@@ -56,6 +60,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--train-dataset', help='dataset for training', default='train_si84')
     parser.add_argument('--host', help='fuel server hostname', default='eos3')
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
+    parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
     parser.add_argument('--truncate-ivectors', help='truncate ivectors', action='store_true')
     parser.add_argument('--reload-model', help='model path to load')
     parser.add_argument('--norm-path', help='normalization data')
@@ -297,8 +302,8 @@ def save_eval_history(eval_history, save_path):
 
 def best_fer(eval_history):
     acopy = list(eval_history)
-    acopy.sort(key=operator.attrgetter('fer'))
-    return acopy[0].fer
+    acopy.sort(key=operator.attrgetter('valid_fer'))
+    return acopy[0].valid_fer
 
 
 def show_status(save_path, ce_frame, network_grads_norm, batch_idx, batch_size, epoch_idx):
@@ -307,3 +312,5 @@ def show_status(save_path, ce_frame, network_grads_norm, batch_idx, batch_size, 
     print('Model Name: {} (Epoch {})'.format(model, epoch_idx))
     print('Train CE {} (batch {}, {} examples so far): '.format(ce_frame, batch_idx, batch_idx*batch_size))
     print('Gradient Norm: {}'.format(network_grads_norm))
+
+

@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 from __future__ import print_function
+import os
 
-import numpy, theano, lasagne, pickle, os
+import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict, namedtuple
 
@@ -44,45 +45,34 @@ if __name__ == '__main__':
         print('Use normalization data from {}'.format(args.norm_path))
     
     print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
-    if args.parallel:
-        datasets = [args.train_dataset, args.valid_dataset]
-        ports = [5557, 5558]
-        for dataset, port in zip(datasets, ports):
-            print('Launching a data processing server for {} on {}:{}'.format(dataset, gethostname(), port))
-            cmd = 'python -u data/fuel_server.py --dataset {} --tmpdir {} --data-path {} --batch-size {} --port {}'.format(
-                            dataset, args.tmpdir, args.data_path, args.batch_size, port)
-            if args.no_copyl:
-                cmd = '{} --no-copy'.format(cmd)
-            print(cmd)
-            run_and_wait_for_output_on_stderr(cmd, 'server started')
-        
-        train_port, valid_port = ports
-        train_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
-            produces_examples=False, host=gethostname(), port=train_port)
-        valid_ds = ServerDataStream(['features', 'features_mask', 'targets', 'targets_mask'], 
-            produces_examples=False, host=gethostname(), port=valid_port)
-    else:
-        if not args.no_copy:
-            with sw:
-                print('Copying data to local machine...')
-                rsync = Rsync(args.tmpdir)
-                rsync.sync(args.data_path)
-                args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
+    if not args.no_copy:
+        print('Copying data to local machine...')
+        rsync = Rsync(args.tmpdir)
+        rsync.sync(args.data_path)
+        args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
+        sw.print_elapsed()
 
-        train_ds = fuel_utils.get_datastream(path=args.data_path,
-                                      which_set=args.train_dataset,
-                                      batch_size=args.batch_size, 
-                                      norm_path=args.norm_path,
-                                      use_ivectors=args.use_ivectors, 
-                                      truncate_ivectors=args.truncate_ivectors, 
-                                      ivector_dim=args.ivector_dim, shuffled=not args.noshuffle)
-        valid_ds = fuel_utils.get_datastream(path=args.data_path,
-                                      which_set=args.valid_dataset,
-                                      batch_size=args.batch_size, 
-                                      norm_path=args.norm_path,
-                                      use_ivectors=args.use_ivectors,
-                                      truncate_ivectors=args.truncate_ivectors,
-                                      ivector_dim=args.ivector_dim, shuffled=not args.noshuffle)
+    train_ds = fuel_utils.get_datastream(path=args.data_path,
+                                  which_set=args.train_dataset,
+                                  batch_size=args.batch_size, 
+                                  norm_path=args.norm_path,
+                                  use_ivectors=args.use_ivectors, 
+                                  truncate_ivectors=args.truncate_ivectors, 
+                                  ivector_dim=args.ivector_dim)
+    valid_ds = fuel_utils.get_datastream(path=args.data_path,
+                                  which_set=args.valid_dataset,
+                                  batch_size=args.batch_size, 
+                                  norm_path=args.norm_path,
+                                  use_ivectors=args.use_ivectors,
+                                  truncate_ivectors=args.truncate_ivectors,
+                                  ivector_dim=args.ivector_dim)
+    test_ds = fuel_utils.get_datastream(path=args.data_path,
+                                  which_set=args.test_dataset,
+                                  batch_size=args.batch_size, 
+                                  norm_path=args.norm_path,
+                                  use_ivectors=args.use_ivectors,
+                                  truncate_ivectors=args.truncate_ivectors,
+                                  ivector_dim=args.ivector_dim)
     
 
 
@@ -101,7 +91,7 @@ if __name__ == '__main__':
 
     network_params = get_all_params(network, trainable=True)
     
-    EvalRecord = namedtuple('EvalRecord', ['ce_frame', 'fer'])
+    EvalRecord = namedtuple('EvalRecord', ['train_ce_frame', 'valid_ce_frame', 'valid_fer', 'test_ce_frame', 'test_fer'])
 
     if args.reload_model:
         print('Loading the model: {}'.format(args.reload_model))
@@ -114,7 +104,7 @@ if __name__ == '__main__':
         pretrain_update_params_val = None
         pretrain_total_epoch_cnt = 0
     
-    eval_history =[EvalRecord(10.0, 1.0)]
+    eval_history =[EvalRecord(10.1, 10.0, 1.0, 10.0, 1.0)]
 
     print('Build trainer')
     sw.reset()
@@ -176,17 +166,22 @@ if __name__ == '__main__':
         eval_sw = StopWatch()
         #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
         valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds)
+        test_ce_frame, test_fer = eval_net(predict_fn, test_ds)
+        
         eval_sw.print_elapsed()
 
         if valid_fer<best_fer(eval_history):
             save_network(network_params, trainer_params, e_idx, args.save_path+'_best_model.pkl') 
         
-        eval_history.append(EvalRecord(valid_ce_frame, valid_fer))
+        er = EvalRecord(train_ce_frame_sum / b_idx, valid_ce_frame, valid_fer, test_ce_frame, test_fer)
+        eval_history.append(er)
 
         print('Train CE: {}'.format(train_ce_frame_sum / b_idx))
         print('Valid CE: {}, FER: {}'.format(valid_ce_frame, valid_fer))
+        print('Test  CE: {}, FER: {}'.format(test_ce_frame, test_fer))
 
         print('Saving the network and evaluation history')
         save_network(network_params, trainer_params, e_idx, args.save_path + '_last_model.pkl')
         save_eval_history(eval_history, args.save_path + '_eval_history.pkl')
+
         
