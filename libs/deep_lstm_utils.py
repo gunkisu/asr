@@ -300,6 +300,11 @@ def save_eval_history(eval_history, save_path):
     with open(save_path, 'wb') as f:
         pickle.dump(eval_history, f)
 
+def symlink_force(src, link_name):
+    if os.path.exists(link_name):
+        os.remove(link_name)
+    os.symlink(src, link_name)
+    
 def best_fer(eval_history):
     acopy = list(eval_history)
     acopy.sort(key=operator.attrgetter('valid_fer'))

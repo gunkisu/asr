@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
+
 import os
 
 import numpy, theano, lasagne, pickle
@@ -161,27 +162,27 @@ if __name__ == '__main__':
 
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
-        
+
+        print('Saving the network')
+        save_network(network_params, trainer_params, e_idx, args.save_path + '_last_model.pkl')
+
         print('Evaluating the network on the validation dataset')
         eval_sw = StopWatch()
         #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
         valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds)
         test_ce_frame, test_fer = eval_net(predict_fn, test_ds)
-        
         eval_sw.print_elapsed()
-
-        if valid_fer<best_fer(eval_history):
-            save_network(network_params, trainer_params, e_idx, args.save_path+'_best_model.pkl') 
-        
-        er = EvalRecord(train_ce_frame_sum / b_idx, valid_ce_frame, valid_fer, test_ce_frame, test_fer)
-        eval_history.append(er)
 
         print('Train CE: {}'.format(train_ce_frame_sum / b_idx))
         print('Valid CE: {}, FER: {}'.format(valid_ce_frame, valid_fer))
         print('Test  CE: {}, FER: {}'.format(test_ce_frame, test_fer))
-
-        print('Saving the network and evaluation history')
-        save_network(network_params, trainer_params, e_idx, args.save_path + '_last_model.pkl')
+       
+        if valid_fer<best_fer(eval_history):
+            symlink_force('{}_last_model.pkl'.format(args.save_path), '{}_best_model.pkl'.format(args.save_path)) 
+        
+        print('Saving the evaluation history')
+        er = EvalRecord(train_ce_frame_sum / b_idx, valid_ce_frame, valid_fer, test_ce_frame, test_fer)
+        eval_history.append(er)
         save_eval_history(eval_history, args.save_path + '_eval_history.pkl')
 
         
