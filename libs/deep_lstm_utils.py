@@ -63,7 +63,6 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
     parser.add_argument('--truncate-ivectors', help='truncate ivectors', action='store_true')
     parser.add_argument('--reload-model', help='model path to load')
-    parser.add_argument('--norm-path', help='normalization data')
     parser.add_argument('--unidirectional', help='make the network unidirectional', action='store_true')
     parser.add_argument('--noshuffle', help='do not shuffle the dataset every epoch', action='store_true')
     parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')

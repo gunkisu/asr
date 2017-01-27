@@ -41,10 +41,7 @@ if __name__ == '__main__':
 
     print(args)
     sw = StopWatch()
-    
-    if args.norm_path: 
-        print('Use normalization data from {}'.format(args.norm_path))
-    
+       
     print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
     if not args.no_copy:
         print('Copying data to local machine...')
@@ -56,21 +53,18 @@ if __name__ == '__main__':
     train_ds = fuel_utils.get_datastream(path=args.data_path,
                                   which_set=args.train_dataset,
                                   batch_size=args.batch_size, 
-                                  norm_path=args.norm_path,
                                   use_ivectors=args.use_ivectors, 
                                   truncate_ivectors=args.truncate_ivectors, 
                                   ivector_dim=args.ivector_dim)
     valid_ds = fuel_utils.get_datastream(path=args.data_path,
                                   which_set=args.valid_dataset,
                                   batch_size=args.batch_size, 
-                                  norm_path=args.norm_path,
                                   use_ivectors=args.use_ivectors,
                                   truncate_ivectors=args.truncate_ivectors,
                                   ivector_dim=args.ivector_dim)
     test_ds = fuel_utils.get_datastream(path=args.data_path,
                                   which_set=args.test_dataset,
                                   batch_size=args.batch_size, 
-                                  norm_path=args.norm_path,
                                   use_ivectors=args.use_ivectors,
                                   truncate_ivectors=args.truncate_ivectors,
                                   ivector_dim=args.ivector_dim)
