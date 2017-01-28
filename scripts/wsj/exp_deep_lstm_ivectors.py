@@ -2,12 +2,9 @@
 from __future__ import print_function
 
 import os
-
 import numpy, theano, lasagne, pickle
 from theano import tensor as T
 from collections import OrderedDict, namedtuple
-
-from socket import gethostname
 
 from libs.deep_lstm_utils import *
 from libs.lasagne_libs.updates import momentum
@@ -18,9 +15,7 @@ from libs.utils import StopWatch, Rsync, run_and_wait_for_output_on_stderr
 import models.deep_bidir_lstm as models
 import data.wsj.fuel_utils as fuel_utils
 
-import data.transformers as trans
-from fuel.transformers import Padding
-from fuel.streams import ServerDataStream
+from fuel.transformers import Padding, MultiProcessing
 
 if __name__ == '__main__':
     parser = get_arg_parser()
@@ -42,7 +37,7 @@ if __name__ == '__main__':
     print(args)
     sw = StopWatch()
        
-    print('Load data streams {} and {} from {}'.format(args.train_dataset, args.valid_dataset, args.data_path))
+    print('Load data streams from {}'.format(args.train_dataset))
     if not args.no_copy:
         print('Copying data to local machine...')
         rsync = Rsync(args.tmpdir)
@@ -172,7 +167,7 @@ if __name__ == '__main__':
         print('Test  CE: {}, FER: {}'.format(test_ce_frame, test_fer))
        
         if valid_fer<best_fer(eval_history):
-            symlink_force('{}_last_model.pkl'.format(args.save_path), '{}_best_model.pkl'.format(args.save_path)) 
+            save_network(network_params, trainer_params, e_idx, '{}_best_model.pkl'.format(args.save_path))
         
         print('Saving the evaluation history')
         er = EvalRecord(train_ce_frame_sum / b_idx, valid_ce_frame, valid_fer, test_ce_frame, test_fer)
