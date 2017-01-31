@@ -2,20 +2,22 @@
 from __future__ import print_function
 
 import os
-import numpy, theano, lasagne, pickle
+import pickle
 from theano import tensor as T
-from collections import OrderedDict, namedtuple
+from collections import namedtuple
 
-from libs.deep_lstm_utils import *
-from libs.lasagne_libs.updates import momentum
+from lasagne.layers import get_all_params
+
+from libs.deep_lstm_utils import get_arg_parser, get_save_path, \
+    trainer, predictor, eval_net, save_network, save_eval_history, \
+    best_fer, show_status
+
 from libs.lasagne_libs.utils import set_model_param_value
+from libs.lasagne_libs.updates import momentum
 
-import libs.utils as utils
-from libs.utils import StopWatch, Rsync, run_and_wait_for_output_on_stderr
-import models.deep_bidir_lstm as models
+from libs.utils import StopWatch, Rsync
+from models.deep_bidir_lstm import deep_bidir_lstm_alex
 import data.wsj.fuel_utils as fuel_utils
-
-from fuel.transformers import Padding, MultiProcessing
 
 if __name__ == '__main__':
     parser = get_arg_parser()
@@ -73,7 +75,7 @@ if __name__ == '__main__':
     target_mask = T.fmatrix('target_mask')
 
     
-    network = models.deep_bidir_lstm_alex(input_var=input_data,
+    network = deep_bidir_lstm_alex(input_var=input_data,
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
                                     num_units_list=[args.num_nodes]*args.num_layers,
