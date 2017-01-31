@@ -6,6 +6,10 @@ import os
 import subprocess
 from operator import attrgetter
 
+import pickle
+
+from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
+
 def run_and_wait_for_output_on_stderr(cmd, expected_str):
     proc = subprocess.Popen(cmd, shell=True, 
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -67,3 +71,34 @@ class Rsync():
     def sync(self, src):
         cmd = "rsync -ahv {} {}".format(src, self.dst_dir)
         self.execute_and_print(cmd, shell=True)
+
+def save_network(network_params, trainer_params, epoch_cnt, save_path):
+    with open(save_path, 'wb') as f:
+        cur_network_params_val = get_model_param_values(network_params)
+        cur_trainer_params_val = get_update_params_values(trainer_params)
+        pickle.dump([cur_network_params_val, cur_trainer_params_val, epoch_cnt],
+                    f)
+
+def save_eval_history(eval_history, save_path):
+    with open(save_path, 'wb') as f:
+        pickle.dump(eval_history, f)
+
+def symlink_force(src, link_name):
+    if os.path.exists(link_name):
+        os.remove(link_name)
+    os.symlink(src, link_name)
+    
+def best_fer(eval_history):
+    acopy = list(eval_history)
+    acopy.sort(key=operator.attrgetter('valid_fer'))
+    return acopy[0].valid_fer
+
+
+def show_status(save_path, ce_frame, network_grads_norm, batch_idx, batch_size, epoch_idx):
+    model = save_path.split('/')[-1]
+    print('--')
+    print('Model Name: {} (Epoch {})'.format(model, epoch_idx))
+    print('Train CE {} (batch {}, {} examples so far): '.format(ce_frame, batch_idx, batch_idx*batch_size))
+    print('Gradient Norm: {}'.format(network_grads_norm))
+
+
