@@ -8,9 +8,9 @@ from collections import namedtuple
 
 from lasagne.layers import get_all_params
 
-from libs.deep_lstm_utils import get_arg_parser, get_save_path, \
-    trainer, predictor, eval_net, save_network, save_eval_history, \
-    best_fer, show_status
+from libs.deep_lstm_utils import get_arg_parser, get_save_path
+from libs.utils import save_network, save_eval_history, best_fer, show_status
+from libs.comp_graph_utils import trainer, predictor, eval_net
 
 from libs.lasagne_libs.utils import set_model_param_value
 from libs.lasagne_libs.updates import momentum
