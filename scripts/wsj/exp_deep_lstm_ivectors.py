@@ -16,7 +16,7 @@ from libs.lasagne_libs.utils import set_model_param_value
 from libs.lasagne_libs.updates import momentum
 
 from libs.utils import StopWatch, Rsync
-from models.deep_bidir_lstm import deep_bidir_lstm_alex
+from models.deep_bidir_lstm import build_deep_bidir_lstm_alex
 import data.wsj.fuel_utils as fuel_utils
 
 if __name__ == '__main__':
@@ -67,7 +67,6 @@ if __name__ == '__main__':
                                   ivector_dim=args.ivector_dim)
     
 
-
     print('Build and compile network')
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
@@ -75,7 +74,7 @@ if __name__ == '__main__':
     target_mask = T.fmatrix('target_mask')
 
     
-    network = deep_bidir_lstm_alex(input_var=input_data,
+    network = build_deep_bidir_lstm_alex(input_var=input_data,
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
                                     num_units_list=[args.num_nodes]*args.num_layers,
