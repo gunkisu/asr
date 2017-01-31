@@ -243,7 +243,7 @@ def deep_bidir_lstm_prj_model(input_var,
                                       nonlinearity=nonlinearities.softmax if use_softmax else None)
     return output_layer
 
-def deep_bidir_lstm_alex(input_var,
+def build_deep_bidir_lstm_alex(input_var,
                           mask_var,
                           input_dim,
                           num_units_list,
@@ -280,7 +280,7 @@ def deep_bidir_lstm_alex(input_var,
 
     return build_sequence_dense_layer(input_var, prev_input_layer, output_dim)
 
-def deep_bidir_lstm_lhuc(input_var,
+def build_deep_bidir_lstm_lhuc(input_var,
                           mask_var,
                           input_dim,
                           num_units_list,
