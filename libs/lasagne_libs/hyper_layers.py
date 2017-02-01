@@ -1698,11 +1698,9 @@ class HyperLSTMLayer(MergeLayer):
                 gates = theano.gradient.grad_clip(
                     gates, -self.grad_clipping, self.grad_clipping)
 
-            ingate = slice_w(gates, 0)
-            forgetgate = slice_w(gates, 1)
-            cell_input = slice_w(gates, 2)
-            outgate = slice_w(gates, 3)
-
+            ingate, forgetgate, cell_input, outgate = \
+                [slice_w(gates, i) for i in range(4)]
+        
             ingate = self.nonlinearity_ingate(ingate)
             forgetgate = self.nonlinearity_forgetgate(forgetgate)
             cell_input = self.nonlinearity_cell(cell_input)
