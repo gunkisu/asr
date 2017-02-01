@@ -6,7 +6,7 @@ import pickle
 from theano import tensor as T
 from collections import namedtuple
 
-from lasagne.layers import get_all_params
+from lasagne.layers import get_all_params, count_params
 
 from libs.deep_lstm_utils import get_arg_parser, get_save_path
 from libs.utils import save_network, save_eval_history, best_fer, show_status
@@ -47,19 +47,19 @@ if __name__ == '__main__':
         args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
         sw.print_elapsed()
 
-    train_ds = fuel_utils.get_datastream(path=args.data_path,
+    train_ds = get_datastream(path=args.data_path,
                                   which_set=args.train_dataset,
                                   batch_size=args.batch_size, 
                                   use_ivectors=args.use_ivectors, 
                                   truncate_ivectors=args.truncate_ivectors, 
                                   ivector_dim=args.ivector_dim)
-    valid_ds = fuel_utils.get_datastream(path=args.data_path,
+    valid_ds = get_datastream(path=args.data_path,
                                   which_set=args.valid_dataset,
                                   batch_size=args.batch_size, 
                                   use_ivectors=args.use_ivectors,
                                   truncate_ivectors=args.truncate_ivectors,
                                   ivector_dim=args.ivector_dim)
-    test_ds = fuel_utils.get_datastream(path=args.data_path,
+    test_ds = get_datastream(path=args.data_path,
                                   which_set=args.test_dataset,
                                   batch_size=args.batch_size, 
                                   use_ivectors=args.use_ivectors,
@@ -82,6 +82,9 @@ if __name__ == '__main__':
 
     network_params = get_all_params(network, trainable=True)
     
+    param_count = count_params(network, trainable=True)
+    print('Number of parameters of the network: {:.2f}M'.format(float(param_count)/1000000))
+
     EvalRecord = namedtuple('EvalRecord', ['train_ce_frame', 'valid_ce_frame', 'valid_fer', 'test_ce_frame', 'test_fer'])
 
     if args.reload_model:
