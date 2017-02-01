@@ -33,6 +33,9 @@ if __name__ == '__main__':
             print('Training continues')
             args.reload_model = reload_path
 
+    if args.use_ivectors:
+        args.input_dim = args.input_dim + args.ivector_dim
+
     print(args)
 
     sw = StopWatch()
