@@ -1432,9 +1432,9 @@ class HyperLSTMLayer(MergeLayer):
         # Equation 10
         def add_hyper_gate_params(gate, gate_name):
             # (W_hhat, W_xhat, bhat)
-            return (self.add_param(gate.W_in, (num_inputs+num_units, num_hyper_units),
+            return (self.add_param(gate.W_hid, (num_hyper_units, num_hyper_units),
                                    name="W_hhat_{}".format(gate_name)),
-                    self.add_param(gate.W_hid, (num_hyper_units, num_hyper_units),
+                    self.add_param(gate.W_in, (num_inputs+num_units, num_hyper_units),
                                    name="W_xhat_{}".format(gate_name)),
                     self.add_param(gate.b, (num_hyper_units,),
                                    name="bhat_{}".format(gate_name),
@@ -1493,7 +1493,7 @@ class HyperLSTMLayer(MergeLayer):
                                    name="W_xz_{}".format(gate_name)),
                     self.add_param(init.Constant(0.), (num_proj_units, num_units),
                                    name="W_bz_{}".format(gate_name)),
-                    self.add_param(init.Constant(0.), (num_proj_units,),
+                    self.add_param(init.Constant(0.), (num_units,),
                                    name="b_0_{}".format(gate_name),
                                    regularizable=False))
 
@@ -1504,10 +1504,11 @@ class HyperLSTMLayer(MergeLayer):
 
         def add_gate_params(gate, gate_name):
             # (W_h, W_x)
-            return (self.add_param(gate.W_in, (num_inputs, num_units),
+            return (self.add_param(gate.W_hid, (num_units, num_units),
                                    name="W_h_{}".format(gate_name)),
-                    self.add_param(gate.W_hid, (num_units, num_units),
-                                   name="W_x_{}".format(gate_name)))
+                    self.add_param(gate.W_in, (num_inputs, num_units),
+                                   name="W_x_{}".format(gate_name))
+                   )
 
         (self.W_h_ig, self.W_x_ig) = add_gate_params(ingate, 'ig')
         (self.W_h_fg, self.W_x_fg) = add_gate_params(forgetgate, 'fg')
@@ -1584,16 +1585,11 @@ class HyperLSTMLayer(MergeLayer):
         W_x_stacked = T.concatenate(
             [self.W_x_ig, self.W_x_fg, self.W_x_c, self.W_x_og], axis=1)
 
-        W_hz_stacked = T.concatenate(
-            [self.W_hz_ig, self.W_hz_fg, self.W_hz_c, self.W_hz_og], axis=1)
-        W_xz_stacked = T.concatenate(
-            [self.W_xz_ig, self.W_xz_fg, self.W_xz_c, self.W_xz_og], axis=1)
+        W_hz_list = [self.W_hz_ig, self.W_hz_fg, self.W_hz_c, self.W_hz_og]
+        W_xz_list = [self.W_xz_ig, self.W_xz_fg, self.W_xz_c, self.W_xz_og]
 
-        W_bz_stacked = T.concatenate(
-                [self.W_bz_ig, self.W_bz_fg, self.W_bz_c, self.W_bz_og], axis=1)
-        b_0_stacked = T.concatenate(
-                [self.b_0_ig, self.b_0_fg, self.b_0_c, self.b_0_og], axis=0)
-
+        W_bz_list = [self.W_bz_ig, self.W_bz_fg, self.W_bz_c, self.W_bz_og]
+        b_0_list = [self.b_0_ig, self.b_0_fg, self.b_0_c, self.b_0_og]
 
         # Equation 10
         W_hhat_stacked = T.concatenate(
@@ -1632,6 +1628,18 @@ class HyperLSTMLayer(MergeLayer):
                 s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
             return s
 
+        def hyper_slice_w(x, n):
+            s = x[:, n*self.num_hyper_units:(n+1)*self.num_hyper_units]
+            if self.num_hyper_units == 1:
+                s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
+            return s
+
+        def proj_slice(x, n):
+            s = x[:, n*self.num_proj_units:(n+1)*self.num_proj_units]
+            if self.num_proj_units == 1:
+                s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
+            return s
+
         # Create single recurrent computation step function
         # input_n is the n'th vector of the input
         # orig_input_n is the original input 
@@ -1645,11 +1653,8 @@ class HyperLSTMLayer(MergeLayer):
                 hyper_gates = theano.gradient.grad_clip(
                     hyper_gates, -self.grad_clipping, self.grad_clipping)
             
-            hyper_ig = slice_w(hyper_gates, 0)
-            hyper_fg = slice_w(hyper_gates, 1)
-            hyper_cell_input = slice_w(hyper_gates, 2)
-            hyper_og = slice_w(hyper_gates, 3)
-
+            hyper_ig, hyper_fg, hyper_cell_input, hyper_og = \
+                [hyper_slice_w(hyper_gates, i) for i in range(4)]
             hyper_ig = self.nonlinearity_ingate(hyper_ig)
             hyper_fg = self.nonlinearity_forgetgate(hyper_fg)
             hyper_cell_input = self.nonlinearity_cell(hyper_cell_input)
@@ -1665,16 +1670,29 @@ class HyperLSTMLayer(MergeLayer):
             z_b = T.dot(hyper_hid, W_hhat_b_stacked)
 
             # Equation 12
-            d_h = T.dot(z_h, W_hz_stacked)
-            d_x = T.dot(z_x, W_xz_stacked)
-            b = T.dot(z_b, W_bz_stacked) + b_0_stacked
-                
+            z_h_list = [proj_slice(z_h, i) for i in range(4)]
+            z_x_list = [proj_slice(z_x, i) for i in range(4)]
+            z_b_list = [proj_slice(z_b, i) for i in range(4)]
+
+            d_h_list = []
+            d_x_list = []
+            b_list = []
+            for z_h_slice, z_x_slice, z_b_slice, W_hz_slice, W_xz_slice, W_bz_slice, b_0_slice in \
+                    zip(z_h_list, z_x_list, z_b_list, W_hz_list, W_xz_list, W_bz_list, b_0_list):
+                d_h_list.append(T.dot(z_h_slice, W_hz_slice))
+                d_x_list.append(T.dot(z_x_slice, W_xz_slice))
+                b_list.append(T.dot(z_b_slice, W_bz_slice)+b_0_slice)
+            
+            d_h_stacked = T.concatenate(d_h_list, axis=1)
+            d_x_stacked = T.concatenate(d_x_list, axis=1)
+            b_stacked = T.concatenate(b_list, axis=1)
+            
             if not self.precompute_input:
                 input_n = T.dot(input_n, W_x_stacked)
             
-            input_n = input_n * d_x + b
+            input_n = input_n * d_x_stacked + b_stacked
             gates = T.dot(hid_previous, W_h_stacked)
-            gates = gates * d_h + input_n
+            gates = gates * d_h_stacked + input_n
        
             if self.grad_clipping:
                 gates = theano.gradient.grad_clip(
@@ -1723,15 +1741,18 @@ class HyperLSTMLayer(MergeLayer):
 
         ones = T.ones((num_batch, 1))
         # Dot against a 1s vector to repeat to shape (num_batch, num_units)
-        hyper_cell_init = T.dot(ones, self.cell_init)
-        hyper_hid_init = T.dot(ones, self.hid_init)
+        hyper_cell_init = T.dot(ones, self.hyper_cell_init)
+        hyper_hid_init = T.dot(ones, self.hyper_hid_init)
         cell_init = T.dot(ones, self.cell_init)
         hid_init = T.dot(ones, self.hid_init)
 
         non_seqs = [W_xhat_stacked, bhat_stacked, W_hhat_stacked, W_hhat_h_stacked, 
             b_hhat_h_stacked, W_hhat_x_stacked, b_hhat_x_stacked, W_hhat_b_stacked,
-            W_hz_stacked, W_xz_stacked, W_bz_stacked, b_0_stacked, 
             W_h_stacked, W_x_stacked]
+        non_seqs.extend(W_hz_list)
+        non_seqs.extend(W_xz_list)
+        non_seqs.extend(W_bz_list)
+        non_seqs.extend(b_0_list)
 
         # Scan op iterates over first dimension of input and repeatedly
         # applies the step function
