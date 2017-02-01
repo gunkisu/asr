@@ -3,9 +3,6 @@ import numpy
 from theano import tensor as T
 from lasagne import init, nonlinearities
 from lasagne.layers import Layer, MergeLayer, Gate
-from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-from lasagne.random import get_rng
-from lasagne.utils import unroll_scan
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
@@ -1391,7 +1388,6 @@ class HyperLSTMLayer(MergeLayer):
                  backwards=False,
                  gradient_steps=-1,
                  grad_clipping=0,
-                 unroll_scan=False,
                  precompute_input=True,
                  mask_input=None,
                  **kwargs):
@@ -1402,8 +1398,6 @@ class HyperLSTMLayer(MergeLayer):
         # unless a mask input was provided.
         incomings = [incoming]
         self.mask_incoming_index = -1
-        self.hid_init_incoming_index = -1
-        self.cell_init_incoming_index = -1
         if mask_input is not None:
             incomings.append(mask_input)
             self.mask_incoming_index = len(incomings)-1
@@ -1423,19 +1417,10 @@ class HyperLSTMLayer(MergeLayer):
         self.backwards = backwards
         self.gradient_steps = gradient_steps
         self.grad_clipping = grad_clipping
-        self.unroll_scan = unroll_scan
         self.precompute_input = precompute_input
-
-        if unroll_scan and gradient_steps != -1:
-            raise ValueError(
-                "Gradient steps must be -1 when unroll_scan is true.")
 
         # Retrieve the dimensionality of the incoming layer
         input_shape = self.input_shapes[0]
-
-        if unroll_scan and input_shape[1] is None:
-            raise ValueError("Input sequence length cannot be specified as "
-                             "None when unroll_scan is True")
 
         num_inputs = numpy.prod(input_shape[2:])
 
@@ -1568,6 +1553,8 @@ class HyperLSTMLayer(MergeLayer):
         input = inputs[0]
         # Retrieve the mask when it is supplied
         mask = None
+        hyper_hid_init = None
+        hyper_cell_init = None
         hid_init = None
         cell_init = None
         if self.mask_incoming_index > 0:
@@ -1708,13 +1695,15 @@ class HyperLSTMLayer(MergeLayer):
             hid = outgate*self.nonlinearity(cell)
             return [hyper_cell, hyper_hid, cell, hid]
 
-        def step_masked(orig_input_n, input_n, mask_n, hyper_cell_previous, hyper_hid_previous, cell_previous, hid_previous, *args):
-            hyper_cell, hyper_hid, cell, hid = step(orig_input_n, input_n, hyper_cell_previous, hyper_hid_previous, cell_previous, hid_previous, *args)
+        def step_masked(orig_input_n, input_n, mask_n, hyper_cell_previous, 
+                hyper_hid_previous, cell_previous, hid_previous, *args):
+            hyper_cell, hyper_hid, cell, hid = step(orig_input_n, input_n, 
+                hyper_cell_previous, hyper_hid_previous, cell_previous, hid_previous, *args)
 
             # Skip over any input with mask 0 by copying the previous
             # hidden state; proceed normally for any input with mask 1.
-            hypercell = T.switch(mask_n, hyper_cell, hyper_cell_previous)
-            hid = T.switch(mask_n, hyper_hid, hyper_hid_previous)
+            hyper_cell = T.switch(mask_n, hyper_cell, hyper_cell_previous)
+            hyper_hid = T.switch(mask_n, hyper_hid, hyper_hid_previous)
 
             cell = T.switch(mask_n, cell, cell_previous)
             hid = T.switch(mask_n, hid, hid_previous)
