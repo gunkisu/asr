@@ -1628,7 +1628,7 @@ class HyperLSTMLayer(MergeLayer):
                 s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
             return s
 
-        def hyper_slice_w(x, n):
+        def hyper_slice(x, n):
             s = x[:, n*self.num_hyper_units:(n+1)*self.num_hyper_units]
             if self.num_hyper_units == 1:
                 s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
@@ -1654,7 +1654,7 @@ class HyperLSTMLayer(MergeLayer):
                     hyper_gates, -self.grad_clipping, self.grad_clipping)
             
             hyper_ig, hyper_fg, hyper_cell_input, hyper_og = \
-                [hyper_slice_w(hyper_gates, i) for i in range(4)]
+                [hyper_slice(hyper_gates, i) for i in range(4)]
             hyper_ig = self.nonlinearity_ingate(hyper_ig)
             hyper_fg = self.nonlinearity_forgetgate(hyper_fg)
             hyper_cell_input = self.nonlinearity_cell(hyper_cell_input)

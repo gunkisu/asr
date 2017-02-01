@@ -20,7 +20,6 @@ def trainer(input_data,
                         updater,
                         learning_rate,
                         load_updater_params=None):
-    
     o = get_output(network, deterministic=False)
     num_seqs = o.shape[0]
     ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
