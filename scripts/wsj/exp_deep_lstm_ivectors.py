@@ -17,7 +17,7 @@ from libs.lasagne_libs.updates import momentum
 
 from libs.utils import StopWatch, Rsync
 from models.deep_bidir_lstm import build_deep_bidir_lstm_alex
-import data.wsj.fuel_utils as fuel_utils
+from data.wsj.fuel_utils import get_datastream
 
 if __name__ == '__main__':
     parser = get_arg_parser()
