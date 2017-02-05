@@ -90,7 +90,7 @@ def symlink_force(src, link_name):
     
 def best_fer(eval_history):
     acopy = list(eval_history)
-    acopy.sort(key=operator.attrgetter('valid_fer'))
+    acopy.sort(key=attrgetter('valid_fer'))
     return acopy[0].valid_fer
 
 
