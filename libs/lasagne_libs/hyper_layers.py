@@ -6,6 +6,508 @@ from lasagne.layers import Layer, MergeLayer, Gate
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
+class ProjectionHyperLSTMLayer(MergeLayer):
+    def __init__(self,
+                 # input
+                 input_data_layer,
+                 input_mask_layer,
+                 # model size
+                 num_factors,
+                 num_units,
+                 # gradient
+                 gradient_steps=-1,
+                 grad_clipping=0,
+                 **kwargs):
+
+        # input layers
+        incomings = [input_data_layer,
+                     input_mask_layer]
+
+        # initialize
+        super(ProjectionHyperLSTMLayer, self).__init__(incomings, **kwargs)
+
+        self.inner_out = None
+        self.scale_outer_in = None
+        self.scale_outer_hid = None
+        self.scale_outer_bias = None
+
+        # options
+        self.num_units = num_units
+        self.num_factors = num_factors
+        self.gradient_steps = gradient_steps
+        self.grad_clipping = grad_clipping
+
+        # input size
+        input_shape = self.input_shapes[0]
+        num_inputs = input_shape[-1]
+
+        ###############
+        # inner level #
+        ###############
+        def add_inner_gate_params(gate_name, bias_const=0.0):
+            return (#### input-to-hidden ####
+                    self.add_param(spec=init.Orthogonal(),
+                                   shape=(num_inputs, num_units),
+                                   name="W_in_to_inner_{}".format(gate_name)),
+
+                    #### hidden-to-hidden ####
+                    self.add_param(spec=init.Orthogonal(),
+                                   shape=(num_factors, num_units),
+                                   name="W_inner_to_inner_{}".format(gate_name)),
+
+                    #### outer-to-hidden ####
+                    self.add_param(spec=init.Orthogonal(),
+                                   shape=(num_factors, num_units),
+                                   name="W_outer_to_inner_{}".format(gate_name)),
+
+                    #### bias ####
+                    self.add_param(spec=init.Constant(bias_const),
+                                   shape=(num_units,),
+                                   name="b_inner_{}".format(gate_name),
+                                   regularizable=False))
+
+        ####ingate####
+        (self.W_in_to_inner_ingate,
+         self.W_inner_to_inner_ingate,
+         self.W_outer_to_inner_ingate,
+         self.b_inner_ingate) = add_inner_gate_params('ingate')
+
+        ####forgetgate####
+        (self.W_in_to_inner_forgetgate,
+         self.W_inner_to_inner_forgetgate,
+         self.W_outer_to_inner_forgetgate,
+         self.b_inner_forgetgate) = add_inner_gate_params('forgetgate')
+
+        ####cell####
+        (self.W_in_to_inner_cell,
+         self.W_inner_to_inner_cell,
+         self.W_outer_to_inner_cell,
+         self.b_inner_cell) = add_inner_gate_params('cell')
+
+        ####outgate####
+        (self.W_in_to_inner_outgate,
+         self.W_inner_to_inner_outgate,
+         self.W_outer_to_inner_outgate,
+         self.b_inner_outgate) = add_inner_gate_params('outgate')
+
+        ####projection####
+        self.W_inner_prj = self.add_param(spec=init.Orthogonal(),
+                                          shape=(num_units, num_factors),
+                                          name="W_inner_prj")
+
+        ####cell_ln####
+        self.W_inner_cell_ln = self.add_param(spec=init.Constant(1.0),
+                                              shape=(self.num_units,),
+                                              name="W_inner_cell_ln")
+        self.b_inner_cell_ln = self.add_param(spec=init.Constant(0.0),
+                                              shape=(self.num_units,),
+                                              name="b_inner_cell_ln",
+                                              regularizable=False)
+
+        ###############
+        # outer level #
+        ###############
+        def add_outer_gate_params(gate_name, bias_const=0.0):
+            return (#### input-to-hidden ####
+                    self.add_param(spec=init.Orthogonal(),
+                                   shape=(num_inputs, num_units),
+                                   name="W_in_to_outer_{}".format(gate_name)),
+
+                    #### hidden-to-hidden ####
+                    self.add_param(spec=init.Orthogonal(),
+                                   shape=(num_factors, num_units),
+                                   name="W_outer_to_outer_{}".format(gate_name)),
+
+                    #### scale input-to-hidden ####
+                    self.add_param(spec=init.Constant(0.),
+                                   shape=(num_factors, num_units),
+                                   name="W_inner_to_in_{}".format(gate_name)),
+                    self.add_param(spec=init.Constant(1.),
+                                   shape=(num_units,),
+                                   name="b_outer_to_in_{}".format(gate_name),
+                                   regularizable=False),
+
+                    #### scale hidden-to-hidden ####
+                    self.add_param(spec=init.Constant(0.),
+                                   shape=(num_factors, num_units),
+                                   name="W_inner_to_outer_{}".format(gate_name)),
+                    self.add_param(spec=init.Constant(1.),
+                                   shape=(num_units,),
+                                   name="b_inner_to_outer_{}".format(gate_name),
+                                   regularizable=False),
+
+                    #### question-to-bias ####
+                    self.add_param(spec=init.Orthogonal(),
+                                   shape=(num_factors, num_units),
+                                   name="W_inner_to_bias_{}".format(gate_name)),
+                    self.add_param(spec=init.Constant(bias_const),
+                                   shape=(num_units,),
+                                   name="b_inner_to_bias_{}".format(gate_name),
+                                   regularizable=False))
+
+        ####ingate####
+        (self.W_in_to_outer_ingate,
+         self.W_outer_to_outer_ingate,
+         self.W_inner_to_in_ingate,
+         self.b_inner_to_in_ingate,
+         self.W_inner_to_outer_ingate,
+         self.b_inner_to_outer_ingate,
+         self.W_inner_to_bias_ingate,
+         self.b_inner_to_bias_ingate) = add_outer_gate_params('ingate')
+
+        ####forgetgate####
+        (self.W_in_to_outer_forgetgate,
+         self.W_outer_to_outer_forgetgate,
+         self.W_inner_to_in_forgetgate,
+         self.b_inner_to_in_forgetgate,
+         self.W_inner_to_outer_forgetgate,
+         self.b_inner_to_outer_forgetgate,
+         self.W_inner_to_bias_forgetgate,
+         self.b_inner_to_bias_forgetgate) = add_outer_gate_params('forgetgate')
+
+        ####cell####
+        (self.W_in_to_outer_cell,
+         self.W_outer_to_outer_cell,
+         self.W_inner_to_in_cell,
+         self.b_inner_to_in_cell,
+         self.W_inner_to_outer_cell,
+         self.b_inner_to_outer_cell,
+         self.W_inner_to_bias_cell,
+         self.b_inner_to_bias_cell) = add_outer_gate_params('cell')
+
+        ####outgate####
+        (self.W_in_to_outer_outgate,
+         self.W_outer_to_outer_outgate,
+         self.W_inner_to_in_outgate,
+         self.b_inner_to_in_outgate,
+         self.W_inner_to_outer_outgate,
+         self.b_inner_to_outer_outgate,
+         self.W_inner_to_bias_outgate,
+         self.b_inner_to_bias_outgate) = add_outer_gate_params('outgate')
+
+        ####projection####
+        self.W_outer_prj = self.add_param(spec=init.Orthogonal(),
+                                          shape=(num_units, num_factors),
+                                          name="W_outer_prj")
+
+        ####cell_ln####
+        self.W_outer_cell_ln = self.add_param(spec=init.Constant(1.0),
+                                              shape=(self.num_units,),
+                                              name="W_outer_cell_ln")
+        self.b_outer_cell_ln = self.add_param(spec=init.Constant(0.0),
+                                              shape=(self.num_units,),
+                                              name="b_outer_cell_ln",
+                                              regularizable=False)
+
+        #### initialize ####
+        self.inner_cell_init = self.add_param(spec=init.Constant(0.0),
+                                              shape=(1, self.num_units),
+                                              name="inner_cell_init",
+                                              trainable=False,
+                                              regularizable=False)
+        self.inner_hid_init = self.add_param(spec=init.Constant(0.0),
+                                             shape=(1, self.num_factors),
+                                             name="inner_hid_init",
+                                             trainable=False,
+                                             regularizable=False)
+        self.outer_cell_init = self.add_param(spec=init.Constant(0.0),
+                                              shape=(1, self.num_units),
+                                              name="outer_cell_init",
+                                              trainable=False,
+                                              regularizable=False)
+        self.outer_hid_init = self.add_param(spec=init.Constant(0.0),
+                                             shape=(1, self.num_factors),
+                                             name="outer_hid_init",
+                                             trainable=False,
+                                             regularizable=False)
+
+    def get_output_shape_for(self, input_shapes):
+        input_shape = input_shapes[0]
+        num_outputs = self.num_factors
+
+        return input_shape[0], input_shape[1], num_outputs
+
+    def get_output_for(self, inputs, deterministic=False, **kwargs):
+        # layer inputs
+        input_data = inputs[0]
+        input_mask = inputs[1]
+
+        # get input size
+        input_data = input_data.dimshuffle(1, 0, 2)
+        input_mask = input_mask.dimshuffle(1, 0, 'x')
+        seq_len, num_batch, num_inputs = input_data.shape
+
+
+        def slice_block(x, n):
+            return x[:, 4*n*self.num_units:4*(n+1)*self.num_units]
+        def slice_unit(x, n):
+            return x[:, n*self.num_units:(n+1)*self.num_units]
+
+        ###############
+        # inner level #
+        ###############
+        W_in_to_inner_concat = T.concatenate([self.W_in_to_inner_ingate,
+                                              self.W_in_to_inner_forgetgate,
+                                              self.W_in_to_inner_cell,
+                                              self.W_in_to_inner_outgate], axis=1)
+
+        W_inner_to_inner_concat = T.concatenate([self.W_inner_to_inner_ingate,
+                                                 self.W_inner_to_inner_forgetgate,
+                                                 self.W_inner_to_inner_cell,
+                                                 self.W_inner_to_inner_outgate], axis=1)
+
+        W_outer_to_inner_concat = T.concatenate([self.W_outer_to_inner_ingate,
+                                                 self.W_outer_to_inner_forgetgate,
+                                                 self.W_outer_to_inner_cell,
+                                                 self.W_outer_to_inner_outgate], axis=1)
+
+        b_inner_concat = T.concatenate([self.b_inner_ingate,
+                                        self.b_inner_forgetgate,
+                                        self.b_inner_cell,
+                                        self.b_inner_outgate], axis=0)
+
+        ##########
+        # answer #
+        ##########
+        W_in_to_outer_concat = T.concatenate([self.W_in_to_outer_ingate,
+                                              self.W_in_to_outer_forgetgate,
+                                              self.W_in_to_outer_cell,
+                                              self.W_in_to_outer_outgate], axis=1)
+
+        W_outer_to_outer_concat = T.concatenate([self.W_outer_to_outer_ingate,
+                                                 self.W_outer_to_outer_forgetgate,
+                                                 self.W_outer_to_outer_cell,
+                                                 self.W_outer_to_outer_outgate], axis=1)
+
+        W_inner_to_outer_concat = T.concatenate([self.W_inner_to_in_ingate,
+                                                 self.W_inner_to_in_forgetgate,
+                                                 self.W_inner_to_in_cell,
+                                                 self.W_inner_to_in_outgate,
+                                                 self.W_inner_to_outer_ingate,
+                                                 self.W_inner_to_outer_forgetgate,
+                                                 self.W_inner_to_outer_cell,
+                                                 self.W_inner_to_outer_outgate,
+                                                 self.W_inner_to_bias_ingate,
+                                                 self.W_inner_to_bias_forgetgate,
+                                                 self.W_inner_to_bias_cell,
+                                                 self.W_inner_to_bias_outgate], axis=1)
+
+        b_inner_to_outer_concat = T.concatenate([self.b_inner_to_in_ingate,
+                                                 self.b_inner_to_in_forgetgate,
+                                                 self.b_inner_to_in_cell,
+                                                 self.b_inner_to_in_outgate,
+                                                 self.b_inner_to_outer_ingate,
+                                                 self.b_inner_to_outer_forgetgate,
+                                                 self.b_inner_to_outer_cell,
+                                                 self.b_inner_to_outer_outgate,
+                                                 self.b_inner_to_bias_ingate,
+                                                 self.b_inner_to_bias_forgetgate,
+                                                 self.b_inner_to_bias_cell,
+                                                 self.b_inner_to_bias_outgate], axis=1)
+
+        inner_input = T.dot(input_data, W_in_to_inner_concat) + b_inner_concat
+        outer_input = T.dot(input_data, W_in_to_outer_concat)
+
+        def step(inner_input_n,
+                 outer_input_n,
+                 inner_cell_previous,
+                 inner_hid_previous,
+                 outer_cell_previous,
+                 outer_hid_previous,
+                 *args):
+            ###############
+            # inner level #
+            ###############
+            inner_gates = inner_input_n
+            inner_gates += T.dot(inner_hid_previous, W_inner_to_inner_concat)
+            inner_gates += T.dot(outer_hid_previous, W_outer_to_inner_concat)
+
+            inner_in = slice_unit(inner_gates, 0)
+            inner_forget = slice_unit(inner_gates, 1)
+            inner_cell = slice_unit(inner_gates, 2)
+            inner_out = slice_unit(inner_gates, 3)
+
+            if self.grad_clipping:
+                inner_in = theano.gradient.grad_clip(inner_in,
+                                                     -self.grad_clipping,
+                                                     self.grad_clipping)
+                inner_forget = theano.gradient.grad_clip(inner_forget,
+                                                         -self.grad_clipping,
+                                                         self.grad_clipping)
+                inner_cell = theano.gradient.grad_clip(inner_cell,
+                                                       -self.grad_clipping,
+                                                       self.grad_clipping)
+                inner_out = theano.gradient.grad_clip(inner_out,
+                                                      -self.grad_clipping,
+                                                      self.grad_clipping)
+
+            inner_in = T.nnet.sigmoid(inner_in)
+            inner_forget = T.nnet.sigmoid(inner_forget)
+            inner_out = T.nnet.sigmoid(inner_out)
+            inner_cell = inner_forget*inner_cell_previous + inner_in*T.tanh(inner_cell)
+
+            inner_outcell = ln(inner_cell, self.W_inner_cell_ln, self.b_inner_cell_ln)
+            if self.grad_clipping:
+                inner_outcell = theano.gradient.grad_clip(inner_outcell,
+                                                          -self.grad_clipping,
+                                                          self.grad_clipping)
+
+            inner_hid = inner_out*T.tanh(inner_outcell)
+            inner_hid = T.dot(inner_hid, self.W_inner_prj)
+
+            ######### question hidden-to-answer #########
+            scale_outer = T.dot(inner_hid, W_inner_to_outer_concat) + b_inner_to_outer_concat
+            scale_outer_in = slice_block(scale_outer, 0)
+            scale_outer_hid = slice_block(scale_outer, 1)
+            scale_outer_bias = slice_block(scale_outer, 2)
+
+            ################
+            # outer level #
+            ################
+            outer_gates = outer_input_n*scale_outer_in
+            outer_gates += T.dot(outer_hid_previous, W_outer_to_outer_concat)*scale_outer_hid
+            outer_gates += scale_outer_bias
+
+            outer_in = slice_unit(outer_gates, 0)
+            outer_forget = slice_unit(outer_gates, 1)
+            outer_cell = slice_unit(outer_gates, 2)
+            outer_out = slice_unit(outer_gates, 3)
+
+            if self.grad_clipping:
+                outer_in = theano.gradient.grad_clip(outer_in,
+                                                     -self.grad_clipping,
+                                                     self.grad_clipping)
+                outer_forget = theano.gradient.grad_clip(outer_forget,
+                                                         -self.grad_clipping,
+                                                         self.grad_clipping)
+                outer_cell = theano.gradient.grad_clip(outer_cell,
+                                                       -self.grad_clipping,
+                                                       self.grad_clipping)
+                outer_out = theano.gradient.grad_clip(outer_out,
+                                                      -self.grad_clipping,
+                                                      self.grad_clipping)
+
+            outer_in = T.nnet.sigmoid(outer_in)
+            outer_forget = T.nnet.sigmoid(outer_forget)
+            outer_out = T.nnet.sigmoid(outer_out)
+            outer_cell = outer_forget*outer_hid_previous + outer_in*T.tanh(outer_cell)
+
+            outer_outcell = ln(outer_cell, self.W_outer_cell_ln, self.b_outer_cell_ln)
+            if self.grad_clipping:
+                outer_outcell = theano.gradient.grad_clip(outer_outcell,
+                                                          -self.grad_clipping,
+                                                          self.grad_clipping)
+
+            outer_hid = outer_out*T.tanh(outer_outcell)
+            outer_hid = T.dot(outer_hid, self.W_outer_prj)
+            return [inner_cell,
+                    inner_hid,
+                    outer_cell,
+                    outer_hid,
+                    scale_outer_in,
+                    scale_outer_hid,
+                    scale_outer_bias]
+
+        def step_masked(inner_input_n,
+                        outer_input_n,
+                        mask_n,
+                        inner_cell_previous,
+                        inner_hid_previous,
+                        outer_cell_previous,
+                        outer_hid_previous,
+                        *args):
+            [inner_cell,
+             inner_hid,
+             outer_cell,
+             outer_hid,
+             scale_outer_in,
+             scale_outer_hid,
+             scale_outer_bias] = step(inner_input_n,
+                                      outer_input_n,
+                                      inner_cell_previous,
+                                      inner_hid_previous,
+                                      outer_cell_previous,
+                                      outer_hid_previous,
+                                      *args)
+
+            inner_cell = T.switch(mask_n, inner_cell, inner_cell_previous)
+            inner_hid = T.switch(mask_n, inner_hid, inner_hid_previous)
+            outer_cell = T.switch(mask_n, outer_cell, outer_cell_previous)
+            outer_hid = T.switch(mask_n, outer_hid, outer_hid_previous)
+
+            scale_outer_in = T.switch(mask_n, scale_outer_in, T.zeros_like(scale_outer_in))
+            scale_outer_hid = T.switch(mask_n, scale_outer_hid, T.zeros_like(scale_outer_hid))
+            scale_outer_bias = T.switch(mask_n, scale_outer_bias, T.zeros_like(scale_outer_bias))
+
+            return [inner_cell,
+                    inner_hid,
+                    outer_cell,
+                    outer_hid,
+                    scale_outer_in,
+                    scale_outer_hid,
+                    scale_outer_bias]
+
+        sequences = [inner_input,
+                     outer_input,
+                     input_mask]
+
+        step_fun = step_masked
+
+        ones = T.ones((num_batch, 1))
+
+        inner_cell_init = T.dot(ones, self.inner_cell_init)
+        inner_hid_init = T.dot(ones, self.inner_hid_init)
+        outer_cell_init = T.dot(ones, self.outer_cell_init)
+        outer_hid_init = T.dot(ones, self.outer_hid_init)
+
+        non_seqs = []
+        ###############
+        # inner level #
+        ###############
+        non_seqs += [W_inner_to_inner_concat,
+                     W_outer_to_inner_concat,
+                     self.W_inner_prj]
+
+        ###############
+        # outer level #
+        ###############
+        non_seqs += [W_outer_to_outer_concat,
+                     W_inner_to_outer_concat,
+                     b_inner_to_outer_concat,
+                     self.W_outer_prj]
+
+        non_seqs += [self.W_inner_cell_ln,
+                     self.b_inner_cell_ln,
+                     self.W_outer_cell_ln,
+                     self.b_outer_cell_ln]
+
+        outputs = theano.scan(fn=step_fun,
+                              sequences=sequences,
+                              outputs_info=[inner_cell_init,
+                                            inner_hid_init,
+                                            outer_cell_init,
+                                            outer_hid_init,
+                                            None,
+                                            None,
+                                            None],
+                              truncate_gradient=self.gradient_steps,
+                              non_sequences=non_seqs,
+                              strict=True)[0]
+
+        self.inner_out = outputs[-6].dimshuffle(1, 0, 2)
+        outer_out = outputs[-4].dimshuffle(1, 0, 2)
+        self.scale_outer_in = outputs[-3].dimshuffle(1, 0, 2)
+        self.scale_outer_hid = outputs[-2].dimshuffle(1, 0, 2)
+        self.scale_outer_bias = outputs[-1].dimshuffle(1, 0, 2)
+
+        return outer_out
+
+    def get_inner_hid(self, **kwargs):
+        return self.inner_out
+
+    def get_scale_factors(self, **kwargs):
+        return self.scale_outer_in, self.scale_outer_hid, self.scale_outer_bias
+
 class ScalingHyperLSTMLayer(MergeLayer):
     def __init__(self,
                  inner_incoming,
