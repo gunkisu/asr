@@ -2287,3 +2287,322 @@ class HyperLSTMLayer(MergeLayer):
             hid_out = hid_out[:, ::-1]
 
         return hid_out
+
+
+class HyperLHUCLSTMLayer(MergeLayer):
+    def __init__(self, incoming, num_units, num_hyper_units,num_proj_units,
+                 ingate=Gate(W_in=init.Orthogonal()),
+                 forgetgate=Gate(W_in=init.Orthogonal()),
+                 cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
+                 outgate=Gate(W_in=init.Orthogonal()),
+                 nonlinearity=nonlinearities.tanh,
+                 cell_init=init.Constant(0.),
+                 hid_init=init.Constant(0.),
+                 backwards=False,
+                 gradient_steps=-1,
+                 grad_clipping=0,
+                 precompute_input=True,
+                 mask_input=None,
+                 **kwargs):
+
+        # This layer inherits from a MergeLayer, because it can have two
+        # inputs - the layer input and the mask, the initial hidden state and the
+        # inital cell state. We will just provide the layer input as incomings,
+        # unless a mask input was provided.
+        incomings = [incoming]
+        self.mask_incoming_index = -1
+        if mask_input is not None:
+            incomings.append(mask_input)
+            self.mask_incoming_index = len(incomings)-1
+
+        # Initialize parent layer
+        super(HyperLHUCLSTMLayer, self).__init__(incomings, **kwargs)
+
+        # If the provided nonlinearity is None, make it linear
+        if nonlinearity is None:
+            self.nonlinearity = nonlinearities.identity
+        else:
+            self.nonlinearity = nonlinearity
+
+        self.num_units = num_units
+        self.num_hyper_units = num_hyper_units
+        self.num_proj_units = num_proj_units
+        self.backwards = backwards
+        self.gradient_steps = gradient_steps
+        self.grad_clipping = grad_clipping
+        self.precompute_input = precompute_input
+
+        # Retrieve the dimensionality of the incoming layer
+        input_shape = self.input_shapes[0]
+
+        num_inputs = numpy.prod(input_shape[2:])
+
+        self.nonlinearity_ingate = ingate.nonlinearity
+        self.nonlinearity_forgetgate = forgetgate.nonlinearity
+        self.nonlinearity_cell = cell.nonlinearity
+        self.nonlinearity_outgate = outgate.nonlinearity
+
+        # Equation 10
+        def add_hyper_gate_params(gate, gate_name):
+            # (W_hhat, W_xhat, bhat)
+            return (self.add_param(gate.W_hid, (num_hyper_units, num_hyper_units),
+                                   name="W_hhat_{}".format(gate_name)),
+                    self.add_param(gate.W_in, (num_inputs+num_units, num_hyper_units),
+                                   name="W_xhat_{}".format(gate_name)),
+                    self.add_param(gate.b, (num_hyper_units,),
+                                   name="bhat_{}".format(gate_name),
+                                   regularizable=False))
+
+        # Add in parameters from the supplied Gate instances
+        (self.W_hhat_ig, self.W_xhat_ig, self.bhat_ig) = add_hyper_gate_params(ingate, 'ig')
+        (self.W_hhat_fg, self.W_xhat_fg, self.bhat_fg) = add_hyper_gate_params(forgetgate, 'fg')
+        (self.W_hhat_c, self.W_xhat_c, self.bhat_c) = add_hyper_gate_params(cell, 'c')
+        (self.W_hhat_og, self.W_xhat_og, self.bhat_og) = add_hyper_gate_params(outgate, 'og')
+
+        self.hyper_cell_init = self.add_param(
+            cell_init, (1, num_hyper_units), name="hyper_cell_init",
+            trainable=False, regularizable=False)
+
+        self.hyper_hid_init = self.add_param(
+            hid_init, (1, num_hyper_units), name="hyper_hid_init",
+            trainable=False, regularizable=False)
+
+        # Equation 11
+        self.W_hhat_h = self.add_param(init.Constant(0.), (num_hyper_units, num_proj_units),
+                        name="W_hhat_h")
+        self.b_hhat_h = self.add_param(init.Constant(1.), (num_proj_units,),
+                                   name="b_hhat_h", regularizable=False)
+   
+        # Equation 12
+        self.W_hz = self.add_param(init.Constant(1.0/num_proj_units), (num_proj_units, num_units),
+                                   name="W_hz")
+
+        def add_gate_params(gate, gate_name):
+            # (W_h, W_x)
+            return (self.add_param(gate.W_hid, (num_units, num_units),
+                                   name="W_h_{}".format(gate_name)),
+                    self.add_param(gate.W_in, (num_inputs, num_units),
+                                   name="W_x_{}".format(gate_name)),
+                    self.add_param(gate.b, (num_units,),
+                                   name="b_{}".format(gate_name),
+                                   regularizable=False)
+                   )
+
+        (self.W_h_ig, self.W_x_ig, self.b_ig) = add_gate_params(ingate, 'ig')
+        (self.W_h_fg, self.W_x_fg, self.b_fg) = add_gate_params(forgetgate, 'fg')
+        (self.W_h_c, self.W_x_c, self.b_c) = add_gate_params(cell, 'c')
+        (self.W_h_og, self.W_x_og, self.b_og) = add_gate_params(outgate, 'og')
+
+        self.cell_init = self.add_param(
+            cell_init, (1, num_units), name="cell_init",
+            trainable=False, regularizable=False)
+
+        self.hid_init = self.add_param(
+            hid_init, (1, num_units), name="hid_init",
+            trainable=False, regularizable=False)
+
+    def get_output_shape_for(self, input_shapes):
+        # The shape of the input to this layer will be the first element
+        # of input_shapes, whether or not a mask input is being used.
+        input_shape = input_shapes[0]
+        return input_shape[0], input_shape[1], self.num_units
+
+    def get_output_for(self, inputs, **kwargs):
+        """
+        Compute this layer's output function given a symbolic input variable
+        Parameters
+        ----------
+        inputs : list of theano.TensorType
+            `inputs[0]` should always be the symbolic input variable.  When
+            this layer has a mask input (i.e. was instantiated with
+            `mask_input != None`, indicating that the lengths of sequences in
+            each batch vary), `inputs` should have length 2, where `inputs[1]`
+            is the `mask`.  The `mask` should be supplied as a Theano variable
+            denoting whether each time step in each sequence in the batch is
+            part of the sequence or not.  `mask` should be a matrix of shape
+            ``(n_batch, n_time_steps)`` where ``mask[i, j] = 1`` when ``j <=
+            (length of sequence i)`` and ``mask[i, j] = 0`` when ``j > (length
+            of sequence i)``.
+        Returns
+        -------
+        layer_output : theano.TensorType
+            Symbolic output variable.
+        """
+        # Retrieve the layer input
+        input = inputs[0]
+        # Retrieve the mask when it is supplied
+        mask = None
+        hyper_hid_init = None
+        hyper_cell_init = None
+        hid_init = None
+        cell_init = None
+        if self.mask_incoming_index > 0:
+            mask = inputs[self.mask_incoming_index]
+   
+        # Treat all dimensions after the second as flattened feature dimensions
+        if input.ndim > 3:
+            input = T.flatten(input, 3)
+
+        # Because scan iterates over the first dimension we dimshuffle to
+        # (n_time_steps, n_batch, n_features)
+        input = input.dimshuffle(1, 0, 2)
+
+        
+        # input will be overwritten when precompute_input is True.
+        # But hyper network needs original input.
+        orig_input = input 
+
+        seq_len, num_batch, _ = input.shape
+
+        # Stack weight matrices into a (num_inputs, 4*num_units)
+        # matrix, which speeds up computation
+        
+        # Equation 10
+        W_hhat_stacked = T.concatenate(
+            [self.W_hhat_ig, self.W_hhat_fg, self.W_hhat_c, self.W_hhat_og], axis=1)
+        W_xhat_stacked = T.concatenate(
+            [self.W_xhat_ig, self.W_xhat_fg, self.W_xhat_c, self.W_xhat_og], axis=1)
+        bhat_stacked = T.concatenate(
+            [self.bhat_ig, self.bhat_fg, self.bhat_c, self.bhat_og], axis=0)
+
+        # Equation 12
+        W_h_stacked = T.concatenate(
+            [self.W_h_ig, self.W_h_fg, self.W_h_c, self.W_h_og], axis=1)
+        W_x_stacked = T.concatenate(
+            [self.W_x_ig, self.W_x_fg, self.W_x_c, self.W_x_og], axis=1)
+        b_stacked = T.concatenate(
+            [self.b_ig, self.b_fg, self.b_c, self.b_og], axis=0)
+
+        if self.precompute_input:
+            # Because the input is given for all time steps, we can
+            # precompute_input the inputs dot weight matrices before scanning.
+            # W_in_stacked is (n_features, 4*num_units). input is then
+            # (n_time_steps, n_batch, 4*num_units).
+
+            # Precompute W_x dot x_t in Equation 12
+            input = T.dot(input, W_x_stacked) + b_stacked
+
+        # When theano.scan calls step, input_n will be (n_batch, 4*num_units).
+        # We define a slicing function that extract the input to each LSTM gate
+        def slice_w(x, n):
+            s = x[:, n*self.num_units:(n+1)*self.num_units]
+            if self.num_units == 1:
+                s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
+            return s
+
+        def hyper_slice(x, n):
+            s = x[:, n*self.num_hyper_units:(n+1)*self.num_hyper_units]
+            if self.num_hyper_units == 1:
+                s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
+            return s
+
+        # Create single recurrent computation step function
+        # input_n is the n'th vector of the input
+        # orig_input_n is the original input 
+        def step(orig_input_n, input_n, hyper_cell_previous, hyper_hid_previous, cell_previous, hid_previous, *args):
+            # Equation 10
+            hyper_input_n = T.concatenate([hid_previous, orig_input_n], axis=1)
+
+            hyper_input_n = T.dot(hyper_input_n, W_xhat_stacked) + bhat_stacked
+            hyper_gates = hyper_input_n + T.dot(hyper_hid_previous, W_hhat_stacked)
+            if self.grad_clipping:
+                hyper_gates = theano.gradient.grad_clip(
+                    hyper_gates, -self.grad_clipping, self.grad_clipping)
+            
+            hyper_ig, hyper_fg, hyper_cell_input, hyper_og = \
+                [hyper_slice(hyper_gates, i) for i in range(4)]
+            hyper_ig = self.nonlinearity_ingate(hyper_ig)
+            hyper_fg = self.nonlinearity_forgetgate(hyper_fg)
+            hyper_cell_input = self.nonlinearity_cell(hyper_cell_input)
+
+            hyper_cell = hyper_fg * hyper_cell_previous + hyper_ig * hyper_cell_input
+            hyper_og = self.nonlinearity_outgate(hyper_og)
+
+            hyper_hid = hyper_og * self.nonlinearity(hyper_cell)
+            
+            # Equation 11
+            z_h = T.dot(hyper_hid, self.W_hhat_h) + self.b_hhat_h
+
+            # Equation 12
+            d_h = T.dot(z_h, self.W_hz)
+
+            if not self.precompute_input:
+                input_n = T.dot(input_n, W_x_stacked) + b_stacked
+            
+            gates = T.dot(hid_previous, W_h_stacked) + input_n
+       
+            if self.grad_clipping:
+                gates = theano.gradient.grad_clip(
+                    gates, -self.grad_clipping, self.grad_clipping)
+
+            ingate, forgetgate, cell_input, outgate = \
+                [slice_w(gates, i) for i in range(4)]
+        
+            ingate = self.nonlinearity_ingate(ingate)
+            forgetgate = self.nonlinearity_forgetgate(forgetgate)
+            cell_input = self.nonlinearity_cell(cell_input)
+
+            cell = forgetgate*cell_previous + ingate*cell_input
+            outgate = self.nonlinearity_outgate(outgate)
+
+            hid = outgate*self.nonlinearity(cell)
+            
+            # LHUC
+            hid = hid * (2/(1+T.exp(-d_h)))
+            return [hyper_cell, hyper_hid, cell, hid]
+
+        def step_masked(orig_input_n, input_n, mask_n, hyper_cell_previous, 
+                hyper_hid_previous, cell_previous, hid_previous, *args):
+            hyper_cell, hyper_hid, cell, hid = step(orig_input_n, input_n, 
+                hyper_cell_previous, hyper_hid_previous, cell_previous, hid_previous, *args)
+
+            # Skip over any input with mask 0 by copying the previous
+            # hidden state; proceed normally for any input with mask 1.
+            hyper_cell = T.switch(mask_n, hyper_cell, hyper_cell_previous)
+            hyper_hid = T.switch(mask_n, hyper_hid, hyper_hid_previous)
+
+            cell = T.switch(mask_n, cell, cell_previous)
+            hid = T.switch(mask_n, hid, hid_previous)
+
+            return [hyper_cell, hyper_hid, cell, hid]
+
+        if mask is not None:
+            # mask is given as (batch_size, seq_len). Because scan iterates
+            # over first dimension, we dimshuffle to (seq_len, batch_size) and
+            # add a broadcastable dimension
+            mask = mask.dimshuffle(1, 0, 'x')
+            sequences = [orig_input, input, mask]
+            step_fun = step_masked
+        else:
+            sequences = [orig_input, input]
+            step_fun = step
+
+        ones = T.ones((num_batch, 1))
+        # Dot against a 1s vector to repeat to shape (num_batch, num_units)
+        hyper_cell_init = T.dot(ones, self.hyper_cell_init)
+        hyper_hid_init = T.dot(ones, self.hyper_hid_init)
+        cell_init = T.dot(ones, self.cell_init)
+        hid_init = T.dot(ones, self.hid_init)
+
+        non_seqs = [W_xhat_stacked, W_hhat_stacked, bhat_stacked, self.W_hhat_h, 
+            self.b_hhat_h, W_h_stacked, W_x_stacked, b_stacked, self.W_hz]
+      
+        # Scan op iterates over first dimension of input and repeatedly
+        # applies the step function
+        hyper_cell_out, hyper_hid_out, cell_out, hid_out = theano.scan(
+            fn=step_fun,
+            sequences=sequences,
+            outputs_info=[hyper_cell_init, hyper_hid_init, cell_init, hid_init],
+            go_backwards=self.backwards,
+            truncate_gradient=self.gradient_steps,
+            non_sequences=non_seqs,
+            strict=True)[0]
+
+        # dimshuffle back to (n_batch, n_time_steps, n_features))
+        hid_out = hid_out.dimshuffle(1, 0, 2)
+
+        # if scan is backward reverse the output
+        if self.backwards:
+            hid_out = hid_out[:, ::-1]
+
+        return hid_out

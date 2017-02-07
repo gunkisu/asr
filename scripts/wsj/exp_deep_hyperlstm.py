@@ -83,7 +83,9 @@ if __name__ == '__main__':
                              num_proj_units=args.num_proj_nodes,
                              output_dim=args.output_dim,
                              grad_clipping=args.grad_clipping,
-                             bidir=not args.unidirectional, num_hyperlstm_layers=args.num_hyperlstm_layers)
+                             bidir=not args.unidirectional, 
+                             num_hyperlstm_layers=args.num_hyperlstm_layers,
+                             lhuc=args.lhuc)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
