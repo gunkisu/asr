@@ -13,7 +13,6 @@ from libs.lasagne_libs.utils import set_model_param_value
 
 from lasagne.layers import count_params
 from lasagne.layers import get_output, get_all_params
-from libs.comp_graph_utils import eval_net
 from libs.utils import save_network, save_eval_history, best_fer, show_status, symlink_force
 from libs.utils import StopWatch, Rsync
 from models.gating_hyper_nets import deep_projection_hyper_model
@@ -379,8 +378,8 @@ if __name__ == '__main__':
 
         print('Evaluating the network on the validation dataset')
         eval_sw = StopWatch()
-        valid_frame_loss, valid_fer = eval_net(predict_fn, valid_datastream)
-        test_frame_loss, test_fer = eval_net(predict_fn, test_datastream)
+        valid_frame_loss, valid_fer = eval_network(predict_fn, valid_datastream)
+        test_frame_loss, test_fer = eval_network(predict_fn, test_datastream)
         eval_sw.print_elapsed()
 
         print('Train CE: {}'.format(train_frame_loss_sum/batch_idx))
