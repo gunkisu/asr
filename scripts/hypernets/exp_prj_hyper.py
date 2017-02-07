@@ -368,7 +368,7 @@ if __name__ == '__main__':
             train_intra_cost = train_output[4]
 
             # show results
-            if 1:#batch_idx%args.train_disp_freq == 0:
+            if batch_idx%args.train_disp_freq == 0:
                 show_status(save_path=args.save_path,
                             ce_frame=train_frame_loss,
                             network_grads_norm=train_grads_norm,
