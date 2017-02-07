@@ -17,6 +17,7 @@ from libs.utils import save_network, save_eval_history, best_fer, show_status, s
 from libs.utils import StopWatch, Rsync
 from models.gating_hyper_nets import deep_projection_hyper_model
 from data.wsj.fuel_utils import get_datastream
+from libs.lasagne_libs.updates import momentum
 
 floatX = theano.config.floatX
 
