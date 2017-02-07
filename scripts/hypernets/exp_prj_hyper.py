@@ -89,14 +89,18 @@ def build_trainer(input_data,
     bwd_inner_feat = network_outputs[2]
     frame_prd_idx = T.argmax(output_score, axis=-1)
 
-    one_hot_target = T.zeros(shape=(output_score.shape[0]*output_score.shape[1], output_score.shape[2]), dtype=floatX)
-    one_hot_target = T.set_subtensor(one_hot_target[T.arange(one_hot_target.shape[0]), target_data.flatten()], 1)
-    one_hot_target = T.reshape(one_hot_target, newshape=output_score.shape)
+    one_hot_target = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
+                                            nb_class=output_score.shape[-1],
+                                            dtype=floatX)
 
+    output_score = T.reshape(x=output_score,
+                             newshape=(-1, output_score.shape[-1]),
+                             ndim=2)
     output_score = output_score - T.max(output_score, axis=-1, keepdims=True)
     output_score = output_score - T.log(T.sum(T.exp(output_score), axis=-1, keepdims=True))
 
-    train_ce = -T.sum(one_hot_target*output_score, axis=-1)*target_mask
+    train_ce = -T.sum(T.mul(one_hot_target, output_score), axis=-1)*T.flatten(target_mask, 1)
+
     train_loss = T.sum(train_ce)/target_mask.shape[0]
     frame_loss = T.sum(train_ce)/T.sum(target_mask)
 
@@ -149,9 +153,18 @@ def build_predictor(input_data,
     output_score = get_output(output_layer, deterministic=True)
 
     frame_prd_idx = T.argmax(output_score, axis=-1)
+
+    one_hot_target = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
+                                            nb_class=output_score.shape[-1],
+                                            dtype=floatX)
+
+    output_score = T.reshape(x=output_score,
+                             newshape=(-1, output_score.shape[-1]),
+                             ndim=2)
     output_score = output_score - T.max(output_score, axis=-1, keepdims=True)
     output_score = output_score - T.log(T.sum(T.exp(output_score), axis=-1, keepdims=True))
-    frame_loss = -T.sum(target_data*output_score, axis=-1)*target_mask
+
+    frame_loss = -T.sum(T.mul(one_hot_target, output_score), axis=-1)*T.flatten(target_mask, 1)
     frame_loss = T.sum(frame_loss)/T.sum(target_mask)
 
     return theano.function(inputs=[input_data,
