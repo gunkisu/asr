@@ -83,7 +83,7 @@ if __name__ == '__main__':
                              num_proj_units=args.num_proj_nodes,
                              output_dim=args.output_dim,
                              grad_clipping=args.grad_clipping,
-                             bidir=not args.unidirectional)
+                             bidir=not args.unidirectional, num_hyperlstm_layers=args.num_hyperlstm_layers)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
@@ -175,7 +175,7 @@ if __name__ == '__main__':
         print('Test  CE: {}, FER: {}'.format(test_ce_frame, test_fer))
        
         if valid_fer<best_fer(eval_history):
-            symlink_force('{}_last_model.pkl'.format(args.save_path), '{}_best_model.pkl'.format(args.save_path)) 
+            save_network(network_params, trainer_params, e_idx, '{}_best_model.pkl'.format(args.save_path)) 
         
         print('Saving the evaluation history')
         er = EvalRecord(train_ce_frame_sum / b_idx, valid_ce_frame, valid_fer, test_ce_frame, test_fer)
