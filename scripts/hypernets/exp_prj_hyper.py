@@ -94,7 +94,7 @@ def build_trainer(input_data,
     one_hot_target = T.reshape(one_hot_target, newshape=output_score.shape)
 
     output_score = output_score - T.max(output_score, axis=-1, keepdims=True)
-    output_score = output_score - T.log(T.sum(T.exp(output_score)*target_mask.dimshuffle(0, 1, 'x'), axis=-1, keepdims=True)+eps)
+    output_score = output_score - T.log(T.sum(T.exp(output_score), axis=-1, keepdims=True))
 
     train_ce = -T.sum(one_hot_target*output_score, axis=-1)*target_mask
     train_loss = T.sum(train_ce)/target_mask.shape[0]
@@ -150,7 +150,7 @@ def build_predictor(input_data,
 
     frame_prd_idx = T.argmax(output_score, axis=-1)
     output_score = output_score - T.max(output_score, axis=-1, keepdims=True)
-    output_score = output_score - T.log(T.sum(T.exp(output_score)*target_mask.dimshuffle(0, 1, 'x'), axis=-1, keepdims=True)+eps)
+    output_score = output_score - T.log(T.sum(T.exp(output_score), axis=-1, keepdims=True))
     frame_loss = -T.sum(target_data*output_score, axis=-1)*target_mask
     frame_loss = T.sum(frame_loss)/T.sum(target_mask)
 
