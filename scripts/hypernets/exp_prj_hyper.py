@@ -149,9 +149,9 @@ def build_predictor(input_data,
 
     frame_prd_idx = T.argmax(output_score, axis=-1)
     output_score = output_score - T.max(output_score, axis=-1, keepdims=True)
-    output_score = output_score - T.log(T.sum(T.exp(output_score)*input_mask.dimshuffle(0, 1, 'x'), axis=-1, keepdims=True))
-    frame_loss = -T.sum(target_data*output_score, axis=-1)*input_mask
-    frame_loss = T.sum(frame_loss)/T.sum(input_mask)
+    output_score = output_score - T.log(T.sum(T.exp(output_score)*target_mask.dimshuffle(0, 1, 'x'), axis=-1, keepdims=True))
+    frame_loss = -T.sum(target_data*output_score, axis=-1)*target_mask
+    frame_loss = T.sum(frame_loss)/T.sum(target_mask)
 
     return theano.function(inputs=[input_data,
                                    input_mask,
