@@ -398,7 +398,7 @@ class ProjectionHyperLSTMLayer(MergeLayer):
             outer_in = T.nnet.sigmoid(outer_in)
             outer_forget = T.nnet.sigmoid(outer_forget)
             outer_out = T.nnet.sigmoid(outer_out)
-            outer_cell = outer_forget*outer_hid_previous + outer_in*T.tanh(outer_cell)
+            outer_cell = outer_forget*outer_cell_previous + outer_in*T.tanh(outer_cell)
 
             outer_outcell = ln(outer_cell, self.W_outer_cell_ln, self.b_outer_cell_ln)
             if self.grad_clipping:
