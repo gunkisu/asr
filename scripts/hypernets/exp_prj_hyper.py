@@ -93,13 +93,13 @@ def build_trainer(input_data,
     one_hot_target = T.reshape(one_hot_target, newshape=output_score.shape)
 
     output_score = output_score - T.max(output_score, axis=-1, keepdims=True)
-    output_score = output_score - T.log(T.sum(T.exp(output_score)*input_mask.dimshuffle(0, 1, 'x'), axis=-1, keepdims=True))
+    output_score = output_score - T.log(T.sum(T.exp(output_score)*target_mask.dimshuffle(0, 1, 'x'), axis=-1, keepdims=True))
 
-    train_ce = -T.sum(one_hot_target*output_score, axis=-1)*input_mask
-    train_loss = T.sum(train_ce)/input_mask.shape[0]
-    frame_loss = T.sum(train_ce)/T.sum(input_mask)
+    train_ce = -T.sum(one_hot_target*output_score, axis=-1)*target_mask
+    train_loss = T.sum(train_ce)/target_mask.shape[0]
+    frame_loss = T.sum(train_ce)/T.sum(target_mask)
 
-    frame_accr = T.sum(T.eq(frame_prd_idx, target_data)*target_mask)/T.sum()
+    frame_accr = T.sum(T.eq(frame_prd_idx, target_data)*target_mask)/T.sum(target_mask)
 
     # mean over sequence
     fwd_seq_mean =  T.sum(fwd_inner_feat*input_mask.dimshuffle(0, 1, 'x'), axis=1)/T.sum(input_mask, axis=1, keepdims=True)
