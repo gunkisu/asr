@@ -90,11 +90,11 @@ def build_trainer(input_data,
     frame_prd_idx = T.argmax(output_score, axis=-1)
 
     one_hot_target = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
-                                            nb_class=output_score.shape[-1],
+                                            nb_class=output_dim,
                                             dtype=floatX)
 
     output_score = T.reshape(x=output_score,
-                             newshape=(-1, output_score.shape[-1]),
+                             newshape=(-1, output_dim),
                              ndim=2)
     output_score = output_score - T.max(output_score, axis=-1, keepdims=True)
     output_score = output_score - T.log(T.sum(T.exp(output_score), axis=-1, keepdims=True))
@@ -368,7 +368,7 @@ if __name__ == '__main__':
             train_intra_cost = train_output[4]
 
             # show results
-            if batch_idx%args.train_disp_freq == 0:
+            if 1:#batch_idx%args.train_disp_freq == 0:
                 show_status(save_path=args.save_path,
                             ce_frame=train_frame_loss,
                             network_grads_norm=train_grads_norm,
