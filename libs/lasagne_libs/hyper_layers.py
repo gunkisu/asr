@@ -306,7 +306,7 @@ class ProjectionHyperLSTMLayer(MergeLayer):
                                                  self.b_inner_to_bias_ingate,
                                                  self.b_inner_to_bias_forgetgate,
                                                  self.b_inner_to_bias_cell,
-                                                 self.b_inner_to_bias_outgate], axis=1)
+                                                 self.b_inner_to_bias_outgate], axis=0)
 
         inner_input = T.dot(input_data, W_in_to_inner_concat) + b_inner_concat
         outer_input = T.dot(input_data, W_in_to_outer_concat)
