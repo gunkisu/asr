@@ -46,7 +46,7 @@ def add_params(parser):
 
     parser.add_argument('--reload_model', help='model path to load')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally',
-                        default='/Tmp/songinch/data/speech')
+                        default='/Tmp/taesup/data/speech')
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -234,12 +234,11 @@ if __name__ == '__main__':
     sw = StopWatch()
 
     print('Loading data streams from {}'.format(args.data_path))
-    # if not args.no_copy:
-    #     print('Copying data to local machine...')
-    #     rsync = Rsync(args.tmpdir)
-    #     rsync.sync(args.data_path)
-    #     args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
-    #     sw.print_elapsed()
+    print('Copying data to local machine...')
+    rsync = Rsync(args.tmpdir)
+    rsync.sync(args.data_path)
+    args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
+    sw.print_elapsed()
 
     ####################
     # load data stream #
