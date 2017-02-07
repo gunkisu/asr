@@ -17,6 +17,8 @@ class ProjectionHyperLSTMLayer(MergeLayer):
                  # gradient
                  gradient_steps=-1,
                  grad_clipping=0,
+                 # directions
+                 backwards=False,
                  **kwargs):
 
         # input layers
@@ -26,7 +28,8 @@ class ProjectionHyperLSTMLayer(MergeLayer):
         # initialize
         super(ProjectionHyperLSTMLayer, self).__init__(incomings, **kwargs)
 
-        self.inner_out = None
+        self.backwards = backwards
+
         self.scale_outer_in = None
         self.scale_outer_hid = None
         self.scale_outer_bias = None
@@ -223,7 +226,7 @@ class ProjectionHyperLSTMLayer(MergeLayer):
 
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
-        num_outputs = self.num_factors
+        num_outputs = self.num_factors*2
 
         return input_shape[0], input_shape[1], num_outputs
 
@@ -492,18 +495,24 @@ class ProjectionHyperLSTMLayer(MergeLayer):
                                             None],
                               truncate_gradient=self.gradient_steps,
                               non_sequences=non_seqs,
+                              go_backwards=self.backwards,
                               strict=True)[0]
 
-        self.inner_out = outputs[-6].dimshuffle(1, 0, 2)
+        inner_out = outputs[-6].dimshuffle(1, 0, 2)
         outer_out = outputs[-4].dimshuffle(1, 0, 2)
         self.scale_outer_in = outputs[-3].dimshuffle(1, 0, 2)
         self.scale_outer_hid = outputs[-2].dimshuffle(1, 0, 2)
         self.scale_outer_bias = outputs[-1].dimshuffle(1, 0, 2)
 
-        return outer_out
+        if self.backwards:
+            inner_out = inner_out[:, ::-1]
+            outer_out = outer_out[:, ::-1]
+            self.scale_outer_in = self.scale_outer_in[:, ::-1]
+            self.scale_outer_hid = self.scale_outer_hid[:, ::-1]
+            self.scale_outer_bias = self.scale_outer_bias[:, ::-1]
 
-    def get_inner_hid(self, **kwargs):
-        return self.inner_out
+        return T.concatenate([inner_out, outer_out], axis=-1)
+
 
     def get_scale_factors(self, **kwargs):
         return self.scale_outer_in, self.scale_outer_hid, self.scale_outer_bias

@@ -1,7 +1,8 @@
 from lasagne import nonlinearities
 from libs.lasagne_libs.layers import SequenceDenseLayer
-from lasagne.layers import InputLayer, DropoutLayer, ConcatLayer, SliceLayer
-from libs.lasagne_libs.hyper_layers import ScalingHyperLSTMLayer
+from lasagne.layers import InputLayer, DenseLayer, ConcatLayer, SliceLayer
+from libs.lasagne_libs.hyper_layers import ScalingHyperLSTMLayer, ProjectionHyperLSTMLayer
+from libs.lasagne_libs.recurrent_layers import ProjectLSTMLayer
 
 def deep_scaling_hyper_model(input_var,
                              mask_var,
@@ -92,3 +93,89 @@ def deep_scaling_hyper_model(input_var,
         return inner_hid_layer_list + [output_layer,]
     else:
         return output_layer
+
+
+def deep_projection_hyper_model(input_var,
+                                mask_var,
+                                num_inputs,
+                                num_outputs,
+                                num_layers,
+                                num_factors,
+                                num_units,
+                                grad_clipping=1):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    inner_layer_list = []
+    prev_input_layer = input_layer
+    for l  in range(num_layers):
+        # for first layer
+        if l==0:
+            # forward
+            fwd_feat_layer = ProjectionHyperLSTMLayer(input_data_layer=prev_input_layer,
+                                                      input_mask_layer=mask_layer,
+                                                      num_factors=num_factors,
+                                                      num_units=num_units,
+                                                      grad_clipping=grad_clipping,
+                                                      backwards=False)
+            fwd_inner_layer = SliceLayer(incoming=fwd_feat_layer,
+                                         indices=slice(0, num_factors),
+                                         axis=-1)
+            fwd_outer_layer = SliceLayer(incoming=fwd_feat_layer,
+                                         indices=slice(num_factors, None),
+                                         axis=-1)
+
+            # backward
+            bwd_feat_layer = ProjectionHyperLSTMLayer(input_data_layer=prev_input_layer,
+                                                      input_mask_layer=mask_layer,
+                                                      num_factors=num_factors,
+                                                      num_units=num_units,
+                                                      grad_clipping=grad_clipping,
+                                                      backwards=True)
+            bwd_inner_layer = SliceLayer(incoming=bwd_feat_layer,
+                                         indices=slice(0, num_factors),
+                                         axis=-1)
+            bwd_outer_layer = SliceLayer(incoming=bwd_feat_layer,
+                                         indices=slice(num_factors, None),
+                                         axis=-1)
+
+            prev_input_layer = ConcatLayer(incomings=[fwd_outer_layer, bwd_outer_layer],
+                                           axis=-1)
+
+            inner_layer_list.append(fwd_inner_layer)
+            inner_layer_list.append(bwd_inner_layer)
+        else:
+            # forward
+            fwd_feat_layer = ProjectLSTMLayer(incoming=prev_input_layer,
+                                              mask_input=mask_layer,
+                                              num_units=num_units,
+                                              num_factors=num_factors,
+                                              grad_clipping=grad_clipping,
+                                              backwards=False)
+
+            # backward
+            bwd_feat_layer = ProjectLSTMLayer(incoming=prev_input_layer,
+                                              mask_input=mask_layer,
+                                              num_units=num_units,
+                                              num_factors=num_factors,
+                                              grad_clipping=grad_clipping,
+                                              backwards=True)
+
+            prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                           axis=-1)
+
+    ################
+    # output layer #
+    ################
+    output_layer = DenseLayer(incoming=prev_input_layer,
+                              num_units=num_outputs,
+                              nonlinearity=None)
+    return [output_layer, ] + inner_layer_list
