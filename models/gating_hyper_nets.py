@@ -175,7 +175,7 @@ def deep_projection_hyper_model(input_var,
     ################
     # output layer #
     ################
-    output_layer = DenseLayer(incoming=prev_input_layer,
-                              num_units=num_outputs,
-                              nonlinearity=None)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
     return [output_layer, ] + inner_layer_list
