@@ -6,6 +6,11 @@ from lasagne.layers import Layer, MergeLayer, Gate
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
+def ln(input, alpha, beta):
+    output = (input - T.mean(input, axis=1, keepdims=True)) / T.sqrt(T.var(input, axis=1, keepdims=True) + eps)
+    output = alpha[None, :] * output + beta[None, :]
+    return output
+
 class ProjectionHyperLSTMLayer(MergeLayer):
     def __init__(self,
                  # input
