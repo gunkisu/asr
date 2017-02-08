@@ -12,6 +12,8 @@ def add_params(parser):
     parser.add_argument('--input-dim', help='input dimension', default=123, type=int)
     parser.add_argument('--output-dim', help='output dimension', default=3436, type=int)
     parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
+    parser.add_argument('--num-hyperlstm-layers', help='number of hyperlstm layers', default=1, type=int)
+
     parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
     parser.add_argument('--train-dataset', help='dataset for training', default='train_si84')
@@ -21,6 +23,7 @@ def add_params(parser):
     parser.add_argument('--truncate-ivectors', help='truncate ivectors', action='store_true')
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
     parser.add_argument('--use-ivectors', help='whether to use ivectors', action='store_true')
+    parser.add_argument('--lhuc', help='whether to use lhuc', action='store_true')
 
     parser.add_argument('--reload-model', help='model path to load')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
