@@ -15,7 +15,7 @@ from libs.lasagne_libs.updates import momentum
 from libs.comp_graph_utils import trainer, predictor, eval_net
 from libs.utils import save_network, save_eval_history, best_fer, show_status
 from libs.utils import StopWatch, Rsync
-from models.deep_hyperlstm import build_deep_hyperlstm
+from models.deep_hyperlstm import build_deep_hyper_lstm
 
 from data.wsj.fuel_utils import get_datastream
 
@@ -74,7 +74,14 @@ if __name__ == '__main__':
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
     
-    network = build_deep_hyperlstm(input_var=input_data,
+    if args.lhuc:
+        layer_name = 'HyperLHUCLSTMLayer'
+    elif args.tied_lhuc:
+        layer_name = 'HyperTiedLHUCLSTMLayer'
+    else:
+        layer_name = 'HyperLSTMLayer'
+
+    network = build_deep_hyper_lstm(layer_name, input_var=input_data,
                              mask_var=input_mask,
                              input_dim=args.input_dim,
                              num_layers=args.num_layers,
@@ -84,8 +91,8 @@ if __name__ == '__main__':
                              output_dim=args.output_dim,
                              grad_clipping=args.grad_clipping,
                              bidir=not args.unidirectional, 
-                             num_hyperlstm_layers=args.num_hyperlstm_layers,
-                             lhuc=args.lhuc)
+                             num_hyperlstm_layers=args.num_hyperlstm_layers)
+
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
