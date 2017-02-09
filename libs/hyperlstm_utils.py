@@ -45,8 +45,14 @@ def get_save_path(args):
         fn = '{}_iv{}'.format(fn, args.ivector_dim)
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
+
+    if not args.tied_lhuc:
+        fn = '{}_hnn{}_pnn{}'.format(args.num_hyper_nodes, args.num_proj_nodes)
+  
     if args.lhuc:
         fn = '{}_lhuc'.format(fn)
+    
+    
     if args.tied_lhuc:
         fn = '{}_tied_lhuc'.format(fn)
     return fn
