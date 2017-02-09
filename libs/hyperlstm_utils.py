@@ -46,7 +46,7 @@ def get_save_path(args):
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
 
-    fn = '{}_hl{}'.format(args.num_hyperlstm_layers)
+    fn = '{}_hl{}'.format(fn, args.num_hyperlstm_layers)
 
     if not args.tied_lhuc:
         fn = '{}_hnn{}_pnn{}'.format(args.num_hyper_nodes, args.num_proj_nodes)
