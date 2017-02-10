@@ -15,7 +15,7 @@ from libs.lasagne_libs.updates import momentum
 from libs.comp_graph_utils import trainer, predictor, eval_net
 from libs.utils import save_network, save_eval_history, best_fer, show_status
 from libs.utils import StopWatch, Rsync
-from models.deep_hyperlstm import build_deep_hyperlstm
+from models.deep_hyperlstm import build_deep_hyper_lstm
 
 from data.wsj.fuel_utils import get_datastream
 
@@ -74,7 +74,14 @@ if __name__ == '__main__':
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
     
-    network = build_deep_hyperlstm(input_var=input_data,
+    if args.lhuc:
+        layer_name = 'HyperLHUCLSTMLayer'
+    elif args.tied_lhuc:
+        layer_name = 'HyperTiedLHUCLSTMLayer'
+    else:
+        layer_name = 'HyperLSTMLayer'
+
+    network = build_deep_hyper_lstm(layer_name, input_var=input_data,
                              mask_var=input_mask,
                              input_dim=args.input_dim,
                              num_layers=args.num_layers,
@@ -84,8 +91,8 @@ if __name__ == '__main__':
                              output_dim=args.output_dim,
                              grad_clipping=args.grad_clipping,
                              bidir=not args.unidirectional, 
-                             num_hyperlstm_layers=args.num_hyperlstm_layers,
-                             lhuc=args.lhuc)
+                             num_hyperlstm_layers=args.num_hyperlstm_layers)
+
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
@@ -147,16 +154,15 @@ if __name__ == '__main__':
         status_sw = StopWatch()
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
             input_data, input_mask, target_data, target_mask = data
-            train_output = training_fn(input_data,
+            ce_frame, network_grads_norm = training_fn(input_data,
                                        input_mask,
                                        target_data,
                                        target_mask)
-            ce_frame = train_output[0]
-            network_grads_norm = train_output[1]
 
             if b_idx%args.train_disp_freq == 0: 
                 show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size, e_idx)
                 status_sw.print_elapsed(); status_sw.reset()
+            
             train_ce_frame_sum += ce_frame
 
         print('End of Epoch {}'.format(e_idx))

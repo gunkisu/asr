@@ -24,6 +24,7 @@ def add_params(parser):
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
     parser.add_argument('--use-ivectors', help='whether to use ivectors', action='store_true')
     parser.add_argument('--lhuc', help='whether to use lhuc', action='store_true')
+    parser.add_argument('--tied-lhuc', help='whether to use tied lhuc', action='store_true')
 
     parser.add_argument('--reload-model', help='model path to load')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
@@ -44,5 +45,17 @@ def get_save_path(args):
         fn = '{}_iv{}'.format(fn, args.ivector_dim)
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
+
+    fn = '{}_hl{}'.format(fn, args.num_hyperlstm_layers)
+
+    if not args.tied_lhuc:
+        fn = '{}_hnn{}_pnn{}'.format(fn, args.num_hyper_nodes, args.num_proj_nodes)
+  
+    if args.lhuc:
+        fn = '{}_lhuc'.format(fn)
+    
+    
+    if args.tied_lhuc:
+        fn = '{}_tied_lhuc'.format(fn)
     return fn
 
