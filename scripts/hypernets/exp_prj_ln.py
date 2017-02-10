@@ -15,7 +15,7 @@ from lasagne.layers import count_params
 from lasagne.layers import get_output, get_all_params
 from libs.utils import save_network, save_eval_history, best_fer, show_status, symlink_force
 from libs.utils import StopWatch, Rsync
-from models.gating_hyper_nets import deep_projection_cond_ln_model
+from models.gating_hyper_nets import deep_projection_lstm_model
 from data.wsj.fuel_utils import get_datastream
 from libs.lasagne_libs.updates import momentum
 
@@ -32,8 +32,6 @@ def add_params(parser):
     parser.add_argument('--num_factors', default=256, help='number of factors', type=int)
     parser.add_argument('--learn_rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad_clipping', default=1.0, help='gradient clipping', type=float)
-    parser.add_argument('--inter_weight', default=0.0, help='inter weight', type=float)
-    parser.add_argument('--intra_weight', default=0.0, help='intra weight', type=float)
     parser.add_argument('--data_path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--save_path', help='save path', default='./')
     parser.add_argument('--num_epochs', help='number of epochs', default=50, type=int)
@@ -55,14 +53,12 @@ def get_arg_parser():
 
 def get_save_path(args):
     path = args.save_path
-    path += '/wsj_prj_cond_ln'
+    path += '/wsj_prj_ln'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
     path += '_nl{}'.format(args.num_layers)
     path += '_nf{}'.format(args.num_factors)
     path += '_nu{}'.format(args.num_units)
-    path += '_w{}'.format(args.inter_weight)
-    path += '_w{}'.format(args.intra_weight)
     path += '_nb{}'.format(args.batch_size)
 
     return path
@@ -73,20 +69,10 @@ def build_trainer(input_data,
                   target_mask,
                   network_params,
                   output_layer,
-                  fwd_inner_layer,
-                  bwd_inner_layer,
                   updater,
-                  inter_weight,
-                  intra_weight,
                   learning_rate,
                   load_updater_params=None):
-
-    network_outputs = get_output([output_layer,
-                                  fwd_inner_layer,
-                                  bwd_inner_layer], deterministic=False)
-    output_score = network_outputs[0]
-    fwd_inner_feat = network_outputs[1]
-    bwd_inner_feat = network_outputs[2]
+    output_score = get_output(output_layer, deterministic=False)
     frame_prd_idx = T.argmax(output_score, axis=-1)
 
     one_hot_target = T.extra_ops.to_one_hot(y=T.flatten(target_data, 1),
@@ -106,23 +92,7 @@ def build_trainer(input_data,
 
     frame_accr = T.sum(T.eq(frame_prd_idx, target_data)*target_mask)/T.sum(target_mask)
 
-    # mean over sequence
-    fwd_seq_mean =  T.sum(fwd_inner_feat*input_mask.dimshuffle(0, 1, 'x'), axis=1)/T.sum(input_mask, axis=1, keepdims=True)
-    bwd_seq_mean =  T.sum(bwd_inner_feat*input_mask.dimshuffle(0, 1, 'x'), axis=1)/T.sum(input_mask, axis=1, keepdims=True)
-
-    # variance over sequence (matrix)
-    fwd_seq_var = T.sum(T.sqr(fwd_inner_feat - fwd_seq_mean.dimshuffle(0, 'x', 1)), axis=1)/T.sum(input_mask, axis=1, keepdims=True)
-    bwd_seq_var = T.sum(T.sqr(bwd_inner_feat - bwd_seq_mean.dimshuffle(0, 'x', 1)), axis=1)/T.sum(input_mask, axis=1, keepdims=True)
-
-    # variance over sample (vector)
-    fwd_sample_var = T.var(fwd_seq_mean, axis=0)
-    bwd_sample_var = T.var(bwd_seq_mean, axis=0)
-
-    # cost (increase inter var, decrease intra var)
-    train_inter_cost = -0.5*T.mean(fwd_sample_var) - 0.5*T.mean(bwd_sample_var)
-    train_intra_cost = 0.5*T.mean(fwd_seq_var) + 0.5*T.mean(bwd_seq_var)
-
-    train_total_loss = train_loss  + inter_weight*train_inter_cost + intra_weight*train_intra_cost
+    train_total_loss = train_loss
 
     network_grads = theano.grad(cost=train_total_loss, wrt=network_params)
     network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
@@ -139,9 +109,7 @@ def build_trainer(input_data,
                                           target_mask],
                                   outputs=[frame_loss,
                                            frame_accr,
-                                           network_grads_norm,
-                                           train_inter_cost,
-                                           train_intra_cost],
+                                           network_grads_norm],
                                   updates=train_updates)
     return training_fn, updater_params
 
@@ -261,19 +229,16 @@ if __name__ == '__main__':
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-    network_outputs = deep_projection_cond_ln_model(input_var=input_data,
-                                                    mask_var=input_mask,
-                                                    num_inputs=input_dim,
-                                                    num_outputs=output_dim,
-                                                    num_layers=args.num_layers,
-                                                    num_factors=args.num_factors,
-                                                    num_units=args.num_units,
-                                                    grad_clipping=args.grad_clipping)
+    network_output = deep_projection_lstm_model(input_var=input_data,
+                                                mask_var=input_mask,
+                                                num_inputs=input_dim,
+                                                num_outputs=output_dim,
+                                                num_layers=args.num_layers,
+                                                num_factors=args.num_factors,
+                                                num_units=args.num_units,
+                                                grad_clipping=args.grad_clipping)
 
-    network = network_outputs[0]
-    fwd_inner_layer = network_outputs[1]
-    bwd_inner_layer = network_outputs[2]
-
+    network = network_output
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
     print('Number of parameters of the network: {:.2f}M'.format(float(param_count)/1000000))
@@ -312,12 +277,8 @@ if __name__ == '__main__':
                                      target_mask=target_mask,
                                      network_params=network_params,
                                      output_layer=network,
-                                     fwd_inner_layer=fwd_inner_layer,
-                                     bwd_inner_layer=bwd_inner_layer,
                                      updater=eval(args.updater),
                                      learning_rate=args.learn_rate,
-                                     inter_weight=args.inter_weight,
-                                     intra_weight=args.intra_weight,
                                      load_updater_params=pretrain_update_params_val)
     sw.print_elapsed()
 
@@ -363,8 +324,6 @@ if __name__ == '__main__':
             train_frame_loss = train_output[0]
             train_frame_accr = train_output[1]
             train_grads_norm = train_output[2]
-            train_inter_cost = train_output[3]
-            train_intra_cost = train_output[4]
 
             # show results
             if batch_idx%args.train_disp_freq == 0:
@@ -375,8 +334,6 @@ if __name__ == '__main__':
                             batch_size=args.batch_size,
                             epoch_idx=e_idx)
                 print('Frame Accr: {}'.format(train_frame_accr))
-                print('Inter Cost: {}'.format(train_inter_cost))
-                print('Intra Cost: {}'.format(train_intra_cost))
                 status_sw.print_elapsed()
                 status_sw.reset()
             train_frame_loss_sum += train_frame_loss
