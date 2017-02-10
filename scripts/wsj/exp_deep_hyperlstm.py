@@ -154,16 +154,15 @@ if __name__ == '__main__':
         status_sw = StopWatch()
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
             input_data, input_mask, target_data, target_mask = data
-            train_output = training_fn(input_data,
+            ce_frame, network_grads_norm = training_fn(input_data,
                                        input_mask,
                                        target_data,
                                        target_mask)
-            ce_frame = train_output[0]
-            network_grads_norm = train_output[1]
 
             if b_idx%args.train_disp_freq == 0: 
                 show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size, e_idx)
                 status_sw.print_elapsed(); status_sw.reset()
+            
             train_ce_frame_sum += ce_frame
 
         print('End of Epoch {}'.format(e_idx))

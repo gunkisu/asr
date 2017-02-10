@@ -49,7 +49,7 @@ def get_save_path(args):
     fn = '{}_hl{}'.format(fn, args.num_hyperlstm_layers)
 
     if not args.tied_lhuc:
-        fn = '{}_hnn{}_pnn{}'.format(args.num_hyper_nodes, args.num_proj_nodes)
+        fn = '{}_hnn{}_pnn{}'.format(fn, args.num_hyper_nodes, args.num_proj_nodes)
   
     if args.lhuc:
         fn = '{}_lhuc'.format(fn)
