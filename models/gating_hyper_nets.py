@@ -1,8 +1,9 @@
-from lasagne import nonlinearities
+from theano import tensor as T
+from lasagne import nonlinearities, init
 from libs.lasagne_libs.layers import SequenceDenseLayer
-from lasagne.layers import InputLayer, DenseLayer, ConcatLayer, SliceLayer
+from lasagne.layers import InputLayer, DenseLayer, ConcatLayer, SliceLayer, GlobalPoolLayer
 from libs.lasagne_libs.hyper_layers import ScalingHyperLSTMLayer, ProjectionHyperLSTMLayer
-from libs.lasagne_libs.recurrent_layers import ProjectLSTMLayer
+from libs.lasagne_libs.recurrent_layers import ProjectLSTMLayer, CondLayerNormProjectLSTMLayer
 
 def deep_scaling_hyper_model(input_var,
                              mask_var,
@@ -215,6 +216,53 @@ def deep_projection_lstm_model(input_var,
                                           num_factors=num_factors,
                                           grad_clipping=grad_clipping,
                                           backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer
+
+def deep_projection_cond_ln_model(input_var,
+                                  mask_var,
+                                  num_inputs,
+                                  num_outputs,
+                                  num_layers,
+                                  num_factors,
+                                  num_units,
+                                  grad_clipping=1):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    prev_input_layer = input_layer
+    for l  in range(num_layers):
+        fwd_feat_layer = CondLayerNormProjectLSTMLayer(incoming=prev_input_layer,
+                                                       mask_input=mask_layer,
+                                                       num_units=num_units,
+                                                       num_factors=num_factors,
+                                                       grad_clipping=grad_clipping,
+                                                       backwards=False)
+
+        # backward
+        bwd_feat_layer = CondLayerNormProjectLSTMLayer(incoming=prev_input_layer,
+                                                       mask_input=mask_layer,
+                                                       num_units=num_units,
+                                                       num_factors=num_factors,
+                                                       grad_clipping=grad_clipping,
+                                                       backwards=True)
 
         prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
                                        axis=-1)
