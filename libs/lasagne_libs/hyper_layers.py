@@ -2226,7 +2226,7 @@ class HyperLSTMLayer(MergeLayer):
         return hid_out
 
 class HyperLHUCLSTMLayer(HyperLSTMLayer):
-    def init_weights():
+    def init_weights(self):
         (self.W_hhat_ig, self.W_xhat_ig, self.bhat_ig) = self.add_hyper_gate_params(self.ingate, 'ig')
         (self.W_hhat_fg, self.W_xhat_fg, self.bhat_fg) = self.add_hyper_gate_params(self.forgetgate, 'fg')
         (self.W_hhat_c, self.W_xhat_c, self.bhat_c) = self.add_hyper_gate_params(self.cell, 'c')
@@ -2372,7 +2372,7 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
 
 class HyperTiedLHUCLSTMLayer(HyperLSTMLayer):
 
-    def init_weights():
+    def init_weights(self):
         self.init_main_lstm_weights()
 
         self.W_e_h = self.add_param(init.Constant(.0), (self.num_inputs, self.num_units),
