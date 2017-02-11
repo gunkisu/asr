@@ -2370,7 +2370,7 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
 
         return hid_out
 
-class HyperTiedLHUCLSTMLayer(MergeLayer):
+class HyperTiedLHUCLSTMLayer(HyperLSTMLayer):
 
     def init_weights():
         self.init_main_lstm_weights()
@@ -2395,7 +2395,7 @@ class HyperTiedLHUCLSTMLayer(MergeLayer):
                  mask_input=None,
                  **kwargs):
 
-        super(HyperLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
+        super(HyperTiedLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
                  gradient_steps, grad_clipping, precompute_input, mask_input, **kwargs)
 
