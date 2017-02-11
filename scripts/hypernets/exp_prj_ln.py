@@ -15,7 +15,7 @@ from lasagne.layers import count_params
 from lasagne.layers import get_output, get_all_params
 from libs.utils import save_network, save_eval_history, best_fer, show_status, symlink_force
 from libs.utils import StopWatch, Rsync
-from models.gating_hyper_nets import deep_projection_lstm_model
+from models.gating_hyper_nets import deep_projection_cond_ln_model
 from data.wsj.fuel_utils import get_datastream
 from libs.lasagne_libs.updates import momentum
 
@@ -229,14 +229,14 @@ if __name__ == '__main__':
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-    network_output = deep_projection_lstm_model(input_var=input_data,
-                                                mask_var=input_mask,
-                                                num_inputs=input_dim,
-                                                num_outputs=output_dim,
-                                                num_layers=args.num_layers,
-                                                num_factors=args.num_factors,
-                                                num_units=args.num_units,
-                                                grad_clipping=args.grad_clipping)
+    network_output = deep_projection_cond_ln_model(input_var=input_data,
+                                                   mask_var=input_mask,
+                                                   num_inputs=input_dim,
+                                                   num_outputs=output_dim,
+                                                   num_layers=args.num_layers,
+                                                   num_factors=args.num_factors,
+                                                   num_units=args.num_units,
+                                                   grad_clipping=args.grad_clipping)
 
     network = network_output
     network_params = get_all_params(network, trainable=True)
