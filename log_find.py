@@ -22,4 +22,5 @@ for jf in jobid_files:
             log_dir = os.path.dirname(jf)
             log_file = glob.glob('{}/logs/*.{}'.format(log_dir, args.ext))[0]
             print(log_file)
+            break
 
