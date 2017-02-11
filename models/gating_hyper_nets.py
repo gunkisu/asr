@@ -249,20 +249,38 @@ def deep_projection_cond_ln_model(input_var,
     #####################
     prev_input_layer = input_layer
     for l  in range(num_layers):
-        fwd_feat_layer = CondLayerNormProjectLSTMLayer(incoming=prev_input_layer,
-                                                       mask_input=mask_layer,
-                                                       num_units=num_units,
-                                                       num_factors=num_factors,
-                                                       grad_clipping=grad_clipping,
-                                                       backwards=False)
+        if l==0:
+            # forward
+            fwd_feat_layer = CondLayerNormProjectLSTMLayer(incoming=prev_input_layer,
+                                                           mask_input=mask_layer,
+                                                           num_units=num_units,
+                                                           num_factors=num_factors,
+                                                           grad_clipping=grad_clipping,
+                                                           backwards=False)
 
-        # backward
-        bwd_feat_layer = CondLayerNormProjectLSTMLayer(incoming=prev_input_layer,
-                                                       mask_input=mask_layer,
-                                                       num_units=num_units,
-                                                       num_factors=num_factors,
-                                                       grad_clipping=grad_clipping,
-                                                       backwards=True)
+            # backward
+            bwd_feat_layer = CondLayerNormProjectLSTMLayer(incoming=prev_input_layer,
+                                                           mask_input=mask_layer,
+                                                           num_units=num_units,
+                                                           num_factors=num_factors,
+                                                           grad_clipping=grad_clipping,
+                                                           backwards=True)
+        else:
+            # forward
+            fwd_feat_layer = ProjectLSTMLayer(incoming=prev_input_layer,
+                                              mask_input=mask_layer,
+                                              num_units=num_units,
+                                              num_factors=num_factors,
+                                              grad_clipping=grad_clipping,
+                                              backwards=False)
+
+            # backward
+            bwd_feat_layer = ProjectLSTMLayer(incoming=prev_input_layer,
+                                              mask_input=mask_layer,
+                                              num_units=num_units,
+                                              num_factors=num_factors,
+                                              grad_clipping=grad_clipping,
+                                              backwards=True)
 
         prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
                                        axis=-1)
