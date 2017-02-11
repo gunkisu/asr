@@ -6,6 +6,10 @@ import os
 import subprocess
 from operator import attrgetter
 
+import argparse
+import glob
+import sys
+
 import pickle
 
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
@@ -102,3 +106,19 @@ def show_status(save_path, ce_frame, network_grads_norm, batch_idx, batch_size, 
     print('Gradient Norm: {}'.format(network_grads_norm))
 
 
+def log_find(jobid, ext, log_dir='SMART_DISPATCH_LOGS'):
+    '''Find the log file of a job launched by smart-dispatch 
+    based on the job id and log file extension.
+    It can be used together with other linux commands such as tail and grep
+    to monitor your jobs'''
+
+    jobid_files = glob.glob('{}/*/jobs_id.txt'.format(log_dir))
+
+    for jf in jobid_files:
+        with open(jf) as f:
+            content = f.read()
+            if jobid in content:
+                log_file = glob.glob('{}/logs/*.{}'.format(os.path.dirname(jf), ext))[0]
+                return log_file
+
+    return ''

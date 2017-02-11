@@ -3,24 +3,15 @@
 based on the job id and log file extension.
 It can be used together with other linux commands such as tail and grep
 to monitor your jobs'''
+
+from __future__ import print_function
+
+from libs.utils import log_find
 import argparse
-import os
-import glob
-import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument('jobid')
 parser.add_argument('ext')
 args = parser.parse_args()
 
-jobid_files = glob.glob('SMART*/*/jobs_id.txt')
-
-for jf in jobid_files:
-    with open(jf) as f:
-        content = f.read()
-        if args.jobid in content:
-            log_dir = os.path.dirname(jf)
-            log_file = glob.glob('{}/logs/*.{}'.format(log_dir, args.ext))[0]
-            print(log_file)
-            break
-
+print(log_find(args.jobid, args.ext))
