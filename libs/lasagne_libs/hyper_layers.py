@@ -2370,7 +2370,7 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
 
         return hid_out
 
-class HyperTiedLHUCLSTMLayer(MergeLayer):
+class HyperTiedLHUCLSTMLayer(HyperLSTMLayer):
 
     def init_weights():
         self.init_main_lstm_weights()
