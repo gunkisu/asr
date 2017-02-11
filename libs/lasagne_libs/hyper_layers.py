@@ -2226,6 +2226,28 @@ class HyperLSTMLayer(MergeLayer):
         return hid_out
 
 class HyperLHUCLSTMLayer(HyperLSTMLayer):
+    def add_gate_params(self, gate, gate_name):
+        # (W_h, W_x, b)
+        return (self.add_param(gate.W_hid, (self.num_units, self.num_units),
+                               name="W_h_{}".format(gate_name)),
+                self.add_param(gate.W_in, (self.num_inputs, self.num_units),
+                               name="W_x_{}".format(gate_name)),
+                self.add_param(gate.b, (self.num_units,),
+                               name="b_{}".format(gate_name),
+                               regularizable=False))
+
+    def init_main_lstm_weights(self):
+        (self.W_h_ig, self.W_x_ig, self.b_ig) = self.add_gate_params(self.ingate, 'ig')
+        (self.W_h_fg, self.W_x_fg, self.b_fg) = self.add_gate_params(self.forgetgate, 'fg')
+        (self.W_h_c, self.W_x_c, self.b_c) = self.add_gate_params(self.cell, 'c')
+        (self.W_h_og, self.W_x_og, self.b_og) = self.add_gate_params(self.outgate, 'og')
+
+        self.cell_init = self.add_param(self.cell_init, (1, self.num_units), name="cell_init",
+            trainable=False, regularizable=False)
+
+        self.hid_init = self.add_param(self.hid_init, (1, self.num_units), name="hid_init",
+            trainable=False, regularizable=False)
+
     def init_weights(self):
         (self.W_hhat_ig, self.W_xhat_ig, self.bhat_ig) = self.add_hyper_gate_params(self.ingate, 'ig')
         (self.W_hhat_fg, self.W_xhat_fg, self.bhat_fg) = self.add_hyper_gate_params(self.forgetgate, 'fg')
@@ -2370,15 +2392,16 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
 
         return hid_out
 
-class HyperTiedLHUCLSTMLayer(HyperLSTMLayer):
+class HyperTiedLHUCLSTMLayer(HyperLHUCLSTMLayer):
 
     def init_weights(self):
-        self.init_main_lstm_weights()
 
         self.W_e_h = self.add_param(init.Constant(.0), (self.num_inputs, self.num_units),
                             name="W_e_h")
         self.b_e_h = self.add_param(init.Constant(.0), (self.num_units,),
                             name="b_e_h", regularizable=False)
+
+        self.init_main_lstm_weights()
 
     def __init__(self, incoming, num_units, num_hyper_units,num_proj_units,
                  ingate=Gate(W_in=init.Orthogonal()),
@@ -2399,7 +2422,15 @@ class HyperTiedLHUCLSTMLayer(HyperLSTMLayer):
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
                  gradient_steps, grad_clipping, precompute_input, mask_input, **kwargs)
 
-    def step(input_n, cell_previous, hid_previous, *args):
+    def step_masked(self, input_n, mask_n, cell_previous, hid_previous, *args):
+        cell, hid = self.step(input_n, cell_previous, hid_previous, *args)
+
+        cell = T.switch(mask_n, cell, cell_previous)
+        hid = T.switch(mask_n, hid, hid_previous)
+
+        return [cell, hid]
+
+    def step(self, input_n, cell_previous, hid_previous, *args):
 
         if not self.precompute_input:
             input_n = T.dot(input_n, self.W_x_stacked) + self.b_stacked
