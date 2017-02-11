@@ -24,7 +24,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
     parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
-    parser.add_argument('--train-dataset', help='dataset for training', default='train_si84')
+    parser.add_argument('--train-dataset', help='dataset for training', default='train_si284')
     parser.add_argument('--host', help='fuel server hostname', default='eos3')
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
