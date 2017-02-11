@@ -53,7 +53,7 @@ def get_arg_parser():
 
 def get_save_path(args):
     path = args.save_path
-    path += '/wsj_prj_ln'
+    path += '/wsj_prj_ln_first'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
     path += '_nl{}'.format(args.num_layers)
