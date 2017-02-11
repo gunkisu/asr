@@ -1,16 +1,16 @@
 #!/usr/bin/env python
-'''Find the log file of a job produced by smart-dispatch 
-based on the job id and file extension.
-Can be used together with other linux commands such as tail and grep
-to monitor the progress of training.'''
+'''Find the log file of a job launched by smart-dispatch 
+based on the job id and log file extension.
+It can be used together with other linux commands such as tail and grep
+to monitor your jobs'''
+import argparse
 import os
 import glob
-import argparse
+import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument('jobid')
 parser.add_argument('ext')
-
 args = parser.parse_args()
 
 jobid_files = glob.glob('SMART*/*/jobs_id.txt')
@@ -20,11 +20,6 @@ for jf in jobid_files:
         content = f.read()
         if args.jobid in content:
             log_dir = os.path.dirname(jf)
-            out_file = glob.glob('{}/logs/*.{}'.format(log_dir, args.ext))[0]
-            print(out_file)
-            
-
-            
-
-
+            log_file = glob.glob('{}/logs/*.{}'.format(log_dir, args.ext))[0]
+            print(log_file)
 
