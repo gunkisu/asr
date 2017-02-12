@@ -2515,3 +2515,111 @@ class HyperTiedLHUCLSTMLayer(HyperLHUCLSTMLayer):
             hid_out = hid_out[:, ::-1]
 
         return hid_out
+
+
+class HyperTiedLHUCOutLSTMLayer(HyperTiedLHUCLSTMLayer):
+    def __init__(self, incoming, num_units, num_hyper_units,num_proj_units,
+                 ingate=Gate(W_in=init.Orthogonal()),
+                 forgetgate=Gate(W_in=init.Orthogonal()),
+                 cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
+                 outgate=Gate(W_in=init.Orthogonal()),
+                 nonlinearity=nonlinearities.tanh,
+                 cell_init=init.Constant(0.),
+                 hid_init=init.Constant(0.),
+                 backwards=False,
+                 gradient_steps=-1,
+                 grad_clipping=0,
+                 precompute_input=True,
+                 mask_input=None,
+                 **kwargs):
+
+        super(HyperTiedLHUCOutLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
+                 ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
+                 gradient_steps, grad_clipping, precompute_input, mask_input, **kwargs)
+
+    def step(self, input_n, cell_previous, hid_previous, *args):
+
+        if not self.precompute_input:
+            input_n = T.dot(input_n, self.W_x_stacked) + self.b_stacked
+        
+        gates = T.dot(hid_previous, self.W_h_stacked) + input_n
+   
+        if self.grad_clipping:
+            gates = theano.gradient.grad_clip(
+                gates, -self.grad_clipping, self.grad_clipping)
+
+        ingate, forgetgate, cell_input, outgate = \
+            [self.slice_w(gates, i) for i in range(4)]
+    
+        ingate = self.nonlinearity_ingate(ingate)
+        forgetgate = self.nonlinearity_forgetgate(forgetgate)
+        cell_input = self.nonlinearity_cell(cell_input)
+
+        cell = forgetgate*cell_previous + ingate*cell_input
+        outgate = self.nonlinearity_outgate(outgate)
+
+        hid = outgate*self.nonlinearity(cell)
+       
+        return [cell, hid]
+
+    def get_output_for(self, inputs, **kwargs):
+        input = inputs[0]
+        mask = None
+        hyper_hid_init = None
+        hyper_cell_init = None
+        hid_init = None
+        cell_init = None
+        if self.mask_incoming_index > 0:
+            mask = inputs[self.mask_incoming_index]
+   
+        if input.ndim > 3:
+            input = T.flatten(input, 3)
+
+        input = input.dimshuffle(1, 0, 2)
+        
+        seq_len, num_batch, _ = input.shape
+
+        prev_embedding = T.mean(input, axis=0)
+        self.d_h = T.dot(prev_embedding, self.W_e_h) + self.b_e_h
+       
+        # Equation 12
+        self.W_h_stacked = T.concatenate([self.W_h_ig, self.W_h_fg, self.W_h_c, self.W_h_og], axis=1)
+        self.W_x_stacked = T.concatenate([self.W_x_ig, self.W_x_fg, self.W_x_c, self.W_x_og], axis=1)
+        self.b_stacked = T.concatenate([self.b_ig, self.b_fg, self.b_c, self.b_og], axis=0)
+
+        if self.precompute_input:
+            input = T.dot(input, self.W_x_stacked) + self.b_stacked
+
+        if mask is not None:
+            mask = mask.dimshuffle(1, 0, 'x')
+            sequences = [input, mask]
+            step_fun = self.step_masked
+        else:
+            sequences = [input]
+            step_fun = self.step
+
+        ones = T.ones((num_batch, 1))
+        cell_init = T.dot(ones, self.cell_init)
+        hid_init = T.dot(ones, self.hid_init)
+        
+        non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked]
+      
+        cell_out, hid_out = theano.scan(
+            fn=step_fun,
+            sequences=sequences,
+            outputs_info=[cell_init, hid_init],
+            go_backwards=self.backwards,
+            truncate_gradient=self.gradient_steps,
+            non_sequences=non_seqs,
+            strict=True)[0]
+
+
+        # LHUC
+        hid_out = hid_out * (2/(1+T.exp(-self.d_h)))
+
+        hid_out = hid_out.dimshuffle(1, 0, 2)
+
+        if self.backwards:
+            hid_out = hid_out[:, ::-1]
+
+        return hid_out

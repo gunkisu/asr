@@ -33,11 +33,15 @@ def get_layer(layer_name, hyper_layer, prev_input_layer,
         return HyperLHUCLSTMLayer(prev_input_layer,
                                 num_units, num_hyper_units, num_proj_units,
                                 mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping)
-    else: 
+    elif layer_name == 'HyperTiedLHUCLSTMLayer': 
         return HyperTiedLHUCLSTMLayer(prev_input_layer,
                                 num_units, num_hyper_units, num_proj_units,
                                 mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping)
-
+    elif layer_name == 'HyperTiedLHUCOutLSTMLayer':
+        return HyperTiedLHUCOutLSTMLayer(prev_input_layer,
+                                num_units, num_hyper_units, num_proj_units,
+                                mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping)
+        
 
 def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
         num_layers, num_units, num_hyper_units, num_proj_units, 
