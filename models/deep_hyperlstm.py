@@ -1,7 +1,7 @@
 from lasagne import nonlinearities
 from lasagne.layers import InputLayer, ConcatLayer, LSTMLayer
 from libs.lasagne_libs.hyper_layers import HyperLSTMLayer, \
-        HyperLHUCLSTMLayer, HyperTiedLHUCLSTMLayer
+        HyperLHUCLSTMLayer, HyperTiedLHUCLSTMLayer, HyperTiedLHUCOutLSTMLayer
 
 from libs.lasagne_libs.layers import build_sequence_dense_layer
 
