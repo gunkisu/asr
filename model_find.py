@@ -35,7 +35,7 @@ with open(log_file) as f:
 
             
 if save_path_line:
-    print(param_extract('save_path', save_path_line))
+    print(param_extract('save_path', save_path_line), end=' ')
 
 if num_params_line:
     print(extract_num_params(num_params_line))
