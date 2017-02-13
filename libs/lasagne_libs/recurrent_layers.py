@@ -7,9 +7,14 @@ from lasagne import init
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
+def ln(input, alpha, beta):
+    output = (input - T.mean(input, axis=1, keepdims=True)) / T.sqrt(T.var(input, axis=1, keepdims=True) + eps)
+    output = alpha[None, :]* output + beta[None, :]
+    return output
+
 def sample_ln(input, alpha, beta):
     output = (input - T.mean(input, axis=1, keepdims=True)) / T.sqrt(T.var(input, axis=1, keepdims=True) + eps)
-    output = alpha* output + beta
+    output = alpha*output + beta
     return output
 
 class LSTMLayer(MergeLayer):
@@ -520,10 +525,8 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                  incoming,
                  mask_input,
                  num_units,
-                 num_factors=None,
+                 num_factors,
                  backwards=False,
-                 learn_init=False,
-                 peepholes=False,
                  gradient_steps=-1,
                  grad_clipping=0,
                  only_return_final=False,
@@ -538,18 +541,14 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
 
         super(CondLayerNormProjectLSTMLayer, self).__init__(incomings, **kwargs)
 
-        self.learn_init = learn_init
         self.num_units = num_units
         self.backwards = backwards
-        self.peepholes = peepholes
         self.gradient_steps = gradient_steps
         self.grad_clipping = grad_clipping
         self.only_return_final = only_return_final
         self.only_return_hidden = only_return_hidden
 
-        self.num_factors = num_units/2
-        if num_factors:
-            self.num_factors = num_factors
+        self.num_factors = num_factors
 
         input_shape = self.input_shapes[0]
         num_inputs = numpy.prod(input_shape[2:])
@@ -559,7 +558,7 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                                    shape=(num_inputs, num_units),
                                    name="W_in_to_{}".format(gate_name)),
                     self.add_param(spec=init.Orthogonal(),
-                                   shape=(self.num_factors, num_units),
+                                   shape=(num_units/2, num_units),
                                    name="W_hid_to_{}".format(gate_name)),
                     self.add_param(spec=init.Constant(const_bias),
                                    shape=(num_units,),
@@ -586,55 +585,52 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
          self.W_hid_to_outgate,
          self.b_outgate) = add_gate_params('outgate')
 
-        if self.peepholes:
-            self.W_cell_to_ingate = self.add_param(spec=init.Uniform(0.1),
-                                                   shape=(num_units, ),
-                                                   name="W_cell_to_ingate")
-
-            self.W_cell_to_forgetgate = self.add_param(spec=init.Uniform(0.1),
-                                                       shape=(num_units, ),
-                                                       name="W_cell_to_forgetgate")
-
-            self.W_cell_to_outgate = self.add_param(spec=init.Uniform(0.1),
-                                                    shape=(num_units, ),
-                                                    name="W_cell_to_outgate")
-
         #### hidden projection ####
         self.W_hid_prj = self.add_param(spec=init.Orthogonal(),
-                                        shape=(num_units, self.num_factors),
+                                        shape=(num_units, num_units/2),
                                         name="W_hid_prj")
 
         # Setup initial values for the cell and the hidden units
         self.cell_init = self.add_param(spec=cell_init,
                                         shape=(1, num_units),
                                         name="cell_init",
-                                        trainable=learn_init,
+                                        trainable=False,
                                         regularizable=False)
         self.hid_init = self.add_param(spec=hid_init,
-                                       shape=(1, self.num_factors),
+                                       shape=(1, num_units/2),
                                        name="hid_init",
-                                       trainable=learn_init,
+                                       trainable=False,
                                        regularizable=False)
 
         #### conditional mapping ####
         self.W_cond_prj = self.add_param(spec=init.Orthogonal(),
-                                         shape=(num_inputs, num_units),
+                                         shape=(num_inputs, num_factors),
                                          name="W_cond_prj")
         self.b_cond_prj = self.add_param(spec=init.Constant(0.),
-                                         shape=(num_units, ),
+                                         shape=(num_factors, ),
                                          name="b_cond_prj",
                                          regularizable=False)
 
+        #### input layer norm ####
         self.W_alpha_in = self.add_param(spec=init.Constant(0.),
-                                         shape=(num_units, num_units*4),
+                                         shape=(num_factors, num_units*4),
                                          name="W_alpha_in")
         self.b_alpha_in = self.add_param(spec=init.Constant(1.),
                                          shape=(num_units*4, ),
                                          name="b_alpha_in",
                                          regularizable=False)
 
+        self.W_beta_in = self.add_param(spec=init.Constant(0.),
+                                        shape=(num_factors, num_units*4),
+                                        name="W_beta_in")
+        self.b_beta_in = self.add_param(spec=init.Constant(0.),
+                                        shape=(num_units*4, ),
+                                        name="b_beta_in",
+                                        regularizable=False)
+
+        #### hidden layer norm ####
         self.W_alpha_hid = self.add_param(spec=init.Constant(0.),
-                                          shape=(num_units, num_units*4),
+                                          shape=(num_factors, num_units*4),
                                           name="W_alpha_hid")
         self.b_alpha_hid = self.add_param(spec=init.Constant(1.),
                                           shape=(num_units*4, ),
@@ -642,43 +638,36 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                                           regularizable=False)
 
         self.W_beta_in = self.add_param(spec=init.Constant(0.),
-                                        shape=(num_units, num_units*4),
+                                        shape=(num_factors, num_units*4),
                                         name="W_beta_in")
-        self.b_beta_in = self.add_param(spec=init.Constant(1.),
+        self.b_beta_in = self.add_param(spec=init.Constant(0.),
                                         shape=(num_units*4, ),
                                         name="b_beta_in",
                                         regularizable=False)
 
         self.W_beta_hid = self.add_param(spec=init.Constant(0.),
-                                         shape=(num_units, num_units*4),
+                                         shape=(num_factors, num_units*4),
                                          name="W_beta_hid")
-        self.b_beta_hid = self.add_param(spec=init.Constant(1.),
+        self.b_beta_hid = self.add_param(spec=init.Constant(0.),
                                          shape=(num_units*4, ),
                                          name="b_beta_hid",
                                          regularizable=False)
 
-        self.W_alpha_cell = self.add_param(spec=init.Constant(0.),
-                                           shape=(num_units, num_units),
-                                           name="W_alpha_cell")
-        self.b_alpha_cell = self.add_param(spec=init.Constant(1.),
-                                           shape=(num_units, ),
-                                           name="b_alpha_cell",
-                                           regularizable=False)
-
-        self.W_beta_cell = self.add_param(spec=init.Constant(0.),
-                                          shape=(num_units, num_units),
-                                          name="W_beta_cell")
-        self.b_beta_cell = self.add_param(spec=init.Constant(0.),
-                                          shape=(num_units, ),
-                                          name="b_beta_cell",
-                                          regularizable=False)
+        #### cell layer norm ####
+        self.W_cell_ln = self.add_param(spec=init.Constant(1.),
+                                        shape=(num_units, ),
+                                        name="W_cell_ln")
+        self.b_cell_ln = self.add_param(spec=init.Constant(0.),
+                                        shape=(num_units, ),
+                                        name="b_cell_ln",
+                                        regularizable=False)
 
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
         if self.only_return_hidden:
-            num_outputs = self.num_factors
+            num_outputs = self.num_units/2
         else:
-            num_outputs = self.num_factors*2
+            num_outputs = self.num_units + self.num_units/2
 
         if self.only_return_final:
             return input_shape[0], num_outputs
@@ -700,9 +689,6 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
 
         alpha_hid = T.dot(ln_input, self.W_alpha_hid) + self.b_alpha_hid
         beta_hid = T.dot(ln_input, self.W_beta_hid) + self.b_beta_hid
-
-        alpha_cell = T.dot(ln_input, self.W_alpha_cell) + self.b_alpha_cell
-        beta_cell = T.dot(ln_input, self.W_beta_cell) + self.b_beta_cell
 
         input = input.dimshuffle(1, 0, 2)
         mask = mask.dimshuffle(1, 0, 'x')
@@ -728,7 +714,6 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
         def slice_w(x, n):
             return x[:, n*self.num_units:(n+1)*self.num_units]
 
-
         def step(input_n,
                  cell_previous,
                  hid_previous,
@@ -740,10 +725,7 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
             ingate = slice_w(gates, 0)
             forgetgate = slice_w(gates, 1)
             cell_input = slice_w(gates, 2)
-
-            if self.peepholes:
-                ingate += cell_previous*self.W_cell_to_ingate
-                forgetgate += cell_previous*self.W_cell_to_forgetgate
+            outgate = slice_w(gates, 3)
 
             if self.grad_clipping:
                 ingate = theano.gradient.grad_clip(ingate,
@@ -755,29 +737,22 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                 cell_input = theano.gradient.grad_clip(cell_input,
                                                        -self.grad_clipping,
                                                        self.grad_clipping)
+                outgate = theano.gradient.grad_clip(outgate,
+                                                    -self.grad_clipping,
+                                                    self.grad_clipping)
 
             ingate = T.nnet.sigmoid(ingate)
             forgetgate = T.nnet.sigmoid(forgetgate)
             cell_input = T.tanh(cell_input)
-
             cell = forgetgate*cell_previous + ingate*cell_input
-            outcell = sample_ln(cell, alpha_cell, beta_cell )
-            outgate = slice_w(gates, 3)
-            if self.peepholes:
-                outgate += cell*self.W_cell_to_outgate
-
+            outcell = ln(cell, self.W_cell_ln, self.b_cell_ln)
             if self.grad_clipping:
-                outgate = theano.gradient.grad_clip(outgate,
-                                                    -self.grad_clipping,
-                                                    self.grad_clipping)
                 outcell = theano.gradient.grad_clip(outcell,
                                                     -self.grad_clipping,
                                                     self.grad_clipping)
-
             outgate = T.nnet.sigmoid(outgate)
             hid = outgate*T.tanh(outcell)
             hid = T.dot(hid, self.W_hid_prj)
-
             return [cell, hid]
 
         def step_masked(input_n,
@@ -805,15 +780,11 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                     b_stacked,
                     alpha_in,
                     alpha_hid,
-                    alpha_cell,
                     beta_in,
                     beta_hid,
-                    beta_cell,
-                    self.W_hid_prj]
-        if self.peepholes:
-            non_seqs += [self.W_cell_to_ingate,
-                         self.W_cell_to_forgetgate,
-                         self.W_cell_to_outgate]
+                    self.W_hid_prj,
+                    self.W_cell_ln,
+                    self.b_cell_ln]
 
         cell_out, hid_out = theano.scan(fn=step_fun,
                                         sequences=sequences,
