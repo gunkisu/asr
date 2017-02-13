@@ -233,6 +233,7 @@ def deep_projection_cond_ln_model(input_var,
                                   num_inputs,
                                   num_outputs,
                                   num_layers,
+                                  num_conds,
                                   num_factors,
                                   num_units,
                                   grad_clipping=1):
@@ -249,7 +250,7 @@ def deep_projection_cond_ln_model(input_var,
     #####################
     prev_input_layer = input_layer
     for l  in range(num_layers):
-        if l==0:
+        if l<num_conds:
             # forward
             fwd_feat_layer = CondLayerNormProjectLSTMLayer(incoming=prev_input_layer,
                                                            mask_input=mask_layer,

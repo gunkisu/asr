@@ -27,6 +27,7 @@ output_dim = 3436
 
 def add_params(parser):
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
+    parser.add_argument('--num_conds', default=1, help='number of hidden units', type=int)
     parser.add_argument('--num_layers', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_units', default=512, help='number of hidden units', type=int)
     parser.add_argument('--num_factors', default=64, help='number of factors', type=int)
@@ -56,6 +57,7 @@ def get_save_path(args):
     path += '/wsj_prj_ln_first'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
+    path += '_nc{}'.format(args.num_conds)
     path += '_nl{}'.format(args.num_layers)
     path += '_nf{}'.format(args.num_factors)
     path += '_nu{}'.format(args.num_units)
@@ -234,6 +236,7 @@ if __name__ == '__main__':
                                                    num_inputs=input_dim,
                                                    num_outputs=output_dim,
                                                    num_layers=args.num_layers,
+                                                   num_conds=args.num_conds,
                                                    num_factors=args.num_factors,
                                                    num_units=args.num_units,
                                                    grad_clipping=args.grad_clipping)
