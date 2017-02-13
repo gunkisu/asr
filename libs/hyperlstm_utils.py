@@ -16,15 +16,14 @@ def add_params(parser):
 
     parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
-    parser.add_argument('--train-dataset', help='dataset for training', default='train_si84')
+    parser.add_argument('--train-dataset', help='dataset for training', default='train_si284')
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
 
     parser.add_argument('--truncate-ivectors', help='truncate ivectors', action='store_true')
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
     parser.add_argument('--use-ivectors', help='whether to use ivectors', action='store_true')
-    parser.add_argument('--lhuc', help='whether to use lhuc', action='store_true')
-    parser.add_argument('--tied-lhuc', help='whether to use tied lhuc', action='store_true')
+    parser.add_argument('--layer-name', help='layer name', default='HyperLSTMLayer')
 
     parser.add_argument('--reload-model', help='model path to load')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
@@ -48,14 +47,10 @@ def get_save_path(args):
 
     fn = '{}_hl{}'.format(fn, args.num_hyperlstm_layers)
 
-    if not args.tied_lhuc:
+    if args.layer_name == 'HyperLSTMLayer' or args.layer_name == 'HyperLHUCLSTMLayer': 
         fn = '{}_hnn{}_pnn{}'.format(fn, args.num_hyper_nodes, args.num_proj_nodes)
+     
+    fn = '{}_{}'.format(fn, args.layer_name)
   
-    if args.lhuc:
-        fn = '{}_lhuc'.format(fn)
-    
-    
-    if args.tied_lhuc:
-        fn = '{}_tied_lhuc'.format(fn)
     return fn
 

@@ -74,14 +74,7 @@ if __name__ == '__main__':
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
     
-    if args.lhuc:
-        layer_name = 'HyperLHUCLSTMLayer'
-    elif args.tied_lhuc:
-        layer_name = 'HyperTiedLHUCLSTMLayer'
-    else:
-        layer_name = 'HyperLSTMLayer'
-
-    network = build_deep_hyper_lstm(layer_name, input_var=input_data,
+    network = build_deep_hyper_lstm(args.layer_name, input_var=input_data,
                              mask_var=input_mask,
                              input_dim=args.input_dim,
                              num_layers=args.num_layers,
