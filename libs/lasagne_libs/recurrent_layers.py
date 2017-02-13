@@ -637,14 +637,6 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                                           name="b_alpha_hid",
                                           regularizable=False)
 
-        self.W_beta_in = self.add_param(spec=init.Constant(0.),
-                                        shape=(num_factors, num_units*4),
-                                        name="W_beta_in")
-        self.b_beta_in = self.add_param(spec=init.Constant(0.),
-                                        shape=(num_units*4, ),
-                                        name="b_beta_in",
-                                        regularizable=False)
-
         self.W_beta_hid = self.add_param(spec=init.Constant(0.),
                                          shape=(num_factors, num_units*4),
                                          name="W_beta_hid")
