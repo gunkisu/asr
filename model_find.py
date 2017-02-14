@@ -33,7 +33,6 @@ with open(log_file) as f:
         if 'Number of parameters' in l:
             num_params_line = l
 
-            
 if save_path_line:
     print(param_extract('save_path', save_path_line), end=' ')
 
