@@ -9,9 +9,12 @@ import glob
 def extract_jobid(jobid_file):
     jobid = ''
     with open(jobid_file) as f:
-        content = f.readlines()
-        if content[-1].strip():
-            jobid = content[-1].split('.')[0]
+        for l in f:
+            if 'helios' in l:
+                jobid = l.split('.')[0]
+
+    # There can be multiple job ids because of resumption.
+    # The last job id will be returned.
 
     return jobid
 
