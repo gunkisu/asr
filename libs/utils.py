@@ -122,3 +122,17 @@ def log_find(jobid, ext, log_dir='SMART_DISPATCH_LOGS'):
                 return log_file
 
     return ''
+
+def uid_find(jobid, log_dir='SMART_DISPATCH_LOGS'):
+    '''Find the directory of a job given its id. The directory name can be used
+    to resume the job by smart-dispatch'''
+
+    jobid_files = glob.glob('{}/*/jobs_id.txt'.format(log_dir))
+
+    for jf in jobid_files:
+        with open(jf) as f:
+            content = f.read()
+            if jobid in content:
+                return os.path.dirname(jf)
+
+    return ''

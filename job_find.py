@@ -2,10 +2,10 @@
 from __future__ import print_function
 
 import subprocess
+import glob
 
 p = subprocess.Popen("qstat", shell=True, stdout=subprocess.PIPE)
 out = p.stdout.read()
-
 out_lines = out.split('\n')
 
 for l in out_lines:
