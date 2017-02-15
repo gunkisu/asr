@@ -2475,7 +2475,19 @@ class HyperTiedLHUCLSTMLayer(HyperLHUCLSTMLayer):
         
         seq_len, num_batch, _ = input.shape
 
-        prev_embedding = T.mean(input, axis=0)
+        if mask is not None:
+            # n_seq, n_batch
+            mask_for_mean = mask.dimshuffle(1,0)
+            # n_batch
+            seq_len = T.sum(mask_for_mean, axis=0)
+            # n_batch, 1
+            seq_len = seq_len[:,None]
+            # n_batch, n_dim
+            seq_sum = T.sum(input, axis=0)
+            prev_embedding = seq_sum / seq_len
+        else:
+            prev_embedding = T.mean(input, axis=0)
+        
         self.d_h = T.dot(prev_embedding, self.W_e_h) + self.b_e_h
        
         # Equation 12
@@ -2579,7 +2591,18 @@ class HyperTiedLHUCOutLSTMLayer(HyperTiedLHUCLSTMLayer):
         
         seq_len, num_batch, _ = input.shape
 
-        prev_embedding = T.mean(input, axis=0)
+        if mask is not None:
+            # n_seq, n_batch
+            mask_for_mean = mask.dimshuffle(1,0)
+            # n_batch
+            seq_len = T.sum(mask_for_mean, axis=0)
+            # n_batch, 1
+            seq_len = seq_len[:,None]
+            # n_batch, n_dim
+            seq_sum = T.sum(input, axis=0)
+            prev_embedding = seq_sum / seq_len
+        else:
+            prev_embedding = T.mean(input, axis=0)
         self.d_h = T.dot(prev_embedding, self.W_e_h) + self.b_e_h
        
         # Equation 12
@@ -2623,3 +2646,4 @@ class HyperTiedLHUCOutLSTMLayer(HyperTiedLHUCLSTMLayer):
             hid_out = hid_out[:, ::-1]
 
         return hid_out
+
