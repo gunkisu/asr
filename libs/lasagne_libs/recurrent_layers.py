@@ -617,16 +617,11 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                                          name="W_alpha_in")
         self.b_alpha_in = self.add_param(spec=init.Constant(1.),
                                          shape=(num_units*4, ),
-                                         name="b_alpha_in",
-                                         regularizable=False)
+                                         name="b_alpha_in")
 
         self.W_beta_in = self.add_param(spec=init.Constant(0.),
                                         shape=(num_factors, num_units*4),
                                         name="W_beta_in")
-        self.b_beta_in = self.add_param(spec=init.Constant(0.),
-                                        shape=(num_units*4, ),
-                                        name="b_beta_in",
-                                        regularizable=False)
 
         #### hidden layer norm ####
         self.W_alpha_hid = self.add_param(spec=init.Constant(0.),
@@ -634,16 +629,11 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                                           name="W_alpha_hid")
         self.b_alpha_hid = self.add_param(spec=init.Constant(1.),
                                           shape=(num_units*4, ),
-                                          name="b_alpha_hid",
-                                          regularizable=False)
+                                          name="b_alpha_hid")
 
         self.W_beta_hid = self.add_param(spec=init.Constant(0.),
                                          shape=(num_factors, num_units*4),
                                          name="W_beta_hid")
-        self.b_beta_hid = self.add_param(spec=init.Constant(0.),
-                                         shape=(num_units*4, ),
-                                         name="b_beta_hid",
-                                         regularizable=False)
 
         #### cell layer norm ####
         self.W_cell_ln = self.add_param(spec=init.Constant(1.),
@@ -674,13 +664,13 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
         # get ln params
         ln_input = T.dot(input,  self.W_cond_prj)  + self.b_cond_prj.dimshuffle('x', 'x', 0)
         ln_input = T.tanh(ln_input)
-        ln_input = T.sum(ln_input, axis=1)/T.sum(mask, axis=1, keepdims=True)
+        ln_input = T.sum(ln_input*mask.dimshuffle(0, 1, 'x'), axis=1)/T.sum(mask, axis=1, keepdims=True)
 
         alpha_in = T.dot(ln_input, self.W_alpha_in) + self.b_alpha_in
-        beta_in = T.dot(ln_input, self.W_beta_in) + self.b_beta_in
+        beta_in = T.dot(ln_input, self.W_beta_in)
 
         alpha_hid = T.dot(ln_input, self.W_alpha_hid) + self.b_alpha_hid
-        beta_hid = T.dot(ln_input, self.W_beta_hid) + self.b_beta_hid
+        beta_hid = T.dot(ln_input, self.W_beta_hid)
 
         input = input.dimshuffle(1, 0, 2)
         mask = mask.dimshuffle(1, 0, 'x')
