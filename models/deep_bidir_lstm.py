@@ -10,6 +10,8 @@ from lasagne.layers import get_output_shape
 from libs.lasagne_libs.lhuc_layers import LHUCLayer, exp, two_sigmoid
 from libs.lasagne_libs.layers import build_sequence_dense_layer
 
+from models.utils import build_input_layer, build_ivector_layer, concatenate_layers
+
 def deep_bidir_lstm_model(input_var,
                           mask_var,
                           num_inputs,
@@ -243,18 +245,15 @@ def deep_bidir_lstm_prj_model(input_var,
                                       nonlinearity=nonlinearities.softmax if use_softmax else None)
     return output_layer
 
-def build_deep_bidir_lstm_alex(input_var,
-                          mask_var,
-                          input_dim,
-                          num_units_list,
-                          output_dim,
-                          grad_clipping=1.0, bidir=True):
+def build_deep_bidir_lstm_alex(input_var, mask_var, input_dim, num_units_list, output_dim,
+                          grad_clipping=1.0, bidir=True, 
+                          ivector_var=None, ivector_dim=100):
     
-    input_layer = InputLayer(shape=(None, None, input_dim),
-                             input_var=input_var)
-
-    mask_layer = InputLayer(shape=(None, None),
-                            input_var=mask_var)
+    input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)
+    
+    if ivector_var:
+        ivector_layer = build_ivector_layer(ivector_dim, ivector_var)
+        input_layer = concatenate_layers(input_layer, ivector_layer)
 
     prev_input_layer = input_layer
     for num_units in num_units_list:
@@ -275,8 +274,6 @@ def build_deep_bidir_lstm_alex(input_var,
         else:
             prev_input_layer = lstm_fwd_layer
 
-#    return DenseLayer(prev_input_layer, num_units=output_dim, 
-#            num_leading_axes=2, nonlinearity=nonlinearities.softmax)
 
     return build_sequence_dense_layer(input_var, prev_input_layer, output_dim)
 
@@ -288,11 +285,8 @@ def build_deep_bidir_lstm_lhuc(input_var,
                           speaker_var,
                           num_speakers,
                           grad_clipping=1.0):
-    input_layer = InputLayer(shape=(None, None, input_dim),
-                             input_var=input_var)
+    input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)
 
-    mask_layer = InputLayer(shape=(None, None),
-                            input_var=mask_var)
     speaker_input_layer = InputLayer(shape=(None,),
                             input_var=speaker_var)
 
