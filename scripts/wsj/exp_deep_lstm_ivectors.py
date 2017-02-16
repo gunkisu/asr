@@ -145,8 +145,6 @@ if __name__ == '__main__':
                 status_sw.print_elapsed(); status_sw.reset()
             train_ce_frame_sum += ce_frame
 
-            break
-
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
 
