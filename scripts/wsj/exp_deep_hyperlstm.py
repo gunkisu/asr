@@ -3,6 +3,7 @@ from __future__ import print_function
 
 import os
 import pickle
+import sys
 from theano import tensor as T
 from collections import namedtuple
 
@@ -17,7 +18,7 @@ from libs.utils import save_network, save_eval_history, best_fer, show_status
 from libs.utils import StopWatch, Rsync
 from models.deep_hyperlstm import build_deep_hyper_lstm
 
-from data.wsj.fuel_utils import get_datastream
+from data.wsj.fuel_utils import create_ivector_datastream
 
 if __name__ == '__main__':
     parser = get_arg_parser()
@@ -33,9 +34,6 @@ if __name__ == '__main__':
             print('Training continues')
             args.reload_model = reload_path
 
-    if args.use_ivectors:
-        args.input_dim = args.input_dim + args.ivector_dim
-
     print(args)
 
     sw = StopWatch()
@@ -47,33 +45,25 @@ if __name__ == '__main__':
         rsync.sync(args.data_path)
         args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
         sw.print_elapsed()
-
-    train_ds = get_datastream(path=args.data_path,
-                                  which_set=args.train_dataset,
-                                  batch_size=args.batch_size, 
-                                  use_ivectors=args.use_ivectors, 
-                                  truncate_ivectors=args.truncate_ivectors, 
-                                  ivector_dim=args.ivector_dim)
-    valid_ds = get_datastream(path=args.data_path,
-                                  which_set=args.valid_dataset,
-                                  batch_size=args.batch_size, 
-                                  use_ivectors=args.use_ivectors,
-                                  truncate_ivectors=args.truncate_ivectors,
-                                  ivector_dim=args.ivector_dim)
-    test_ds = get_datastream(path=args.data_path,
-                                  which_set=args.test_dataset,
-                                  batch_size=args.batch_size, 
-                                  use_ivectors=args.use_ivectors,
-                                  truncate_ivectors=args.truncate_ivectors,
-                                  ivector_dim=args.ivector_dim)
     
-
+    datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
+    train_ds, valid_ds, test_ds = [create_ivector_datastream(path=args.data_path, which_set=dataset, 
+        batch_size=args.batch_size) for dataset in datasets]
+    
     print('Building and compiling network')
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
+    ivector_data = None
+    if args.use_ivector_input or args.use_ivector_model:
+        ivector_data = T.ftensor3('ivector_data')
     target_data = T.imatrix('target_data')
-    target_mask = T.fmatrix('target_mask')
-    
+    target_mask = T.fmatrix('target_mask')    
+
+    if args.layer_name == 'IVectorLHUCLSTMLayer' and not args.use_ivector_model:
+        print('--use-ivector-model not specified for IVectorLHUCLSTMLayer')
+        sys.exit(1)
+
+
     network = build_deep_hyper_lstm(args.layer_name, input_var=input_data,
                              mask_var=input_mask,
                              input_dim=args.input_dim,
@@ -84,8 +74,10 @@ if __name__ == '__main__':
                              output_dim=args.output_dim,
                              grad_clipping=args.grad_clipping,
                              bidir=not args.unidirectional, 
-                             num_hyperlstm_layers=args.num_hyperlstm_layers)
-
+                             num_hyperlstm_layers=args.num_hyperlstm_layers,
+                             use_ivector_input=args.use_ivector_input,
+                             ivector_var=ivector_data, 
+                             ivector_dim=args.ivector_dim)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
@@ -113,11 +105,11 @@ if __name__ == '__main__':
               input_mask=input_mask,
               target_data=target_data,
               target_mask=target_mask,
-              num_outputs=args.output_dim,
               network=network,
               updater=eval(args.updater),
               learning_rate=args.learn_rate,
-              load_updater_params=pretrain_update_params_val)
+              load_updater_params=pretrain_update_params_val,
+              ivector_data=ivector_data)
     sw.print_elapsed()
 
     print('Building predictor')
@@ -126,8 +118,8 @@ if __name__ == '__main__':
                                        input_mask=input_mask,
                                        target_data=target_data,
                                        target_mask=target_mask,
-                                       num_outputs=args.output_dim,
-                                       network=network)
+                                       network=network,
+                                       ivector_data=ivector_data)
 
     sw.print_elapsed()
     print('Starting')
@@ -146,17 +138,28 @@ if __name__ == '__main__':
         train_ce_frame_sum = 0.0
         status_sw = StopWatch()
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
-            input_data, input_mask, target_data, target_mask = data
-            ce_frame, network_grads_norm = training_fn(input_data,
-                                       input_mask,
-                                       target_data,
-                                       target_mask)
+            input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = data
+            if args.use_ivector_input or args.use_ivector_model:
+                train_output = training_fn(input_data,
+                                           input_mask,
+                                           ivector_data,
+                                           target_data,
+                                           target_mask)
+            else:
+                train_output = training_fn(input_data,
+                                           input_mask,
+                                           target_data,
+                                           target_mask)
+
+
+            ce_frame, network_grads_norm = train_output
 
             if b_idx%args.train_disp_freq == 0: 
                 show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size, e_idx)
                 status_sw.print_elapsed(); status_sw.reset()
             
             train_ce_frame_sum += ce_frame
+            break
 
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
@@ -166,9 +169,10 @@ if __name__ == '__main__':
 
         print('Evaluating the network on the validation dataset')
         eval_sw = StopWatch()
-        #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
-        valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds)
-        test_ce_frame, test_fer = eval_net(predict_fn, test_ds)
+        use_ivectors = args.use_ivector_input or args.use_ivector_model
+        #train_ce_frame, train_fer = eval_net(predict_fn, train_ds, use_ivectors)
+        valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds, use_ivectors)
+        test_ce_frame, test_fer = eval_net(predict_fn, test_ds, use_ivectors)
         eval_sw.print_elapsed()
 
         print('Train CE: {}'.format(train_ce_frame_sum / b_idx))

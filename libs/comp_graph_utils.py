@@ -165,6 +165,8 @@ def eval_net(predict_fn, data_stream, use_ivectors=False):
         total_nll += predict_cost
         total_fer += (1.0 - match_avg)
 
+        break
+
     total_nll /= batch_cnt 
     total_fer /= batch_cnt
 
