@@ -382,7 +382,11 @@ if __name__ == '__main__':
         print('Test  CE: {}, FER: {}'.format(test_frame_loss, test_fer))
 
         if valid_fer<best_fer(eval_history):
-            symlink_force('{}_last_model.pkl'.format(args.save_path), '{}_best_model.pkl'.format(args.save_path))
+            # symlink_force('{}_last_model.pkl'.format(args.save_path), '{}_best_model.pkl'.format(args.save_path))
+            save_network(network_params=network_params,
+                         trainer_params=updater_params,
+                         epoch_cnt=e_idx,
+                         save_path=args.save_path + '_best_model.pkl')
 
         print('Saving the evaluation history')
         er = EvalRecord(train_frame_loss_sum /batch_idx, valid_frame_loss, valid_fer, test_frame_loss, test_fer)
