@@ -248,6 +248,7 @@ def deep_projection_cond_ln_model(input_var,
     #####################
     # stacked rnn layer #
     #####################
+    cond_layer_list = []
     prev_input_layer = input_layer
     for l  in range(num_layers):
         if l<num_conds:
@@ -266,6 +267,9 @@ def deep_projection_cond_ln_model(input_var,
                                                            num_factors=num_factors,
                                                            grad_clipping=grad_clipping,
                                                            backwards=True)
+
+            cond_layer_list.append(fwd_feat_layer)
+            cond_layer_list.append(bwd_feat_layer)
         else:
             # forward
             fwd_feat_layer = ProjectLSTMLayer(incoming=prev_input_layer,
@@ -292,4 +296,4 @@ def deep_projection_cond_ln_model(input_var,
     output_layer = SequenceDenseLayer(incoming=prev_input_layer,
                                       num_outputs=num_outputs,
                                       nonlinearity=None)
-    return output_layer
+    return output_layer, cond_layer_list

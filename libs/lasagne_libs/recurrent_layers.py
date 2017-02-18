@@ -541,6 +541,8 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
 
         super(CondLayerNormProjectLSTMLayer, self).__init__(incomings, **kwargs)
 
+        self.sample_feat = None
+
         self.num_units = num_units
         self.backwards = backwards
         self.gradient_steps = gradient_steps
@@ -656,6 +658,8 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
         ln_input = T.dot(input,  self.W_cond_prj)  + self.b_cond_prj.dimshuffle('x', 'x', 0)
         ln_input = T.tanh(ln_input)
         ln_input = T.sum(ln_input*mask.dimshuffle(0, 1, 'x'), axis=1)/T.sum(mask, axis=1, keepdims=True)
+
+        self.sample_feat = ln_input
 
         alpha_in = T.dot(ln_input, self.W_alpha_in) + self.b_alpha_in
         beta_in = T.dot(ln_input, self.W_beta_in) + self.b_beta_in
@@ -782,3 +786,6 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                     cell_out = cell_out[:, ::-1]
 
             return T.concatenate([hid_out, cell_out], axis=-1)
+
+    def get_sample_feat(self):
+        return self.sample_feat

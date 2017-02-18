@@ -39,6 +39,8 @@ def add_params(parser):
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
     parser.add_argument('--train_disp_freq', help='how ferquently to display progress', default=100, type=int)
 
+    parser.add_argument('--feat_reg', default=0.0, help='feat_reg', type=float)
+
     parser.add_argument('--train_dataset', help='dataset for training', default='train_si284')
     parser.add_argument('--valid_dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--test_dataset', help='dataset for test', default='test_eval92')
@@ -64,6 +66,7 @@ def get_save_path(args):
     path += '_nf{}'.format(args.num_factors)
     path += '_nu{}'.format(args.num_units)
     path += '_nb{}'.format(args.batch_size)
+    path += '_fr{}'.format(args.feat_reg)
 
     return path
 
@@ -73,6 +76,8 @@ def build_trainer(input_data,
                   target_mask,
                   network_params,
                   output_layer,
+                  cond_layer_list,
+                  feat_reg,
                   updater,
                   learning_rate,
                   load_updater_params=None):
@@ -96,7 +101,15 @@ def build_trainer(input_data,
 
     frame_accr = T.sum(T.eq(frame_prd_idx, target_data)*target_mask)/T.sum(target_mask)
 
-    train_total_loss = train_loss
+    train_feat_loss = 0
+    for cond_layer in cond_layer_list:
+        sample_feat = cond_layer.get_sample_feat()
+        sample_feat_cost = T.var(sample_feat, axis=0)
+        sample_feat_cost = -T.mean(sample_feat_cost)
+        train_feat_loss += sample_feat_cost
+    train_feat_loss /= len(cond_layer_list)
+
+    train_total_loss = train_loss + train_feat_loss*feat_reg
 
     network_grads = theano.grad(cost=train_total_loss, wrt=network_params)
     network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
@@ -113,6 +126,7 @@ def build_trainer(input_data,
                                           target_mask],
                                   outputs=[frame_loss,
                                            frame_accr,
+                                           train_feat_loss,
                                            network_grads_norm],
                                   updates=train_updates)
     return training_fn, updater_params
@@ -234,15 +248,15 @@ if __name__ == '__main__':
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-    network_output = deep_projection_cond_ln_model(input_var=input_data,
-                                                   mask_var=input_mask,
-                                                   num_inputs=input_dim,
-                                                   num_outputs=output_dim,
-                                                   num_layers=args.num_layers,
-                                                   num_conds=args.num_conds,
-                                                   num_factors=args.num_factors,
-                                                   num_units=args.num_units,
-                                                   grad_clipping=args.grad_clipping)
+    network_output, cond_layer_list = deep_projection_cond_ln_model(input_var=input_data,
+                                                                    mask_var=input_mask,
+                                                                    num_inputs=input_dim,
+                                                                    num_outputs=output_dim,
+                                                                    num_layers=args.num_layers,
+                                                                    num_conds=args.num_conds,
+                                                                    num_factors=args.num_factors,
+                                                                    num_units=args.num_units,
+                                                                    grad_clipping=args.grad_clipping)
 
     network = network_output
     network_params = get_all_params(network, trainable=True)
@@ -283,6 +297,8 @@ if __name__ == '__main__':
                                      target_mask=target_mask,
                                      network_params=network_params,
                                      output_layer=network,
+                                     cond_layer_list=cond_layer_list,
+                                     feat_reg=args.feat_reg,
                                      updater=eval(args.updater),
                                      learning_rate=args.learn_rate,
                                      load_updater_params=pretrain_update_params_val)
@@ -329,7 +345,8 @@ if __name__ == '__main__':
                                     target_mask)
             train_frame_loss = train_output[0]
             train_frame_accr = train_output[1]
-            train_grads_norm = train_output[2]
+            train_feat_loss = train_output[2]
+            train_grads_norm = train_output[3]
 
             # show results
             if batch_idx%args.train_disp_freq == 0:
@@ -340,6 +357,7 @@ if __name__ == '__main__':
                             batch_size=args.batch_size,
                             epoch_idx=e_idx)
                 print('Frame Accr: {}'.format(train_frame_accr))
+                print('Feat loss: {}'.format(train_feat_loss))
                 status_sw.print_elapsed()
                 status_sw.reset()
             train_frame_loss_sum += train_frame_loss
