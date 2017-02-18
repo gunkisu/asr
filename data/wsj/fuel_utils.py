@@ -89,4 +89,11 @@ def get_datastream(path, which_set='train_si84', batch_size=1, norm_path=None,
         fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
     return Padding(fs)
 
+def create_ivector_datastream(path, which_set='train_si84', batch_size=1):
+    wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
+    iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
+    base_stream = DataStream(dataset=wsj_dataset,
+                             iteration_scheme=iterator_scheme)
 
+    fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
+    return Padding(fs)

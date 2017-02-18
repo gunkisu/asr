@@ -11,15 +11,8 @@ import data.wsj.fuel_utils as fuel_utils
 
 floatX = theano.config.floatX
 
-def trainer(input_data,
-                        input_mask,
-                        target_data,
-                        target_mask,
-                        num_outputs,
-                        network,
-                        updater,
-                        learning_rate,
-                        load_updater_params=None):
+
+def compute_loss(network, target_data, target_mask):
     o = get_output(network, deterministic=False)
     num_seqs = o.shape[0]
     ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
@@ -29,6 +22,14 @@ def trainer(input_data,
 
     ce_cost = ce.sum()/num_seqs
     ce_frame = ce.sum()/target_mask.sum()
+
+    return ce_cost, ce_frame
+
+def trainer(input_data, input_mask, target_data, target_mask, 
+        network, updater, learning_rate, load_updater_params=None,
+        ivector_data=None):
+
+    ce_cost, ce_frame = compute_loss(network, target_data, target_mask)
 
     network_params = get_all_params(network, trainable=True)
     network_grads = theano.grad(cost=ce_cost,
@@ -42,35 +43,30 @@ def trainer(input_data,
                                             learning_rate=train_lr,
                                             load_params_dict=load_updater_params)
 
-    training_fn = theano.function(inputs=[input_data,
-                                          input_mask,
-                                          target_data,
-                                          target_mask],
-                                  outputs=[ce_frame,
-                                           network_grads_norm],
-                                  updates=train_updates)
+    inputs = None
+    if ivector_data:
+        inputs = [input_data, input_mask, ivector_data, target_data, target_mask]
+    else:
+        inputs = [input_data, input_mask, target_data, target_mask]
+
+    outputs = [ce_frame, network_grads_norm]
+
+    training_fn = theano.function(
+            inputs=inputs, outputs=outputs, updates=train_updates)
+     
     return training_fn, trainer_params
 
 def trainer_lhuc(input_data,
                         input_mask,
                         target_data,
                         target_mask,
-                        num_outputs,
                         speaker_data,
                         network,
                         updater,
                         learning_rate,
                         load_updater_params=None):
     
-    o = get_output(network, deterministic=False)
-    num_seqs = o.shape[0]
-    ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
-            targets=T.flatten(target_data, 1))
-
-    ce = ce * T.flatten(target_mask, 1)
-
-    ce_cost = ce.sum()/num_seqs
-    ce_frame = ce.sum()/target_mask.sum()
+    ce_cost, ce_frame = compute_loss(network, target_data, target_mask)
 
     network_params = get_all_params(network, trainable=True, speaker_independent=False)
     network_grads = theano.grad(cost=ce_cost,
@@ -93,12 +89,7 @@ def trainer_lhuc(input_data,
                                   updates=train_updates)
     return training_fn, trainer_params
 
-def predictor(input_data,
-                          input_mask,
-                          target_data,
-                          target_mask,
-                          num_outputs,
-                          network):
+def predictor(input_data, input_mask, target_data, target_mask, network, ivector_data=None):
     o = get_output(network, deterministic=False)
     num_seqs = o.shape[0]
     ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
@@ -109,18 +100,22 @@ def predictor(input_data,
 
     ce_frame = ce.sum()/target_mask.sum()
 
-    return theano.function(inputs=[input_data,
-                                         input_mask,
-                                         target_data,
-                                         target_mask],
-                                 outputs=[pred_idx,
-                                          ce_frame])
+    inputs = None
+    if ivector_data:
+        inputs = [input_data, input_mask, ivector_data, target_data, target_mask]
+    else:
+        inputs = [input_data, input_mask, target_data, target_mask]
+    outputs = [pred_idx, ce_frame]
+
+    fn = theano.function(inputs=inputs, outputs=outputs)
+
+    return fn
+
 def predictor_lhuc(input_data,
                           input_mask,
                           target_data,
                           target_mask,
                           speaker_data,
-                          num_outputs,
                           network):
     o = get_output(network, deterministic=False)
     num_seqs = o.shape[0]
@@ -139,8 +134,7 @@ def predictor_lhuc(input_data,
                                  outputs=[pred_idx,
                                           ce_frame])
 
-def eval_net(predict_fn,
-                       data_stream):
+def eval_net(predict_fn, data_stream, use_ivectors=False):
 
     data_iterator = data_stream.get_epoch_iterator()
 
@@ -148,16 +142,20 @@ def eval_net(predict_fn,
     total_fer = 0.
 
     for batch_cnt, data in enumerate(data_iterator, start=1):
-        input_data = data[0].astype(floatX)
-        input_mask = data[1].astype(floatX)
-
-        target_data = data[2]
-        target_mask = data[3].astype(floatX)
-
-        predict_output = predict_fn(input_data,
+        input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = data
+     
+        if use_ivectors:
+            predict_output = predict_fn(input_data,
+                                    input_mask,
+                                    ivector_data,
+                                    target_data,
+                                    target_mask)
+        else:
+            predict_output = predict_fn(input_data,
                                     input_mask,
                                     target_data,
                                     target_mask)
+ 
         predict_idx = predict_output[0]
         predict_cost = predict_output[1]
 

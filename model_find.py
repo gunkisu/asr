@@ -22,19 +22,20 @@ parser.add_argument('jobid')
 args = parser.parse_args()
 
 log_file = log_find(args.jobid, 'out')
+if log_file: 
 
-save_path_line = ''
-num_params_line = ''
+    save_path_line = ''
+    num_params_line = ''
 
-with open(log_file) as f:
-    for l in f:
-        if 'save_path' in l:
-            save_path_line = l
-        if 'Number of parameters' in l:
-            num_params_line = l
+    with open(log_file) as f:
+        for l in f:
+            if 'save_path' in l:
+                save_path_line = l
+            if 'Number of parameters' in l:
+                num_params_line = l
 
-if save_path_line:
-    print(param_extract('save_path', save_path_line), end=' ')
+    if save_path_line:
+        print(param_extract('save_path', save_path_line), end=' ')
 
-if num_params_line:
-    print(extract_num_params(num_params_line))
+    if num_params_line:
+        print(extract_num_params(num_params_line))

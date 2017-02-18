@@ -118,9 +118,9 @@ def log_find(jobid, ext, log_dir='SMART_DISPATCH_LOGS'):
         with open(jf) as f:
             content = f.read()
             if jobid in content:
-                log_file = glob.glob('{}/logs/*.{}'.format(os.path.dirname(jf), ext))[0]
-                return log_file
-
+                log_file = glob.glob('{}/logs/*.{}'.format(os.path.dirname(jf), ext))
+                if log_file: return log_file[0]
+                else: return ''
     return ''
 
 def uid_find(jobid, log_dir='SMART_DISPATCH_LOGS'):
