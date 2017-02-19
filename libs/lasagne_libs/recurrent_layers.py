@@ -745,6 +745,7 @@ class LayerNormProjectLSTMLayer(MergeLayer):
         hid_init = T.dot(ones, self.hid_init)
 
         non_seqs = [W_hid_stacked,
+                    b_stacked,
                     self.W_hid_prj,
                     self.W_alpha_in,
                     self.W_alpha_hid,
