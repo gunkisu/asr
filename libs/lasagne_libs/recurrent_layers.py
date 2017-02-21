@@ -12,9 +12,11 @@ def ln(input, alpha, beta):
     output = alpha[None, :]* output + beta[None, :]
     return output
 
-def sample_ln(input, alpha, beta):
+def sample_ln(input, alpha, beta=None):
     output = (input - T.mean(input, axis=1, keepdims=True)) / T.sqrt(T.var(input, axis=1, keepdims=True) + eps)
-    output = alpha*output + beta
+    output = alpha*output
+    if beta:
+        output += beta
     return output
 
 class LSTMLayer(MergeLayer):
@@ -881,14 +883,6 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                                          shape=(num_units*4, ),
                                          name="b_alpha_in")
 
-        self.W_beta_in = self.add_param(spec=init.Constant(0.),
-                                        shape=(num_factors, num_units*4),
-                                        name="W_beta_in")
-        self.b_beta_in = self.add_param(spec=init.Constant(0.),
-                                        shape=(num_units*4, ),
-                                        name="b_beta_in",
-                                        regularizable=False)
-
         #### hidden layer norm ####
         self.W_alpha_hid = self.add_param(spec=init.Constant(0.),
                                           shape=(num_factors, num_units*4),
@@ -897,13 +891,14 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                                           shape=(num_units*4, ),
                                           name="b_alpha_hid")
 
-        self.W_beta_hid = self.add_param(spec=init.Constant(0.),
-                                         shape=(num_factors, num_units*4),
-                                         name="W_beta_hid")
-        self.b_beta_hid = self.add_param(spec=init.Constant(0.),
-                                         shape=(num_units*4, ),
-                                         name="b_beta_hid",
-                                         regularizable=False)
+        #### beta  for all ####
+        self.W_beta = self.add_param(spec=init.Constant(0.),
+                                     shape=(num_factors, num_units*4),
+                                     name="W_beta")
+        self.b_beta = self.add_param(spec=init.Constant(0.),
+                                     shape=(num_units*4, ),
+                                     name="b_beta",
+                                     regularizable=False)
 
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
@@ -930,10 +925,8 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
         self.sample_feat = ln_input
 
         alpha_in = T.dot(ln_input, self.W_alpha_in) + self.b_alpha_in
-        beta_in = T.dot(ln_input, self.W_beta_in) + self.b_beta_in
-
         alpha_hid = T.dot(ln_input, self.W_alpha_hid) + self.b_alpha_hid
-        beta_hid = T.dot(ln_input, self.W_beta_hid) + self.b_beta_hid
+        beta = T.dot(ln_input, self.W_beta) + self.b_beta
 
         input = input.dimshuffle(1, 0, 2)
         mask = mask.dimshuffle(1, 0, 'x')
@@ -949,7 +942,7 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                                        self.W_hid_to_cell,
                                        self.W_hid_to_outgate], axis=1)
 
-        input = T.dot(input, W_in_stacked)
+        input = T.dot(input, W_in_stacked) + beta
         def slice_w(x, n):
             return x[:, n*self.num_units:(n+1)*self.num_units]
 
@@ -957,8 +950,8 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
                  cell_previous,
                  hid_previous,
                  *args):
-            gates = sample_ln(input_n, alpha_in, beta_in)
-            gates += sample_ln(T.dot(hid_previous, W_hid_stacked), alpha_hid, beta_hid)
+            gates = sample_ln(input_n, alpha_in)
+            gates += sample_ln(T.dot(hid_previous, W_hid_stacked), alpha_hid)
 
             ingate = slice_w(gates, 0)
             forgetgate = slice_w(gates, 1)
@@ -1017,8 +1010,6 @@ class CondLayerNormProjectLSTMLayer(MergeLayer):
         non_seqs = [W_hid_stacked,
                     alpha_in,
                     alpha_hid,
-                    beta_in,
-                    beta_hid,
                     self.W_hid_prj]
 
         cell_out, hid_out = theano.scan(fn=step_fun,

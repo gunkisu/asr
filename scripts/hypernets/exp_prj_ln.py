@@ -33,6 +33,7 @@ def add_params(parser):
     parser.add_argument('--num_factors', default=64, help='number of factors', type=int)
     parser.add_argument('--learn_rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad_clipping', default=1.0, help='gradient clipping', type=float)
+    parser.add_argument('--dropout', default=0.2, help='dropout', type=float)
     parser.add_argument('--data_path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--save_path', help='save path', default='./')
     parser.add_argument('--num_epochs', help='number of epochs', default=50, type=int)
@@ -61,6 +62,7 @@ def get_save_path(args):
     path += '/wsj_prj_ln_first'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
+    path += '_do{}'.format(args.dropout)
     path += '_nc{}'.format(args.num_conds)
     path += '_nl{}'.format(args.num_layers)
     path += '_nf{}'.format(args.num_factors)
@@ -129,7 +131,7 @@ def build_trainer(input_data,
                                            train_feat_loss,
                                            network_grads_norm],
                                   updates=train_updates)
-    return training_fn, updater_params
+    return training_fn, train_lr, updater_params
 
 def build_predictor(input_data,
                     input_mask,
@@ -256,7 +258,8 @@ if __name__ == '__main__':
                                                                     num_conds=args.num_conds,
                                                                     num_factors=args.num_factors,
                                                                     num_units=args.num_units,
-                                                                    grad_clipping=args.grad_clipping)
+                                                                    grad_clipping=args.grad_clipping,
+                                                                    dropout=args.dropout)
 
     network = network_output
     network_params = get_all_params(network, trainable=True)
@@ -291,6 +294,7 @@ if __name__ == '__main__':
     print('Building trainer')
     sw.reset()
     [train_fn,
+     train_lr,
      updater_params] = build_trainer(input_data=input_data,
                                      input_mask=input_mask,
                                      target_data=target_data,
@@ -322,6 +326,10 @@ if __name__ == '__main__':
     print('Starting')
     # for each epoch
     for e_idx in range(1, args.num_epochs+1):
+        # control learning rate
+        new_lr = args.learn_rate/(1.04**max(e_idx/2-1, 0))
+        print("Learning Rate: " + str(new_lr))
+        train_lr.set_value(lasagne.utils.floatX(new_lr))
         if e_idx <= pretrain_total_epoch_cnt:
             print('Skipping Epoch {}'.format(e_idx))
             continue

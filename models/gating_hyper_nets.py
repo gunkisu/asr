@@ -1,7 +1,7 @@
 from theano import tensor as T
 from lasagne import nonlinearities, init
 from libs.lasagne_libs.layers import SequenceDenseLayer
-from lasagne.layers import InputLayer, DenseLayer, ConcatLayer, SliceLayer, GlobalPoolLayer
+from lasagne.layers import InputLayer, DenseLayer, ConcatLayer, SliceLayer, GlobalPoolLayer, DropoutLayer
 from libs.lasagne_libs.hyper_layers import ScalingHyperLSTMLayer, ProjectionHyperLSTMLayer
 from libs.lasagne_libs.recurrent_layers import ProjectLSTMLayer, LayerNormProjectLSTMLayer, CondLayerNormProjectLSTMLayer
 
@@ -188,7 +188,8 @@ def deep_projection_lstm_model(input_var,
                                num_layers,
                                num_factors,
                                num_units,
-                               grad_clipping=1):
+                               grad_clipping=1,
+                               dropout=0.2):
     ###############
     # input layer #
     ###############
@@ -202,6 +203,9 @@ def deep_projection_lstm_model(input_var,
     #####################
     prev_input_layer = input_layer
     for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+
         fwd_feat_layer = ProjectLSTMLayer(incoming=prev_input_layer,
                                           mask_input=mask_layer,
                                           num_units=num_units,
@@ -223,6 +227,8 @@ def deep_projection_lstm_model(input_var,
     ################
     # output layer #
     ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
     output_layer = SequenceDenseLayer(incoming=prev_input_layer,
                                       num_outputs=num_outputs,
                                       nonlinearity=None)
@@ -235,7 +241,8 @@ def deep_projection_ln_lstm_model(input_var,
                                   num_layers,
                                   num_factors,
                                   num_units,
-                                  grad_clipping=1):
+                                  grad_clipping=1,
+                                  dropout=0.2):
     ###############
     # input layer #
     ###############
@@ -249,6 +256,9 @@ def deep_projection_ln_lstm_model(input_var,
     #####################
     prev_input_layer = input_layer
     for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+
         fwd_feat_layer = LayerNormProjectLSTMLayer(incoming=prev_input_layer,
                                                    mask_input=mask_layer,
                                                    num_units=num_units,
@@ -270,6 +280,8 @@ def deep_projection_ln_lstm_model(input_var,
     ################
     # output layer #
     ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
     output_layer = SequenceDenseLayer(incoming=prev_input_layer,
                                       num_outputs=num_outputs,
                                       nonlinearity=None)
@@ -283,7 +295,8 @@ def deep_projection_cond_ln_model(input_var,
                                   num_conds,
                                   num_factors,
                                   num_units,
-                                  grad_clipping=1):
+                                  grad_clipping=1,
+                                  dropout=0.2):
     ###############
     # input layer #
     ###############
@@ -298,6 +311,8 @@ def deep_projection_cond_ln_model(input_var,
     cond_layer_list = []
     prev_input_layer = input_layer
     for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
         if l<num_conds:
             # forward
             fwd_feat_layer = CondLayerNormProjectLSTMLayer(incoming=prev_input_layer,
@@ -340,6 +355,8 @@ def deep_projection_cond_ln_model(input_var,
     ################
     # output layer #
     ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
     output_layer = SequenceDenseLayer(incoming=prev_input_layer,
                                       num_outputs=num_outputs,
                                       nonlinearity=None)
