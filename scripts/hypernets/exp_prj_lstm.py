@@ -47,6 +47,8 @@ def add_params(parser):
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally',
                         default='/Tmp/taesup/data/speech')
 
+    parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')
+
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add_params(parser)
@@ -204,12 +206,13 @@ if __name__ == '__main__':
 
     sw = StopWatch()
 
-    print('Loading data streams from {}'.format(args.data_path))
-    print('Copying data to local machine...')
-    rsync = Rsync(args.tmpdir)
-    rsync.sync(args.data_path)
-    args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
-    sw.print_elapsed()
+    if not args.no_copy:
+        print('Loading data streams from {}'.format(args.data_path))
+        print('Copying data to local machine...')
+        rsync = Rsync(args.tmpdir)
+        rsync.sync(args.data_path)
+        args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
+        sw.print_elapsed()
 
     ####################
     # load data stream #
