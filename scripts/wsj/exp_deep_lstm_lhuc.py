@@ -84,7 +84,6 @@ if __name__ == '__main__':
               input_mask=input_mask,
               target_data=target_data,
               target_mask=target_mask,
-              num_outputs=args.output_dim,
               speaker_data=speaker_data,
               network=network,
               updater=eval(args.updater),
@@ -99,7 +98,6 @@ if __name__ == '__main__':
                                        target_data=target_data,
                                        target_mask=target_mask,
                                        speaker_data=speaker_data,
-                                       num_outputs=args.output_dim,
                                        network=network)
 
     sw.print_elapsed()

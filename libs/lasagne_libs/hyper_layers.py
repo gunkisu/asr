@@ -2290,6 +2290,12 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
     def reparam_relu(self, scaling_factor):
         return T.nnet.relu(scaling_factor)
 
+    def get_lhuc_weight_bias_init_2sigmoid(self):
+        return init.Constant(.0), init.Constant(.0)
+   
+    def get_lhuc_weight_bias_init(self):
+        return init.Constant(.0), init.Constant(1.0)
+    
     def __init__(self, incoming, num_units, num_hyper_units,num_proj_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
@@ -2318,7 +2324,14 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
             self.reparam = self.reparam_exp
         elif reparam == 'relu':
             self.reparam = self.reparam_relu
-
+        
+        if reparam == '2sigmoid':
+            self.lhuc_weight_bias_init = self.get_lhuc_weight_bias_init_2sigmoid
+        else:
+            self.lhuc_weight_bias_init = self.get_lhuc_weight_bias_init
+   
+        # Give a change to initialize weights based on reparametrising functions
+        self.init_lhuc_weights()
 
     def step(self, orig_input_n, input_n, hyper_cell_previous, hyper_hid_previous, cell_previous, hid_previous, *args):
         hyper_cell, hyper_hid = self.compute_eq10(hid_previous, orig_input_n, self.W_xhat_stacked,
@@ -2432,13 +2445,20 @@ class PoolLHUCLSTMLayer(HyperLHUCLSTMLayer):
 
     ''' Generates scaling vectors based on the average pooling of the previous layer output'''
     def init_weights(self):
+        # Initialize weights later in init_lhuc_weights() when we know
+        # the reparametrising function
+        pass
 
-        self.W_e_h = self.add_param(init.Constant(.0), (self.num_inputs, self.num_units),
+    def init_lhuc_weights(self):
+        weight_init, bias_init = self.lhuc_weight_bias_init()
+
+        self.W_e_h = self.add_param(weight_init, (self.num_inputs, self.num_units),
                             name="W_e_h")
-        self.b_e_h = self.add_param(init.Constant(.0), (self.num_units,),
+        self.b_e_h = self.add_param(bias_init, (self.num_units,),
                             name="b_e_h", regularizable=False)
 
         self.init_main_lstm_weights()
+
 
     def __init__(self, incoming, num_units, num_hyper_units,num_proj_units,
                  ingate=Gate(W_in=init.Orthogonal()),
@@ -2557,19 +2577,9 @@ class PoolLHUCLSTMLayer(HyperLHUCLSTMLayer):
         return hid_out
 
 class IVectorLHUCLSTMLayer(PoolLHUCLSTMLayer):
+
     ''' Generates scaling vectors based on ivectors'''
-    def init_weights(self):
-        ivector_shape = self.input_shapes[self.ivector_incoming_index]
-        self.ivector_dim = ivector_shape[-1]
-        
-        self.W_iv_h = self.add_param(init.Constant(.0), (self.ivector_dim, self.num_units),
-                            name="W_iv_h")
-        self.b_iv_h = self.add_param(init.Constant(.0), (self.num_units,),
-                            name="b_iv_h", regularizable=False)
-
-        self.init_main_lstm_weights()
-
-
+ 
     def __init__(self, incoming, ivector_input, num_units, num_hyper_units,num_proj_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
@@ -2590,8 +2600,22 @@ class IVectorLHUCLSTMLayer(PoolLHUCLSTMLayer):
                  gradient_steps, grad_clipping, precompute_input, mask_input, 
                  ivector_input=ivector_input, reparam=reparam, **kwargs)
 
-        
-   
+
+    def init_lhuc_weights(self):
+        ivector_shape = self.input_shapes[self.ivector_incoming_index]
+        self.ivector_dim = ivector_shape[-1]
+
+        weight_init, bias_init = self.lhuc_weight_bias_init()
+
+
+        self.W_iv_h = self.add_param(weight_init, (self.ivector_dim, self.num_units),
+                            name="W_iv_h")
+        self.b_iv_h = self.add_param(bias_init, (self.num_units,),
+                            name="b_iv_h", regularizable=False)
+
+        self.init_main_lstm_weights()
+
+
     def step(self, input_n, cell_previous, hid_previous, *args):
 
         if not self.precompute_input:
