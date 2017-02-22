@@ -2230,6 +2230,7 @@ class HyperLSTMLayer(MergeLayer):
         return hid_out
 
 class HyperLHUCLSTMLayer(HyperLSTMLayer):
+
     def add_gate_params(self, gate, gate_name):
         # (W_h, W_x, b)
         return (self.add_param(gate.W_hid, (self.num_units, self.num_units),
@@ -2275,7 +2276,20 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
                                    name="W_hz")
 
         self.init_main_lstm_weights()
+
     
+    def reparam_2sigmoid(self, scaling_factor):
+        return 2/(1+T.exp(-scaling_factor))
+
+    def reparam_exp(self, scaling_factor):
+        return T.exp(scaling_factor)
+
+    def reparam_identity(self, scaling_factor):
+        return scaling_factor
+
+    def reparam_relu(self, scaling_factor):
+        return T.nnet.relu(scaling_factor)
+
     def __init__(self, incoming, num_units, num_hyper_units,num_proj_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
@@ -2289,11 +2303,21 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
                  grad_clipping=0,
                  precompute_input=True,
                  mask_input=None,
+                 reparam='2sigmoid',
                  **kwargs):
 
         super(HyperLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
                  gradient_steps, grad_clipping, precompute_input, mask_input, **kwargs)
+
+        if reparam == '2sigmoid':
+            self.reparam = self.reparam_2sigmoid
+        elif reparam == 'identity':
+            self.reparam = self.reparam_identity
+        elif reparam == 'exp':
+            self.reparam = self.reparam_exp
+        elif reparam == 'relu':
+            self.reparam = self.reparam_relu
 
 
     def step(self, orig_input_n, input_n, hyper_cell_previous, hyper_hid_previous, cell_previous, hid_previous, *args):
@@ -2328,7 +2352,7 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
         hid = outgate*self.nonlinearity(cell)
         
         # LHUC
-        hid = hid * (2/(1+T.exp(-d_h)))
+        hid = hid * self.reparam(d_h)
         return [hyper_cell, hyper_hid, cell, hid]
 
     def get_output_for(self, inputs, **kwargs):
@@ -2428,12 +2452,12 @@ class PoolLHUCLSTMLayer(HyperLHUCLSTMLayer):
                  gradient_steps=-1,
                  grad_clipping=0,
                  precompute_input=True,
-                 mask_input=None,
+                 mask_input=None, reparam='exp',
                  **kwargs):
 
         super(PoolLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
-                 gradient_steps, grad_clipping, precompute_input, mask_input, **kwargs)
+                 gradient_steps, grad_clipping, precompute_input, mask_input, reparam=reparam, **kwargs)
 
     def step(self, input_n, cell_previous, hid_previous, *args):
 
@@ -2523,7 +2547,7 @@ class PoolLHUCLSTMLayer(HyperLHUCLSTMLayer):
             strict=True)[0]
 
         # LHUC
-        hid_out = hid_out * (2/(1+T.exp(-self.d_h)))
+        hid_out = hid_out * self.reparam(self.d_h)
 
         hid_out = hid_out.dimshuffle(1, 0, 2)
 
@@ -2545,6 +2569,7 @@ class IVectorLHUCLSTMLayer(PoolLHUCLSTMLayer):
 
         self.init_main_lstm_weights()
 
+
     def __init__(self, incoming, ivector_input, num_units, num_hyper_units,num_proj_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
@@ -2557,14 +2582,16 @@ class IVectorLHUCLSTMLayer(PoolLHUCLSTMLayer):
                  gradient_steps=-1,
                  grad_clipping=0,
                  precompute_input=True,
-                 mask_input=None,
+                 mask_input=None, reparam='exp',
                  **kwargs):
 
         super(IVectorLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
                  gradient_steps, grad_clipping, precompute_input, mask_input, 
-                 ivector_input=ivector_input, **kwargs)
+                 ivector_input=ivector_input, reparam=reparam, **kwargs)
+
         
+   
     def step(self, input_n, cell_previous, hid_previous, *args):
 
         if not self.precompute_input:
@@ -2648,7 +2675,7 @@ class IVectorLHUCLSTMLayer(PoolLHUCLSTMLayer):
             strict=True)[0]
 
         # LHUC
-        hid_out = hid_out * (2/(1+T.exp(-self.d_h)))
+        hid_out = hid_out * self.reparam(self.d_h)
 
         hid_out = hid_out.dimshuffle(1, 0, 2)
 
