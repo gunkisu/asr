@@ -77,7 +77,9 @@ if __name__ == '__main__':
                              num_hyperlstm_layers=args.num_hyperlstm_layers,
                              use_ivector_input=args.use_ivector_input,
                              ivector_var=ivector_data, 
-                             ivector_dim=args.ivector_dim, reparam=args.reparam)
+                             ivector_dim=args.ivector_dim, 
+                             reparam=args.reparam, 
+                             use_layer_norm=args.use_layer_norm)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)

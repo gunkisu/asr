@@ -2031,7 +2031,7 @@ class HyperLSTMLayer(MergeLayer):
                  grad_clipping=0,
                  precompute_input=True,
                  mask_input=None, 
-                 ivector_input=None,
+                 ivector_input=None, use_layer_norm=False,
                  **kwargs):
 
         incomings = [incoming]
@@ -2074,6 +2074,8 @@ class HyperLSTMLayer(MergeLayer):
 
         self.cell_init = cell_init
         self.hid_init = hid_init
+
+        self.use_layer_norm = use_layer_norm
 
         self.init_weights()
 
@@ -2309,12 +2311,12 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
                  grad_clipping=0,
                  precompute_input=True,
                  mask_input=None,
-                 reparam='2sigmoid',
+                 reparam='relu', use_layer_norm=False,
                  **kwargs):
 
         super(HyperLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
-                 gradient_steps, grad_clipping, precompute_input, mask_input, **kwargs)
+                 gradient_steps, grad_clipping, precompute_input, mask_input, use_layer_norm=use_layer_norm, **kwargs)
 
         if reparam == '2sigmoid':
             self.reparam = self.reparam_2sigmoid
@@ -2472,12 +2474,12 @@ class PoolLHUCLSTMLayer(HyperLHUCLSTMLayer):
                  gradient_steps=-1,
                  grad_clipping=0,
                  precompute_input=True,
-                 mask_input=None, reparam='exp',
+                 mask_input=None, reparam='relu', use_layer_norm=False,
                  **kwargs):
 
         super(PoolLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
-                 gradient_steps, grad_clipping, precompute_input, mask_input, reparam=reparam, **kwargs)
+                 gradient_steps, grad_clipping, precompute_input, mask_input, reparam=reparam, use_layer_norm=use_layer_norm, **kwargs)
 
     def step(self, input_n, cell_previous, hid_previous, *args):
 
@@ -2592,13 +2594,13 @@ class IVectorLHUCLSTMLayer(PoolLHUCLSTMLayer):
                  gradient_steps=-1,
                  grad_clipping=0,
                  precompute_input=True,
-                 mask_input=None, reparam='exp',
+                 mask_input=None, reparam='relu', use_layer_norm=False,
                  **kwargs):
 
         super(IVectorLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
                  gradient_steps, grad_clipping, precompute_input, mask_input, 
-                 ivector_input=ivector_input, reparam=reparam, **kwargs)
+                 ivector_input=ivector_input, reparam=reparam, use_layer_norm=use_layer_norm, **kwargs)
 
 
     def init_lhuc_weights(self):

@@ -32,6 +32,7 @@ def add_params(parser):
     parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')
     parser.add_argument('--unidirectional', help='make the network unidirectional', action='store_true')
 
+    parser.add_argument('--use-layer-norm', help='whether to apply layer normalization', action='store_true')
     
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -56,6 +57,9 @@ def get_save_path(args):
     
     if 'LHUC' in args.layer_name:
         fn = '{}_rp{}'.format(fn, args.reparam)
+
+    if args.use_layer_norm:
+        fn = '{}_ln'.format(fn)
 
     fn = '{}_{}'.format(fn, args.layer_name)
   
