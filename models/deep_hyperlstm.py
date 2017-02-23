@@ -1,11 +1,10 @@
 from lasagne import nonlinearities
 from lasagne.layers import InputLayer, ConcatLayer, LSTMLayer
-from libs.lasagne_libs.hyper_layers import HyperLSTMLayer, \
+from libs.lasagne_libs.hyper_lhuc_layers import HyperLSTMLayer, \
         HyperLHUCLSTMLayer, PoolLHUCLSTMLayer, IVectorLHUCLSTMLayer
 
-from libs.lasagne_libs.layers import build_sequence_dense_layer
-
-from models.utils import build_input_layer, build_ivector_layer, concatenate_layers
+from models.utils import build_input_layer, build_ivector_layer, concatenate_layers, \
+            build_sequence_dense_layer
 
 def get_layer(layer_name, is_hyper_layer, prev_input_layer, 
         num_units, num_hyper_units, num_proj_units, 
