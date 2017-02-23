@@ -63,6 +63,9 @@ if __name__ == '__main__':
         print('--use-ivector-model not specified for IVectorLHUCLSTMLayer')
         sys.exit(1)
 
+    if args.layer_name == 'SummarizingLHUCLSTMLayer' and args.use_ivector_model:
+        print('--use-ivector-model specified for SummarizingLHUCLSTMLayer')
+        sys.exit(1)
 
     network = build_deep_hyper_lstm(args.layer_name, input_var=input_data,
                              mask_var=input_mask,

@@ -1,7 +1,7 @@
 from lasagne import nonlinearities
 from lasagne.layers import InputLayer, ConcatLayer, LSTMLayer
 from libs.lasagne_libs.hyper_lhuc_layers import HyperLSTMLayer, \
-        HyperLHUCLSTMLayer, PoolLHUCLSTMLayer, IVectorLHUCLSTMLayer
+        HyperLHUCLSTMLayer, SummarizingLHUCLSTMLayer, IVectorLHUCLSTMLayer
 
 from models.utils import build_input_layer, build_ivector_layer, concatenate_layers, \
             build_sequence_dense_layer
@@ -26,8 +26,8 @@ def get_layer(layer_name, is_hyper_layer, prev_input_layer,
                                 num_units, num_hyper_units, num_proj_units,
                                 mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping,
                                 reparam=reparam, use_layer_norm=use_layer_norm)
-    elif layer_name == 'PoolLHUCLSTMLayer': 
-        return PoolLHUCLSTMLayer(prev_input_layer,
+    elif layer_name == 'SummarizingLHUCLSTMLayer': 
+        return SummarizingLHUCLSTMLayer(prev_input_layer,
                                 num_units, num_hyper_units, num_proj_units,
                                 mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping,
                                 reparam=reparam, use_layer_norm=use_layer_norm)
