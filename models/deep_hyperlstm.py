@@ -67,14 +67,16 @@ def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
         prev_fwd_layer = get_layer(layer_name, is_hyper_layer, prev_input_layer,
                             num_units, num_hyper_units, num_proj_units,
                             mask_layer, backwards=False, grad_clipping=grad_clipping, ivector_layer=ivector_layer, 
-                            reparam=reparam, use_layer_norm=use_layer_norm)
+                            reparam=reparam, use_layer_norm=use_layer_norm, num_pred_layers=num_pred_layers, 
+                            num_pred_units=num_pred_units)
 
      
         if bidir:
             prev_bwd_layer = get_layer(layer_name, is_hyper_layer, prev_input_layer,
                             num_units, num_hyper_units, num_proj_units,
                             mask_layer, backwards=True, grad_clipping=grad_clipping, ivector_layer=ivector_layer,
-                            reparam=reparam, use_layer_norm=use_layer_norm)
+                            reparam=reparam, use_layer_norm=use_layer_norm,
+                            num_pred_layers=num_pred_layers, num_pred_units=num_pred_units)
           
             prev_input_layer = ConcatLayer(incomings=[prev_fwd_layer, prev_bwd_layer],
                                    axis=-1)

@@ -597,10 +597,32 @@ class BaseLHUCLSTMLayer(MergeLayer):
 
         return [cell, hid]
 
+    def init_lhuc_weights_helper(self, embedding_dim):
+        weight_init, bias_init = self.reparam_weight_init
+
+        self.W_pred_list = []
+        self.b_pred_list = []
+
+        for i in range(self.num_pred_layers):
+            input_dim = embedding_dim if i == 0 else self.num_pred_units
+
+            self.W_pred_list.append(self.add_param(init.Normal(), (input_dim, self.num_pred_units),
+                                name="W_e_h_{}".format(i)))
+            
+            self.b_pred_list.append(self.add_param(init.Constant(.0), (self.num_pred_units,), 
+                                name="b_e_h_{}".format(i), regularizable=False))
+
+        input_dim = embedding_dim if self.num_pred_layers == 0 else self.num_pred_units
+        self.W_pred_list.append(self.add_param(weight_init, (input_dim, self.num_units),
+                            name="W_e_h_{}".format(self.num_pred_layers)))
+        self.b_pred_list.append(self.add_param(bias_init, (self.num_units,),
+                            name="b_e_h_{}".format(self.num_pred_layers), regularizable=False))
+
+
     @abstractmethod
     def init_lhuc_weights(self):
         pass
-
+    
     def __init__(self, incoming, num_units, num_pred_layers, num_pred_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
@@ -666,13 +688,15 @@ class BaseLHUCLSTMLayer(MergeLayer):
         self.init_main_lstm_weights()
         self.init_lhuc_weights()
     
-    @abstractmethod
-    def compute_speaker_embedding(self, inputs):
-        pass
-
-    @abstractmethod
     def compute_scaling_factor(self, speaker_embedding):
-        pass
+        pred_in = speaker_embedding
+
+        for i in range(self.num_pred_layers):
+            pred_in = T.dot(pred_in, self.W_pred_list[i]) + self.b_pred_list[i]
+            pred_in = T.tanh(pred_in)
+            
+        return T.dot(pred_in, self.W_pred_list[self.num_pred_layers]) + self.b_pred_list[self.num_pred_layers]
+
 
     def step(self, input_n, cell_previous, hid_previous, *args):
         # Precomputed input outside of scan: input = T.dot(input, self.W_x_stacked) + self.b_stacked
@@ -718,6 +742,7 @@ class BaseLHUCLSTMLayer(MergeLayer):
         self.W_x_stacked = T.concatenate([self.W_x_ig, self.W_x_fg, self.W_x_c, self.W_x_og], axis=1)
         self.b_stacked = T.concatenate([self.b_ig, self.b_fg, self.b_c, self.b_og], axis=0)
 
+        # Precompute input
         input = T.dot(input, self.W_x_stacked) + self.b_stacked
 
         if mask is not None:
@@ -733,6 +758,8 @@ class BaseLHUCLSTMLayer(MergeLayer):
         hid_init = T.dot(ones, self.hid_init)
         
         non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked]
+        non_seqs.extend(self.W_pred_list)
+        non_seqs.extend(self.b_pred_list)
       
         cell_out, hid_out = theano.scan(
             fn=step_fun,
@@ -754,14 +781,7 @@ class BaseLHUCLSTMLayer(MergeLayer):
 class SummarizingLHUCLSTMLayer(BaseLHUCLSTMLayer):
 
     def init_lhuc_weights(self):
-        weight_init, bias_init = self.reparam_weight_init
-
-        self.W_e_h = self.add_param(weight_init, (self.num_inputs, self.num_units),
-                            name="W_e_h")
-        self.b_e_h = self.add_param(bias_init, (self.num_units,),
-                            name="b_e_h", regularizable=False)
-
-
+        self.init_lhuc_weights_helper(self.num_inputs)
 
     def __init__(self, incoming, num_units, num_pred_layers, num_pred_units,
                  ingate=Gate(W_in=init.Orthogonal()),
@@ -803,10 +823,6 @@ class SummarizingLHUCLSTMLayer(BaseLHUCLSTMLayer):
         else:
             return T.mean(input, axis=0)
             
-    def compute_scaling_factor(self, speaker_embedding):
-
-        return T.dot(speaker_embedding, self.W_e_h) + self.b_e_h
-
 
 class IVectorLHUCLSTMLayer(BaseLHUCLSTMLayer):
 
@@ -821,9 +837,7 @@ class IVectorLHUCLSTMLayer(BaseLHUCLSTMLayer):
                  cell_init=init.Constant(0.),
                  hid_init=init.Constant(0.),
                  backwards=False,
-                 
                  grad_clipping=0,
-             
                  mask_input=None, reparam='relu', use_layer_norm=False,
                  **kwargs):
 
@@ -835,14 +849,9 @@ class IVectorLHUCLSTMLayer(BaseLHUCLSTMLayer):
 
     def init_lhuc_weights(self):
         ivector_shape = self.input_shapes[self.ivector_incoming_index]
-        self.ivector_dim = ivector_shape[-1]
+        ivector_dim = ivector_shape[-1]
 
-        weight_init, bias_init = self.reparam_weight_init
-
-        self.W_e_h = self.add_param(weight_init, (self.ivector_dim, self.num_units),
-                            name="W_e_h")
-        self.b_e_h = self.add_param(bias_init, (self.num_units,),
-                            name="b_e_h", regularizable=False)
+        self.init_lhuc_weights_helper(ivector_dim)
 
 
     def compute_speaker_embedding(self, inputs):        
@@ -852,7 +861,3 @@ class IVectorLHUCLSTMLayer(BaseLHUCLSTMLayer):
 
         # we only need the ivector for the first step because they are all the same
         return ivector_input[0]
-       
-    def compute_scaling_factor(self, speaker_embedding):
-
-        return T.dot(speaker_embedding, self.W_e_h) + self.b_e_h
