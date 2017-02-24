@@ -601,7 +601,7 @@ class BaseLHUCLSTMLayer(MergeLayer):
     def init_lhuc_weights(self):
         pass
 
-    def __init__(self, incoming, num_units,
+    def __init__(self, incoming, num_units, num_pred_layers, num_pred_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
                  cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
@@ -634,6 +634,10 @@ class BaseLHUCLSTMLayer(MergeLayer):
             self.nonlinearity = nonlinearity
 
         self.num_units = num_units
+        self.num_pred_layers = num_pred_layers
+        self.num_pred_units = num_pred_units
+
+
         self.backwards = backwards
         self.grad_clipping = grad_clipping
 
@@ -658,7 +662,6 @@ class BaseLHUCLSTMLayer(MergeLayer):
         self.reparam_weight_init = weight_init(reparam)
 
         self.use_layer_norm = use_layer_norm
-
 
         self.init_main_lstm_weights()
         self.init_lhuc_weights()
@@ -760,7 +763,7 @@ class SummarizingLHUCLSTMLayer(BaseLHUCLSTMLayer):
 
 
 
-    def __init__(self, incoming, num_units,
+    def __init__(self, incoming, num_units, num_pred_layers, num_pred_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
                  cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
@@ -775,7 +778,7 @@ class SummarizingLHUCLSTMLayer(BaseLHUCLSTMLayer):
                  use_layer_norm=False,
                  **kwargs):
 
-        super(SummarizingLHUCLSTMLayer, self).__init__(incoming, num_units,
+        super(SummarizingLHUCLSTMLayer, self).__init__(incoming, num_units, num_pred_layers, num_pred_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
                  grad_clipping, mask_input, reparam=reparam, use_layer_norm=use_layer_norm, **kwargs)
 
@@ -805,11 +808,11 @@ class SummarizingLHUCLSTMLayer(BaseLHUCLSTMLayer):
         return T.dot(speaker_embedding, self.W_e_h) + self.b_e_h
 
 
-class IVectorLHUCLSTMLayer(SummarizingLHUCLSTMLayer):
+class IVectorLHUCLSTMLayer(BaseLHUCLSTMLayer):
 
     ''' Generates scaling vectors based on ivectors'''
  
-    def __init__(self, incoming, ivector_input, num_units,
+    def __init__(self, incoming, ivector_input, num_units, num_pred_layers, num_pred_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
                  cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
@@ -824,7 +827,7 @@ class IVectorLHUCLSTMLayer(SummarizingLHUCLSTMLayer):
                  mask_input=None, reparam='relu', use_layer_norm=False,
                  **kwargs):
 
-        super(IVectorLHUCLSTMLayer, self).__init__(incoming, num_units,
+        super(IVectorLHUCLSTMLayer, self).__init__(incoming, num_units, num_pred_layers, num_pred_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
                  grad_clipping, mask_input, 
                  ivector_input=ivector_input, reparam=reparam, use_layer_norm=use_layer_norm, **kwargs)
@@ -850,3 +853,6 @@ class IVectorLHUCLSTMLayer(SummarizingLHUCLSTMLayer):
         # we only need the ivector for the first step because they are all the same
         return ivector_input[0]
        
+    def compute_scaling_factor(self, speaker_embedding):
+
+        return T.dot(speaker_embedding, self.W_e_h) + self.b_e_h

@@ -61,6 +61,7 @@ def get_save_path(args):
     
     if 'LHUC' in args.layer_name:
         fn = '{}_rp{}'.format(fn, args.reparam)
+        fn = '{}_npl{}_npn{}'.format(fn, args.num_pred_layers, args.num_pred_nodes)
 
     if args.use_layer_norm:
         fn = '{}_ln'.format(fn)

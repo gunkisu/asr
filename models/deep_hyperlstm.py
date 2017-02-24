@@ -8,7 +8,9 @@ from models.utils import build_input_layer, build_ivector_layer, concatenate_lay
 
 def get_layer(layer_name, is_hyper_layer, prev_input_layer, 
         num_units, num_hyper_units, num_proj_units, 
-        mask_layer, backwards, grad_clipping, ivector_layer=None, reparam='2sigmoid', use_layer_norm=False):
+        mask_layer, backwards, grad_clipping, ivector_layer=None, reparam='2sigmoid', 
+        use_layer_norm=False,
+        num_pred_layers=1, num_pred_units=100):
 
     if not is_hyper_layer:
         return LSTMLayer(prev_input_layer, num_units,
@@ -28,14 +30,14 @@ def get_layer(layer_name, is_hyper_layer, prev_input_layer,
                                 reparam=reparam, use_layer_norm=use_layer_norm)
     elif layer_name == 'SummarizingLHUCLSTMLayer': 
         return SummarizingLHUCLSTMLayer(prev_input_layer,
-                                num_units,
+                                num_units, num_pred_layers, num_pred_units,
                                 mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping,
                                 reparam=reparam, use_layer_norm=use_layer_norm)
             
 
     elif layer_name == 'IVectorLHUCLSTMLayer':
         return IVectorLHUCLSTMLayer(prev_input_layer, ivector_layer,
-                                num_units, 
+                                num_units, num_pred_layers, num_pred_units,
                                 mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping,
                                 reparam=reparam, use_layer_norm=use_layer_norm)
 
@@ -43,7 +45,11 @@ def get_layer(layer_name, is_hyper_layer, prev_input_layer,
 def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
         num_layers, num_units, num_hyper_units, num_proj_units, 
         output_dim, grad_clipping, bidir=True, num_hyperlstm_layers=1, 
-        use_ivector_input=False, ivector_var=None, ivector_dim=100, reparam='2sigmoid', use_layer_norm=False):
+        use_ivector_input=False, ivector_var=None, ivector_dim=100, 
+        reparam='2sigmoid', use_layer_norm=False,
+        num_pred_layers=1, num_pred_units=100
+        
+        ):
 
     input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)
 

@@ -82,7 +82,9 @@ if __name__ == '__main__':
                              ivector_var=ivector_data, 
                              ivector_dim=args.ivector_dim, 
                              reparam=args.reparam, 
-                             use_layer_norm=args.use_layer_norm)
+                             use_layer_norm=args.use_layer_norm,
+                             num_pred_layers=args.num_pred_layers,
+                             num_pred_units=args.num_pred_nodes)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
