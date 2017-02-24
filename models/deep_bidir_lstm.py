@@ -8,9 +8,8 @@ from lasagne.layers import LSTMLayer as LasagneLSTMLayer
 from lasagne.layers import DenseLayer, ReshapeLayer, reshape, Gate
 from lasagne.layers import get_output_shape
 from libs.lasagne_libs.lhuc_layers import LHUCLayer, exp, two_sigmoid
-from libs.lasagne_libs.layers import build_sequence_dense_layer
 
-from models.utils import build_input_layer, build_ivector_layer, concatenate_layers
+from models.utils import build_sequence_dense_layer, build_input_layer, build_ivector_layer, concatenate_layers
 
 def deep_bidir_lstm_model(input_var,
                           mask_var,
