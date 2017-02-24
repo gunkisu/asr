@@ -28,14 +28,14 @@ def get_layer(layer_name, is_hyper_layer, prev_input_layer,
                                 reparam=reparam, use_layer_norm=use_layer_norm)
     elif layer_name == 'SummarizingLHUCLSTMLayer': 
         return SummarizingLHUCLSTMLayer(prev_input_layer,
-                                num_units, num_hyper_units, num_proj_units,
+                                num_units,
                                 mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping,
                                 reparam=reparam, use_layer_norm=use_layer_norm)
             
 
     elif layer_name == 'IVectorLHUCLSTMLayer':
         return IVectorLHUCLSTMLayer(prev_input_layer, ivector_layer,
-                                num_units, num_hyper_units, num_proj_units,
+                                num_units, 
                                 mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping,
                                 reparam=reparam, use_layer_norm=use_layer_norm)
 

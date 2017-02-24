@@ -13,6 +13,10 @@ def add_params(parser):
     parser.add_argument('--output-dim', help='output dimension', default=3436, type=int)
     parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
     parser.add_argument('--num-hyperlstm-layers', help='number of hyperlstm layers', default=1, type=int)
+    parser.add_argument('--num-pred-layers', help='number of prediction layers between speaker embedding and scaling factor', default=1, type=int)
+    parser.add_argument('--num-pred-nodes',
+                        help='number of units in prediction layers between speaker embedding and scaling factor', default=100,
+                        type=int)
 
     parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
@@ -52,7 +56,7 @@ def get_save_path(args):
 
     fn = '{}_hl{}'.format(fn, args.num_hyperlstm_layers)
 
-    if args.layer_name == 'HyperLSTMLayer' or args.layer_name == 'HyperLHUCLSTMLayer': 
+    if 'Hyper' in args.layer_name: 
         fn = '{}_hnn{}_pnn{}'.format(fn, args.num_hyper_nodes, args.num_proj_nodes)
     
     if 'LHUC' in args.layer_name:

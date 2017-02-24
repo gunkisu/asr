@@ -11,6 +11,28 @@ def ln(input, alpha, beta):
     output = alpha[None, :] * output + beta[None, :]
     return output
 
+def reparam_2sigmoid(scaling_factor):
+    return 2/(1+T.exp(-scaling_factor))
+
+def reparam_exp(scaling_factor):
+    return T.exp(scaling_factor)
+
+def reparam_identity(scaling_factor):
+    return scaling_factor
+
+def reparam_relu(scaling_factor):
+    return T.nnet.relu(scaling_factor)
+
+def to_reparam_fn(fn_name):
+    return eval('reparam_{}'.format(fn_name))
+
+def weight_init(fn_name):
+    if fn_name == '2sigmoid':
+        return init.Constant(.0), init.Constant(.0) 
+    else:
+        return init.Constant(.0), init.Constant(1.0)
+
+
 class HyperLSTMLayer(MergeLayer):
     def add_scale_params(self, gate_name):
         # (W_hz, W_xz, W_bz, b_0)
@@ -399,25 +421,6 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
                                    name="W_hz")
 
         self.init_main_lstm_weights()
-
-    
-    def reparam_2sigmoid(self, scaling_factor):
-        return 2/(1+T.exp(-scaling_factor))
-
-    def reparam_exp(self, scaling_factor):
-        return T.exp(scaling_factor)
-
-    def reparam_identity(self, scaling_factor):
-        return scaling_factor
-
-    def reparam_relu(self, scaling_factor):
-        return T.nnet.relu(scaling_factor)
-
-    def get_lhuc_weight_bias_init_2sigmoid(self):
-        return init.Constant(.0), init.Constant(.0)
-   
-    def get_lhuc_weight_bias_init(self):
-        return init.Constant(.0), init.Constant(1.0)
     
     def __init__(self, incoming, num_units, num_hyper_units,num_proj_units,
                  ingate=Gate(W_in=init.Orthogonal()),
@@ -439,23 +442,9 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
                  gradient_steps, grad_clipping, precompute_input, mask_input, use_layer_norm=use_layer_norm, **kwargs)
 
-        if reparam == '2sigmoid':
-            self.reparam = self.reparam_2sigmoid
-        elif reparam == 'identity':
-            self.reparam = self.reparam_identity
-        elif reparam == 'exp':
-            self.reparam = self.reparam_exp
-        elif reparam == 'relu':
-            self.reparam = self.reparam_relu
-        
-        if reparam == '2sigmoid':
-            self.lhuc_weight_bias_init = self.get_lhuc_weight_bias_init_2sigmoid
-        else:
-            self.lhuc_weight_bias_init = self.get_lhuc_weight_bias_init
-   
-        # Give a change to initialize weights based on reparametrising functions
-        self.init_lhuc_weights()
 
+        self.reparam = to_reparam_fn(reparam)
+        
     def step(self, orig_input_n, input_n, hyper_cell_previous, hyper_hid_previous, cell_previous, hid_previous, *args):
         hyper_cell, hyper_hid = self.compute_eq10(hid_previous, orig_input_n, self.W_xhat_stacked,
             self.bhat_stacked, hyper_cell_previous, hyper_hid_previous, self.W_hhat_stacked)
@@ -556,7 +545,50 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
 
         return hid_out
 
-class BaseLHUCLSTMLayer(HyperLHUCLSTMLayer):
+#
+# Non-hyper Layers
+#
+from abc import ABCMeta, abstractmethod, abstractproperty
+
+class BaseLHUCLSTMLayer(MergeLayer):
+    __metaclass__ = ABCMeta
+
+    def slice_w(self, x, n):
+        s = x[:, n*self.num_units:(n+1)*self.num_units]
+        if self.num_units == 1:
+            s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
+        return s
+
+    def get_output_shape_for(self, input_shapes):
+        # The shape of the input to this layer will be the first element
+        # of input_shapes, whether or not a mask input is being used.
+        input_shape = input_shapes[0]
+        return input_shape[0], input_shape[1], self.num_units
+
+
+    def add_gate_params(self, gate, gate_name):
+        # (W_h, W_x, b)
+        return (self.add_param(gate.W_hid, (self.num_units, self.num_units),
+                               name="W_h_{}".format(gate_name)),
+                self.add_param(gate.W_in, (self.num_inputs, self.num_units),
+                               name="W_x_{}".format(gate_name)),
+                self.add_param(gate.b, (self.num_units,),
+                               name="b_{}".format(gate_name),
+                               regularizable=False))
+
+    def init_main_lstm_weights(self):
+        (self.W_h_ig, self.W_x_ig, self.b_ig) = self.add_gate_params(self.ingate, 'ig')
+        (self.W_h_fg, self.W_x_fg, self.b_fg) = self.add_gate_params(self.forgetgate, 'fg')
+        (self.W_h_c, self.W_x_c, self.b_c) = self.add_gate_params(self.cell, 'c')
+        (self.W_h_og, self.W_x_og, self.b_og) = self.add_gate_params(self.outgate, 'og')
+
+        self.cell_init = self.add_param(self.cell_init, (1, self.num_units), name="cell_init",
+            trainable=False, regularizable=False)
+
+        self.hid_init = self.add_param(self.hid_init, (1, self.num_units), name="hid_init",
+            trainable=False, regularizable=False)
+    
+    
     def step_masked(self, input_n, mask_n, cell_previous, hid_previous, *args):
         cell, hid = self.step(input_n, cell_previous, hid_previous, *args)
 
@@ -565,16 +597,11 @@ class BaseLHUCLSTMLayer(HyperLHUCLSTMLayer):
 
         return [cell, hid]
 
-    ''' Generates scaling vectors based on the average pooling of the previous layer output'''
-    def init_weights(self):
-        # Initialize weights later in init_lhuc_weights() when we know
-        # the reparametrising function
+    @abstractmethod
+    def init_lhuc_weights(self):
         pass
 
-    def init_lhuc_weights(self):
-        raise NotImplementedError
-
-    def __init__(self, incoming, num_units, num_hyper_units,num_proj_units,
+    def __init__(self, incoming, num_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
                  cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
@@ -583,27 +610,70 @@ class BaseLHUCLSTMLayer(HyperLHUCLSTMLayer):
                  cell_init=init.Constant(0.),
                  hid_init=init.Constant(0.),
                  backwards=False,
-                 gradient_steps=-1,
                  grad_clipping=0,
-                 precompute_input=True,
-                 mask_input=None, reparam='relu', use_layer_norm=False,
+                 mask_input=None, 
+                 ivector_input=None,
+                 reparam='relu', 
+                 use_layer_norm=False,
                  **kwargs):
 
-        super(BaseLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
-                 ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
-                 gradient_steps, grad_clipping, precompute_input, mask_input, reparam=reparam, use_layer_norm=use_layer_norm, **kwargs)
+        incomings = [incoming]
+        self.mask_incoming_index = -1
+        if mask_input is not None:
+            incomings.append(mask_input)
+            self.mask_incoming_index = len(incomings)-1
+        if ivector_input is not None:
+            incomings.append(ivector_input)
+            self.ivector_incoming_index = len(incomings)-1
 
-    def compute_speaker_embedding(self, inputs):
-        raise NotImplementedError
+        super(BaseLHUCLSTMLayer, self).__init__(incomings, **kwargs)
+
+        if nonlinearity is None:
+            self.nonlinearity = nonlinearities.identity
+        else:
+            self.nonlinearity = nonlinearity
+
+        self.num_units = num_units
+        self.backwards = backwards
+        self.grad_clipping = grad_clipping
+
+        input_shape = self.input_shapes[0]
+
+        self.num_inputs = numpy.prod(input_shape[2:])
+
+        self.ingate = ingate
+        self.forgetgate = forgetgate
+        self.cell = cell
+        self.outgate = outgate
+
+        self.nonlinearity_ingate = ingate.nonlinearity
+        self.nonlinearity_forgetgate = forgetgate.nonlinearity
+        self.nonlinearity_cell = cell.nonlinearity
+        self.nonlinearity_outgate = outgate.nonlinearity
+
+        self.cell_init = cell_init
+        self.hid_init = hid_init
+
+        self.reparam_fn = to_reparam_fn(reparam)
+        self.reparam_weight_init = weight_init(reparam)
+
+        self.use_layer_norm = use_layer_norm
+
+
+        self.init_main_lstm_weights()
+        self.init_lhuc_weights()
     
+    @abstractmethod
+    def compute_speaker_embedding(self, inputs):
+        pass
+
+    @abstractmethod
     def compute_scaling_factor(self, speaker_embedding):
-        raise NotImplementedError
+        pass
 
     def step(self, input_n, cell_previous, hid_previous, *args):
+        # Precomputed input outside of scan: input = T.dot(input, self.W_x_stacked) + self.b_stacked
 
-        if not self.precompute_input:
-            input_n = T.dot(input_n, self.W_x_stacked) + self.b_stacked
-        
         gates = T.dot(hid_previous, self.W_h_stacked) + input_n
    
         if self.grad_clipping:
@@ -627,10 +697,6 @@ class BaseLHUCLSTMLayer(HyperLHUCLSTMLayer):
     def get_output_for(self, inputs, **kwargs):
         input = inputs[0]
         mask = None
-        hyper_hid_init = None
-        hyper_cell_init = None
-        hid_init = None
-        cell_init = None
         if self.mask_incoming_index > 0:
             mask = inputs[self.mask_incoming_index]
    
@@ -649,8 +715,7 @@ class BaseLHUCLSTMLayer(HyperLHUCLSTMLayer):
         self.W_x_stacked = T.concatenate([self.W_x_ig, self.W_x_fg, self.W_x_c, self.W_x_og], axis=1)
         self.b_stacked = T.concatenate([self.b_ig, self.b_fg, self.b_c, self.b_og], axis=0)
 
-        if self.precompute_input:
-            input = T.dot(input, self.W_x_stacked) + self.b_stacked
+        input = T.dot(input, self.W_x_stacked) + self.b_stacked
 
         if mask is not None:
             mask = mask.dimshuffle(1, 0, 'x')
@@ -671,13 +736,11 @@ class BaseLHUCLSTMLayer(HyperLHUCLSTMLayer):
             sequences=sequences,
             outputs_info=[cell_init, hid_init],
             go_backwards=self.backwards,
-            truncate_gradient=self.gradient_steps,
             non_sequences=non_seqs,
             strict=True)[0]
 
         # LHUC
-        hid_out = hid_out * self.reparam(scaling_factor)
-
+        hid_out = hid_out * self.reparam_fn(scaling_factor)
         hid_out = hid_out.dimshuffle(1, 0, 2)
 
         if self.backwards:
@@ -688,17 +751,16 @@ class BaseLHUCLSTMLayer(HyperLHUCLSTMLayer):
 class SummarizingLHUCLSTMLayer(BaseLHUCLSTMLayer):
 
     def init_lhuc_weights(self):
-        weight_init, bias_init = self.lhuc_weight_bias_init()
+        weight_init, bias_init = self.reparam_weight_init
 
         self.W_e_h = self.add_param(weight_init, (self.num_inputs, self.num_units),
                             name="W_e_h")
         self.b_e_h = self.add_param(bias_init, (self.num_units,),
                             name="b_e_h", regularizable=False)
 
-        self.init_main_lstm_weights()
 
 
-    def __init__(self, incoming, num_units, num_hyper_units,num_proj_units,
+    def __init__(self, incoming, num_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
                  cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
@@ -707,15 +769,15 @@ class SummarizingLHUCLSTMLayer(BaseLHUCLSTMLayer):
                  cell_init=init.Constant(0.),
                  hid_init=init.Constant(0.),
                  backwards=False,
-                 gradient_steps=-1,
                  grad_clipping=0,
-                 precompute_input=True,
-                 mask_input=None, reparam='relu', use_layer_norm=False,
+                 mask_input=None, 
+                 reparam='relu', 
+                 use_layer_norm=False,
                  **kwargs):
 
-        super(SummarizingLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
+        super(SummarizingLHUCLSTMLayer, self).__init__(incoming, num_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
-                 gradient_steps, grad_clipping, precompute_input, mask_input, reparam=reparam, use_layer_norm=use_layer_norm, **kwargs)
+                 grad_clipping, mask_input, reparam=reparam, use_layer_norm=use_layer_norm, **kwargs)
 
     def compute_speaker_embedding(self, inputs):
         input = inputs[0]
@@ -747,7 +809,7 @@ class IVectorLHUCLSTMLayer(SummarizingLHUCLSTMLayer):
 
     ''' Generates scaling vectors based on ivectors'''
  
-    def __init__(self, incoming, ivector_input, num_units, num_hyper_units,num_proj_units,
+    def __init__(self, incoming, ivector_input, num_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
                  cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
@@ -756,15 +818,15 @@ class IVectorLHUCLSTMLayer(SummarizingLHUCLSTMLayer):
                  cell_init=init.Constant(0.),
                  hid_init=init.Constant(0.),
                  backwards=False,
-                 gradient_steps=-1,
+                 
                  grad_clipping=0,
-                 precompute_input=True,
+             
                  mask_input=None, reparam='relu', use_layer_norm=False,
                  **kwargs):
 
-        super(IVectorLHUCLSTMLayer, self).__init__(incoming, num_units, num_hyper_units,num_proj_units,
+        super(IVectorLHUCLSTMLayer, self).__init__(incoming, num_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
-                 gradient_steps, grad_clipping, precompute_input, mask_input, 
+                 grad_clipping, mask_input, 
                  ivector_input=ivector_input, reparam=reparam, use_layer_norm=use_layer_norm, **kwargs)
 
 
@@ -772,14 +834,13 @@ class IVectorLHUCLSTMLayer(SummarizingLHUCLSTMLayer):
         ivector_shape = self.input_shapes[self.ivector_incoming_index]
         self.ivector_dim = ivector_shape[-1]
 
-        weight_init, bias_init = self.lhuc_weight_bias_init()
+        weight_init, bias_init = self.reparam_weight_init
 
         self.W_e_h = self.add_param(weight_init, (self.ivector_dim, self.num_units),
                             name="W_e_h")
         self.b_e_h = self.add_param(bias_init, (self.num_units,),
                             name="b_e_h", regularizable=False)
 
-        self.init_main_lstm_weights()
 
     def compute_speaker_embedding(self, inputs):        
         ivector_input = inputs[self.ivector_incoming_index]
