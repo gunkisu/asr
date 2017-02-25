@@ -16,6 +16,7 @@ if args.slurm:
     out_lines = out.split('\n')
     for l in out_lines:
         if os.environ['USER'] not in l: continue
+        if 'bash' in l: continue # sinter
         items = l.split()
         if items[-4] == 'R':
             print(items[0])
