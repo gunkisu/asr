@@ -25,11 +25,12 @@ def add_params(parser):
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
 
     parser.add_argument('--reparam', help='function for reparametrisation', default='2sigmoid')
+    parser.add_argument('--pred-act', help='activation function for the prediction network', default='tanh')
 
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
     parser.add_argument('--use-ivector-model', help='whether to use ivectors as inputs to layers', action='store_true')
-    parser.add_argument('--layer-name', help='layer name', default='HyperLSTMLayer')
+    parser.add_argument('--layer-name', help='layer name', default='IVectorLHUCLSTMLayer')
 
     parser.add_argument('--reload-model', help='model path to load')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
@@ -62,6 +63,7 @@ def get_save_path(args):
     if 'LHUC' in args.layer_name:
         fn = '{}_rp{}'.format(fn, args.reparam)
         fn = '{}_npl{}_npn{}'.format(fn, args.num_pred_layers, args.num_pred_nodes)
+        fn = '{}_a{}'.format(fn, args.pred_act)
 
     if args.use_layer_norm:
         fn = '{}_ln'.format(fn)

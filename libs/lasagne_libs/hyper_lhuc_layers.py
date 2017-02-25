@@ -1,6 +1,8 @@
 import theano
 import numpy
 from theano import tensor as T
+from theano.tensor import tanh
+from theano.tensor.nnet import relu
 from lasagne import init, nonlinearities
 from lasagne.layers import Layer, MergeLayer, Gate
 floatX = theano.config.floatX
@@ -637,6 +639,7 @@ class BaseLHUCLSTMLayer(MergeLayer):
                  ivector_input=None,
                  reparam='relu', 
                  use_layer_norm=False,
+                 pred_act='tanh',
                  **kwargs):
 
         incomings = [incoming]
@@ -685,6 +688,8 @@ class BaseLHUCLSTMLayer(MergeLayer):
 
         self.use_layer_norm = use_layer_norm
 
+        self.pred_act = eval('{}'.format(pred_act))
+
         self.init_main_lstm_weights()
         self.init_lhuc_weights()
     
@@ -693,7 +698,7 @@ class BaseLHUCLSTMLayer(MergeLayer):
 
         for i in range(self.num_pred_layers):
             pred_in = T.dot(pred_in, self.W_pred_list[i]) + self.b_pred_list[i]
-            pred_in = T.tanh(pred_in)
+            pred_in = self.pred_act(pred_in)
             
         return T.dot(pred_in, self.W_pred_list[self.num_pred_layers]) + self.b_pred_list[self.num_pred_layers]
 
@@ -796,11 +801,13 @@ class SummarizingLHUCLSTMLayer(BaseLHUCLSTMLayer):
                  mask_input=None, 
                  reparam='relu', 
                  use_layer_norm=False,
+                 pred_act='tanh',
                  **kwargs):
 
         super(SummarizingLHUCLSTMLayer, self).__init__(incoming, num_units, num_pred_layers, num_pred_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
-                 grad_clipping, mask_input, reparam=reparam, use_layer_norm=use_layer_norm, **kwargs)
+                 grad_clipping, mask_input, reparam=reparam, use_layer_norm=use_layer_norm, 
+                 pred_act=pred_act, **kwargs)
 
     def compute_speaker_embedding(self, inputs):
         input = inputs[0]
@@ -839,12 +846,14 @@ class IVectorLHUCLSTMLayer(BaseLHUCLSTMLayer):
                  backwards=False,
                  grad_clipping=0,
                  mask_input=None, reparam='relu', use_layer_norm=False,
+                 pred_act='tanh',
                  **kwargs):
 
         super(IVectorLHUCLSTMLayer, self).__init__(incoming, num_units, num_pred_layers, num_pred_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
                  grad_clipping, mask_input, 
-                 ivector_input=ivector_input, reparam=reparam, use_layer_norm=use_layer_norm, **kwargs)
+                 ivector_input=ivector_input, reparam=reparam, use_layer_norm=use_layer_norm, 
+                 pred_act=pred_act, **kwargs)
 
 
     def init_lhuc_weights(self):

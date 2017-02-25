@@ -84,7 +84,8 @@ if __name__ == '__main__':
                              reparam=args.reparam, 
                              use_layer_norm=args.use_layer_norm,
                              num_pred_layers=args.num_pred_layers,
-                             num_pred_units=args.num_pred_nodes)
+                             num_pred_units=args.num_pred_nodes,
+                             pred_act=args.pred_act)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)

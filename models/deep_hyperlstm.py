@@ -10,7 +10,8 @@ def get_layer(layer_name, is_hyper_layer, prev_input_layer,
         num_units, num_hyper_units, num_proj_units, 
         mask_layer, backwards, grad_clipping, ivector_layer=None, reparam='2sigmoid', 
         use_layer_norm=False,
-        num_pred_layers=1, num_pred_units=100):
+        num_pred_layers=1, num_pred_units=100,
+        pred_act='tanh'):
 
     if not is_hyper_layer:
         return LSTMLayer(prev_input_layer, num_units,
@@ -32,14 +33,14 @@ def get_layer(layer_name, is_hyper_layer, prev_input_layer,
         return SummarizingLHUCLSTMLayer(prev_input_layer,
                                 num_units, num_pred_layers, num_pred_units,
                                 mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping,
-                                reparam=reparam, use_layer_norm=use_layer_norm)
+                                reparam=reparam, use_layer_norm=use_layer_norm, pred_act=pred_act)
             
 
     elif layer_name == 'IVectorLHUCLSTMLayer':
         return IVectorLHUCLSTMLayer(prev_input_layer, ivector_layer,
                                 num_units, num_pred_layers, num_pred_units,
                                 mask_input=mask_layer, backwards=backwards, grad_clipping=grad_clipping,
-                                reparam=reparam, use_layer_norm=use_layer_norm)
+                                reparam=reparam, use_layer_norm=use_layer_norm, pred_act=pred_act)
 
 
 def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
@@ -47,7 +48,7 @@ def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
         output_dim, grad_clipping, bidir=True, num_hyperlstm_layers=1, 
         use_ivector_input=False, ivector_var=None, ivector_dim=100, 
         reparam='2sigmoid', use_layer_norm=False,
-        num_pred_layers=1, num_pred_units=100
+        num_pred_layers=1, num_pred_units=100, pred_act='tanh'
         
         ):
 
@@ -68,7 +69,7 @@ def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
                             num_units, num_hyper_units, num_proj_units,
                             mask_layer, backwards=False, grad_clipping=grad_clipping, ivector_layer=ivector_layer, 
                             reparam=reparam, use_layer_norm=use_layer_norm, num_pred_layers=num_pred_layers, 
-                            num_pred_units=num_pred_units)
+                            num_pred_units=num_pred_units, pred_act=pred_act)
 
      
         if bidir:
@@ -76,7 +77,7 @@ def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
                             num_units, num_hyper_units, num_proj_units,
                             mask_layer, backwards=True, grad_clipping=grad_clipping, ivector_layer=ivector_layer,
                             reparam=reparam, use_layer_norm=use_layer_norm,
-                            num_pred_layers=num_pred_layers, num_pred_units=num_pred_units)
+                            num_pred_layers=num_pred_layers, num_pred_units=num_pred_units, pred_act=pred_act)
           
             prev_input_layer = ConcatLayer(incomings=[prev_fwd_layer, prev_bwd_layer],
                                    axis=-1)
