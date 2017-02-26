@@ -13,6 +13,10 @@ def add_params(parser):
     parser.add_argument('--output-dim', help='output dimension', default=3436, type=int)
     parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
     parser.add_argument('--num-hyperlstm-layers', help='number of hyperlstm layers', default=1, type=int)
+    parser.add_argument('--num-pred-layers', help='number of prediction layers between speaker embedding and scaling factor', default=1, type=int)
+    parser.add_argument('--num-pred-nodes',
+                        help='number of units in prediction layers between speaker embedding and scaling factor', default=100,
+                        type=int)
 
     parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
@@ -21,17 +25,19 @@ def add_params(parser):
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
 
     parser.add_argument('--reparam', help='function for reparametrisation', default='2sigmoid')
+    parser.add_argument('--pred-act', help='activation function for the prediction network', default='tanh')
 
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
     parser.add_argument('--use-ivector-model', help='whether to use ivectors as inputs to layers', action='store_true')
-    parser.add_argument('--layer-name', help='layer name', default='HyperLSTMLayer')
+    parser.add_argument('--layer-name', help='layer name', default='IVectorLHUCLSTMLayer')
 
     parser.add_argument('--reload-model', help='model path to load')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
     parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')
     parser.add_argument('--unidirectional', help='make the network unidirectional', action='store_true')
 
+    parser.add_argument('--use-layer-norm', help='whether to apply layer normalization', action='store_true')
     
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -51,11 +57,16 @@ def get_save_path(args):
 
     fn = '{}_hl{}'.format(fn, args.num_hyperlstm_layers)
 
-    if args.layer_name == 'HyperLSTMLayer' or args.layer_name == 'HyperLHUCLSTMLayer': 
+    if 'Hyper' in args.layer_name: 
         fn = '{}_hnn{}_pnn{}'.format(fn, args.num_hyper_nodes, args.num_proj_nodes)
     
     if 'LHUC' in args.layer_name:
         fn = '{}_rp{}'.format(fn, args.reparam)
+        fn = '{}_npl{}_npn{}'.format(fn, args.num_pred_layers, args.num_pred_nodes)
+        fn = '{}_a{}'.format(fn, args.pred_act)
+
+    if args.use_layer_norm:
+        fn = '{}_ln'.format(fn)
 
     fn = '{}_{}'.format(fn, args.layer_name)
   

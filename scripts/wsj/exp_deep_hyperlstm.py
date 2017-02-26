@@ -63,6 +63,9 @@ if __name__ == '__main__':
         print('--use-ivector-model not specified for IVectorLHUCLSTMLayer')
         sys.exit(1)
 
+    if args.layer_name == 'SummarizingLHUCLSTMLayer' and args.use_ivector_model:
+        print('--use-ivector-model specified for SummarizingLHUCLSTMLayer')
+        sys.exit(1)
 
     network = build_deep_hyper_lstm(args.layer_name, input_var=input_data,
                              mask_var=input_mask,
@@ -77,7 +80,12 @@ if __name__ == '__main__':
                              num_hyperlstm_layers=args.num_hyperlstm_layers,
                              use_ivector_input=args.use_ivector_input,
                              ivector_var=ivector_data, 
-                             ivector_dim=args.ivector_dim, reparam=args.reparam)
+                             ivector_dim=args.ivector_dim, 
+                             reparam=args.reparam, 
+                             use_layer_norm=args.use_layer_norm,
+                             num_pred_layers=args.num_pred_layers,
+                             num_pred_units=args.num_pred_nodes,
+                             pred_act=args.pred_act)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
