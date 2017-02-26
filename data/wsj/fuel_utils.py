@@ -84,7 +84,7 @@ def get_datastream(path, which_set='train_si84', batch_size=1, norm_path=None,
         fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
         if truncate_ivectors:
             fs = TruncateTransformer(fs, 'ivectors', ivector_dim)
-        fs = ConcatenateTransformer(fs, ['features', 'ivectors'], 'features')
+        # fs = ConcatenateTransformer(fs, ['features', 'ivectors'], 'features')
     else:
         fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
     return Padding(fs)
