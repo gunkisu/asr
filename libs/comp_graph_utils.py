@@ -200,3 +200,17 @@ def eval_net_lhuc(predict_fn,
     return total_nll, total_fer
 
 
+
+def ff(network, input_data, input_mask, ivector_data=None):
+    predict_data = get_output(network, deterministic=True)
+
+    
+    if ivector_data:
+        inputs = [input_data, input_mask, ivector_data]
+    else:
+        inputs = [input_data, input_mask]
+
+    predict_fn = theano.function(inputs=inputs,
+                                 outputs=[predict_data])
+
+    return predict_fn
