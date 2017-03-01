@@ -85,7 +85,10 @@ if __name__ == '__main__':
                              use_layer_norm=args.use_layer_norm,
                              num_pred_layers=args.num_pred_layers,
                              num_pred_units=args.num_pred_nodes,
-                             pred_act=args.pred_act)
+                             pred_act=args.pred_act, 
+                             num_seqsum_nodes=args.num_seqsum_nodes, 
+                             num_seqsum_layers=args.num_seqsum_layers, 
+                             seqsum_output_dim=args.seqsum_output_dim)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)

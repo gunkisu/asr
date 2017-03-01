@@ -5,6 +5,7 @@ from theano.tensor import tanh
 from theano.tensor.nnet import relu
 from lasagne import init, nonlinearities
 from lasagne.layers import Layer, MergeLayer, Gate
+
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
@@ -33,7 +34,6 @@ def weight_init(fn_name):
         return init.Constant(.0), init.Constant(.0) 
     else:
         return init.Constant(.0), init.Constant(1.0)
-
 
 class HyperLSTMLayer(MergeLayer):
     def add_scale_params(self, gate_name):
@@ -552,7 +552,7 @@ class HyperLHUCLSTMLayer(HyperLSTMLayer):
 #
 from abc import ABCMeta, abstractmethod, abstractproperty
 
-class BaseLHUCLSTMLayer(MergeLayer):
+class SpeakerLHUCLSTMLayer(MergeLayer):
     __metaclass__ = ABCMeta
 
     def slice_w(self, x, n):
@@ -621,9 +621,13 @@ class BaseLHUCLSTMLayer(MergeLayer):
                             name="b_e_h_{}".format(self.num_pred_layers), regularizable=False))
 
 
-    @abstractmethod
+  
     def init_lhuc_weights(self):
-        pass
+        speaker_shape = self.input_shapes[self.speaker_incoming_index]
+        speaker_dim = speaker_shape[-1]
+
+        self.init_lhuc_weights_helper(speaker_dim)
+
     
     def __init__(self, incoming, num_units, num_pred_layers, num_pred_units,
                  ingate=Gate(W_in=init.Orthogonal()),
@@ -636,7 +640,7 @@ class BaseLHUCLSTMLayer(MergeLayer):
                  backwards=False,
                  grad_clipping=0,
                  mask_input=None, 
-                 ivector_input=None,
+                 speaker_input=None,
                  reparam='relu', 
                  use_layer_norm=False,
                  pred_act='tanh',
@@ -647,11 +651,11 @@ class BaseLHUCLSTMLayer(MergeLayer):
         if mask_input is not None:
             incomings.append(mask_input)
             self.mask_incoming_index = len(incomings)-1
-        if ivector_input is not None:
-            incomings.append(ivector_input)
-            self.ivector_incoming_index = len(incomings)-1
+        if speaker_input is not None:
+            incomings.append(speaker_input)
+            self.speaker_incoming_index = len(incomings)-1
 
-        super(BaseLHUCLSTMLayer, self).__init__(incomings, **kwargs)
+        super(SpeakerLHUCLSTMLayer, self).__init__(incomings, **kwargs)
 
         if nonlinearity is None:
             self.nonlinearity = nonlinearities.identity
@@ -783,7 +787,7 @@ class BaseLHUCLSTMLayer(MergeLayer):
 
         return hid_out
 
-class SummarizingLHUCLSTMLayer(BaseLHUCLSTMLayer):
+class SummarizingLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
 
     def init_lhuc_weights(self):
         self.init_lhuc_weights_helper(self.num_inputs)
@@ -829,12 +833,37 @@ class SummarizingLHUCLSTMLayer(BaseLHUCLSTMLayer):
             return seq_sum / seq_len
         else:
             return T.mean(input, axis=0)
-            
 
-class IVectorLHUCLSTMLayer(BaseLHUCLSTMLayer):
+class SeqSumLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
 
-    ''' Generates scaling vectors based on ivectors'''
- 
+    def __init__(self, incoming, speaker_input, num_units, num_pred_layers, num_pred_units,
+                 ingate=Gate(W_in=init.Orthogonal()),
+                 forgetgate=Gate(W_in=init.Orthogonal()),
+                 cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
+                 outgate=Gate(W_in=init.Orthogonal()),
+                 nonlinearity=nonlinearities.tanh,
+                 cell_init=init.Constant(0.),
+                 hid_init=init.Constant(0.),
+                 backwards=False,
+                 grad_clipping=0,
+                 mask_input=None, 
+                 reparam='relu', 
+                 use_layer_norm=False,
+                 pred_act='tanh',
+                 **kwargs):
+       
+        super(SeqSumLHUCLSTMLayer, self).__init__(incoming, num_units, num_pred_layers, num_pred_units,
+                 ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
+                 grad_clipping, mask_input, 
+                 speaker_input=speaker_input, reparam=reparam, use_layer_norm=use_layer_norm, 
+                 pred_act=pred_act, **kwargs)
+
+    def compute_speaker_embedding(self, inputs):        
+        speaker_input = inputs[self.speaker_incoming_index]
+        return speaker_input
+
+
+class IVectorLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
     def __init__(self, incoming, ivector_input, num_units, num_pred_layers, num_pred_units,
                  ingate=Gate(W_in=init.Orthogonal()),
                  forgetgate=Gate(W_in=init.Orthogonal()),
@@ -852,21 +881,15 @@ class IVectorLHUCLSTMLayer(BaseLHUCLSTMLayer):
         super(IVectorLHUCLSTMLayer, self).__init__(incoming, num_units, num_pred_layers, num_pred_units,
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
                  grad_clipping, mask_input, 
-                 ivector_input=ivector_input, reparam=reparam, use_layer_norm=use_layer_norm, 
+                 speaker_input=ivector_input, reparam=reparam, use_layer_norm=use_layer_norm, 
                  pred_act=pred_act, **kwargs)
 
-
-    def init_lhuc_weights(self):
-        ivector_shape = self.input_shapes[self.ivector_incoming_index]
-        ivector_dim = ivector_shape[-1]
-
-        self.init_lhuc_weights_helper(ivector_dim)
-
-
     def compute_speaker_embedding(self, inputs):        
-        ivector_input = inputs[self.ivector_incoming_index]
+        ivector_input = inputs[self.speaker_incoming_index]
         ivector_input = ivector_input.dimshuffle(1, 0, 2)
         iv_seq_len, iv_num_batch, _ = ivector_input.shape
 
         # we only need the ivector for the first step because they are all the same
         return ivector_input[0]
+
+

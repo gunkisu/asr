@@ -18,6 +18,10 @@ def add_params(parser):
                         help='number of units in prediction layers between speaker embedding and scaling factor', default=100,
                         type=int)
 
+    parser.add_argument('--num-seqsum-layers', help='number of layers in sequence summarizing neural network', default=2, type=int)
+    parser.add_argument('--num-seqsum-nodes',  help='number of units in sequence summarizing layers', default=512,type=int)
+    parser.add_argument('--seqsum-output-dim', help='output dimension of sequence summarizing neural network', default=100, type=int)
+
     parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
     parser.add_argument('--train-dataset', help='dataset for training', default='train_si284')
@@ -45,9 +49,9 @@ def get_arg_parser():
     return parser
 
 def get_save_path(args):
-    fn = './wsj_hyperlstm_lr{}_gc{}_nl{}_nn{}_b{}'.format(
+    fn = './wsj_hyperlstm_lr{}_gc{}_nl{}_nn{}_b{}_od{}'.format(
             args.learn_rate, args.grad_clipping, args.num_layers, args.num_nodes, 
-            args.batch_size)
+            args.batch_size, args.output_dim)
     if args.use_ivector_input:
         fn = '{}_ivi{}'.format(fn, args.ivector_dim)
     if args.use_ivector_model:
@@ -64,7 +68,10 @@ def get_save_path(args):
         fn = '{}_rp{}'.format(fn, args.reparam)
         fn = '{}_npl{}_npn{}'.format(fn, args.num_pred_layers, args.num_pred_nodes)
         fn = '{}_a{}'.format(fn, args.pred_act)
-
+    
+    if 'SeqSum' in args.layer_name:
+        fn = '{}_nsl{}_nsn{}_sod{}'.format(fn, args.num_seqsum_layers, args.num_seqsum_nodes, args.seqsum_output_dim)
+          
     if args.use_layer_norm:
         fn = '{}_ln'.format(fn)
 
