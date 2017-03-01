@@ -2061,6 +2061,7 @@ class FixedCondLayerNormProjectLSTMLayer(MergeLayer):
         non_seqs = [W_hid_stacked,
                     alpha_in,
                     alpha_hid,
+                    beta,
                     self.W_hid_prj]
 
         cell_out, hid_out = theano.scan(fn=step_fun,
@@ -2327,6 +2328,7 @@ class FixedInputCondLayerNormProjectLSTMLayer(MergeLayer):
         non_seqs = [W_hid_stacked,
                     alpha_in,
                     alpha_hid,
+                    beta,
                     self.W_hid_prj]
 
         cell_out, hid_out = theano.scan(fn=step_fun,
@@ -2588,6 +2590,7 @@ class FixedMaxCondLayerNormProjectLSTMLayer(MergeLayer):
         non_seqs = [W_hid_stacked,
                     alpha_in,
                     alpha_hid,
+                    beta,
                     self.W_hid_prj]
 
         cell_out, hid_out = theano.scan(fn=step_fun,
@@ -2854,6 +2857,7 @@ class FixedMaxInputCondLayerNormProjectLSTMLayer(MergeLayer):
         non_seqs = [W_hid_stacked,
                     alpha_in,
                     alpha_hid,
+                    beta,
                     self.W_hid_prj]
 
         cell_out, hid_out = theano.scan(fn=step_fun,
