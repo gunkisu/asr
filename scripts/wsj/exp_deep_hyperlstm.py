@@ -10,7 +10,7 @@ from collections import namedtuple
 from libs.hyperlstm_utils import add_params, get_arg_parser, get_save_path
 from libs.lasagne_libs.utils import set_model_param_value
 
-from lasagne.layers import get_all_params, count_params
+from lasagne.layers import get_all_params, count_params, get_output
 from libs.lasagne_libs.updates import momentum
 
 from libs.comp_graph_utils import trainer, predictor, eval_net
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         print('--use-ivector-model specified for SummarizingLHUCLSTMLayer')
         sys.exit(1)
 
-    network = build_deep_hyper_lstm(args.layer_name, input_var=input_data,
+    network, speaker_layer = build_deep_hyper_lstm(args.layer_name, input_var=input_data,
                              mask_var=input_mask,
                              input_dim=args.input_dim,
                              num_layers=args.num_layers,
@@ -111,6 +111,12 @@ if __name__ == '__main__':
 
     print('Building trainer')
     sw.reset()
+
+
+    speaker_embedding = None
+    if args.use_mb_loss:
+        speaker_embedding = get_output(speaker_layer)
+
     training_fn, trainer_params = trainer(
               input_data=input_data,
               input_mask=input_mask,
@@ -120,7 +126,10 @@ if __name__ == '__main__':
               updater=eval(args.updater),
               learning_rate=args.learn_rate,
               load_updater_params=pretrain_update_params_val,
-              ivector_data=ivector_data)
+              ivector_data=ivector_data, speaker_embedding=speaker_embedding,
+              mb_loss_lambda=args.mb_loss_lambda)
+
+
     sw.print_elapsed()
 
     print('Building predictor')

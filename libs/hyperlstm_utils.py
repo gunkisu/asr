@@ -35,6 +35,8 @@ def add_params(parser):
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
     parser.add_argument('--use-ivector-model', help='whether to use ivectors as inputs to layers', action='store_true')
     parser.add_argument('--layer-name', help='layer name', default='IVectorLHUCLSTMLayer')
+    parser.add_argument('--use-mb-loss', help='use speaker embedding loss computed over minibatch', action='store_true')  
+    parser.add_argument('--mb-loss-lambda', default=0.1, help='weight for the mb-loss regularizer ', type=float)
 
     parser.add_argument('--reload-model', help='model path to load')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
@@ -71,7 +73,10 @@ def get_save_path(args):
     
     if 'SeqSum' in args.layer_name:
         fn = '{}_nsl{}_nsn{}_sod{}'.format(fn, args.num_seqsum_layers, args.num_seqsum_nodes, args.seqsum_output_dim)
+        if args.use_mb_loss:
+            fn = '{}_lambda{}'.format(fn, args.mb_loss_lambda)
           
+
     if args.use_layer_norm:
         fn = '{}_ln'.format(fn)
 
