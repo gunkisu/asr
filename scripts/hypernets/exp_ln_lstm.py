@@ -233,14 +233,14 @@ if __name__ == '__main__':
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-    network_output = deep_lstm_model(input_var=input_data,
-                                     mask_var=input_mask,
-                                     num_inputs=input_dim,
-                                     num_outputs=output_dim,
-                                     num_layers=args.num_layers,
-                                     num_units=args.num_units,
-                                     grad_clipping=args.grad_clipping,
-                                     dropout=args.dropout)
+    network_output = deep_ln_lstm_model(input_var=input_data,
+                                        mask_var=input_mask,
+                                        num_inputs=input_dim,
+                                        num_outputs=output_dim,
+                                        num_layers=args.num_layers,
+                                        num_units=args.num_units,
+                                        grad_clipping=args.grad_clipping,
+                                        dropout=args.dropout)
 
     network = network_output
     network_params = get_all_params(network, trainable=True)
