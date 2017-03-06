@@ -696,7 +696,13 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
 
         self.init_main_lstm_weights()
         self.init_lhuc_weights()
+
+        self.speaker_embedding = None
     
+    @abstractmethod
+    def compute_speaker_embedding(self, inputs):
+        pass
+
     def compute_scaling_factor(self, speaker_embedding):
         pred_in = speaker_embedding
 
@@ -743,8 +749,8 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
         
         seq_len, num_batch, _ = input.shape
 
-        speaker_embedding = self.compute_speaker_embedding(inputs)
-        scaling_factor = self.compute_scaling_factor(speaker_embedding)
+        self.speaker_embedding = self.compute_speaker_embedding(inputs)
+        scaling_factor = self.compute_scaling_factor(self.speaker_embedding)
        
         # Equation 12
         self.W_h_stacked = T.concatenate([self.W_h_ig, self.W_h_fg, self.W_h_c, self.W_h_og], axis=1)
@@ -786,6 +792,9 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
             hid_out = hid_out[:, ::-1]
 
         return hid_out
+
+    def get_speaker_embedding(self):
+        return self.speaker_embedding
 
 class SummarizingLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
 

@@ -58,8 +58,7 @@ def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
         use_ivector_input=False, ivector_var=None, ivector_dim=100, 
         reparam='2sigmoid', use_layer_norm=False,
         num_pred_layers=1, num_pred_units=100, pred_act='tanh',
-        num_seqsum_nodes=512, num_seqsum_layers=2, seqsum_output_dim=100
-        ):
+        num_seqsum_nodes=512, num_seqsum_layers=2, seqsum_output_dim=100):
 
     input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)
   
@@ -74,6 +73,7 @@ def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
 
         speaker_layer = build_sequence_summarizing_layer(input_var, input_layer, 
                 num_nodes=num_seqsum_nodes, num_layers=num_seqsum_layers, output_dim=seqsum_output_dim)
+        
         
 
     prev_input_layer = input_layer
@@ -102,6 +102,6 @@ def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
             prev_input_layer = prev_fwd_layer
 
   
-    return build_sequence_dense_layer(input_var, prev_input_layer, output_dim)
+    return build_sequence_dense_layer(input_var, prev_input_layer, output_dim), speaker_layer
 
 

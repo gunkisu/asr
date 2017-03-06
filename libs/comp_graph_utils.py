@@ -11,7 +11,6 @@ import data.wsj.fuel_utils as fuel_utils
 
 floatX = theano.config.floatX
 
-
 def compute_loss(network, target_data, target_mask):
     o = get_output(network, deterministic=False)
     num_seqs = o.shape[0]
@@ -25,12 +24,34 @@ def compute_loss(network, target_data, target_mask):
 
     return ce_cost, ce_frame
 
+def compute_loss_speaker_embedding(network, target_data, target_mask, speaker_embedding=None, mb_loss_lambda=.0):
+    o = get_output(network, deterministic=False)
+    num_seqs = o.shape[0]
+    ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
+            targets=T.flatten(target_data, 1))
+
+    ce = ce * T.flatten(target_mask, 1)
+
+    ce_cost = ce.sum()/num_seqs
+    ce_frame = ce.sum()/target_mask.sum()
+
+    if speaker_embedding:
+        # speaker_embedding's shape: (n_batch, n_feat)    
+        se_cost = -T.mean(T.var(speaker_embedding, axis=0)) # over batch
+        ce_cost += se_cost * mb_loss_lambda
+
+    return ce_cost, ce_frame
+
+
 def trainer(input_data, input_mask, target_data, target_mask, 
         network, updater, learning_rate, load_updater_params=None,
-        ivector_data=None):
+        ivector_data=None, speaker_embedding=None, mb_loss_lambda=.0):
 
-    ce_cost, ce_frame = compute_loss(network, target_data, target_mask)
-
+    if speaker_embedding:
+        ce_cost, ce_frame = compute_loss_speaker_embedding(network, target_data, target_mask, speaker_embedding, mb_loss_lambda)
+    else:
+        ce_cost, ce_frame = compute_loss(network, target_data, target_mask)
+  
     network_params = get_all_params(network, trainable=True)
     network_grads = theano.grad(cost=ce_cost,
                                 wrt=network_params)
