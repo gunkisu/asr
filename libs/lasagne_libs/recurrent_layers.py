@@ -3670,3 +3670,4 @@ class InputCondLayerNormLSTMLayer(MergeLayer):
 
     def get_sample_feat(self):
         return self.sample_feat
+
