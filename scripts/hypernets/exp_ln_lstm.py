@@ -240,7 +240,7 @@ if __name__ == '__main__':
                                         num_layers=args.num_layers,
                                         num_units=args.num_units,
                                         grad_clipping=args.grad_clipping,
-                                        dropout=args.dropout)
+                                         dropout=args.dropout)
 
     network = network_output
     network_params = get_all_params(network, trainable=True)
