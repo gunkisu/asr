@@ -23,7 +23,7 @@ floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
 input_dim = 123
-output_dim = 3436
+output_dim = 4174
 
 def add_params(parser):
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
