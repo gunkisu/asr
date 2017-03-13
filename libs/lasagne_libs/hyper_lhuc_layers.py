@@ -584,6 +584,16 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
         (self.W_h_c, self.W_x_c, self.b_c) = self.add_gate_params(self.cell, 'c')
         (self.W_h_og, self.W_x_og, self.b_og) = self.add_gate_params(self.outgate, 'og')
 
+		# Peephole connections
+        self.W_c_ig = self.add_param(
+                self.ingate.W_cell, (self.num_units, ), name="W_c_ig")
+
+        self.W_c_fg = self.add_param(
+                self.forgetgate.W_cell, (self.num_units, ), name="W_c_fg")
+
+        self.W_c_og = self.add_param(
+                self.outgate.W_cell, (self.num_units, ), name="W_c_og")
+
         self.cell_init = self.add_param(self.cell_init, (1, self.num_units), name="cell_init",
             trainable=False, regularizable=False)
 
@@ -630,10 +640,10 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
 
     
     def __init__(self, incoming, num_units, num_pred_layers, num_pred_units,
-                 ingate=Gate(W_in=init.Orthogonal()),
-                 forgetgate=Gate(W_in=init.Orthogonal()),
-                 cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
-                 outgate=Gate(W_in=init.Orthogonal()),
+                 ingate=Gate(),
+                 forgetgate=Gate(),
+                 cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
+                 outgate=Gate(),
                  nonlinearity=nonlinearities.tanh,
                  cell_init=init.Constant(0.),
                  hid_init=init.Constant(0.),
@@ -724,12 +734,20 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
 
         ingate, forgetgate, cell_input, outgate = \
             [self.slice_w(gates, i) for i in range(4)]
-    
+
+        # Peephole connections
+        ingate += cell_previous*self.W_c_ig
+        forgetgate += cell_previous*self.W_c_fg
+
         ingate = self.nonlinearity_ingate(ingate)
         forgetgate = self.nonlinearity_forgetgate(forgetgate)
         cell_input = self.nonlinearity_cell(cell_input)
 
         cell = forgetgate*cell_previous + ingate*cell_input
+
+        # Peephole connections
+        outgate += cell * self.W_c_og
+
         outgate = self.nonlinearity_outgate(outgate)
 
         hid = outgate*self.nonlinearity(cell)
@@ -772,7 +790,7 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
         cell_init = T.dot(ones, self.cell_init)
         hid_init = T.dot(ones, self.hid_init)
         
-        non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked]
+        non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked, self.W_c_ig, self.W_c_fg, self.W_c_og]
         non_seqs.extend(self.W_pred_list)
         non_seqs.extend(self.b_pred_list)
       
@@ -802,10 +820,10 @@ class SummarizingLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
         self.init_lhuc_weights_helper(self.num_inputs)
 
     def __init__(self, incoming, num_units, num_pred_layers, num_pred_units,
-                 ingate=Gate(W_in=init.Orthogonal()),
-                 forgetgate=Gate(W_in=init.Orthogonal()),
-                 cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
-                 outgate=Gate(W_in=init.Orthogonal()),
+                 ingate=Gate(),
+                 forgetgate=Gate(),
+                 cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
+                 outgate=Gate(),
                  nonlinearity=nonlinearities.tanh,
                  cell_init=init.Constant(0.),
                  hid_init=init.Constant(0.),
@@ -846,10 +864,10 @@ class SummarizingLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
 class SeqSumLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
 
     def __init__(self, incoming, speaker_input, num_units, num_pred_layers, num_pred_units,
-                 ingate=Gate(W_in=init.Orthogonal()),
-                 forgetgate=Gate(W_in=init.Orthogonal()),
-                 cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
-                 outgate=Gate(W_in=init.Orthogonal()),
+                 ingate=Gate(),
+                 forgetgate=Gate(),
+                 cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
+                 outgate=Gate(),
                  nonlinearity=nonlinearities.tanh,
                  cell_init=init.Constant(0.),
                  hid_init=init.Constant(0.),
@@ -874,10 +892,10 @@ class SeqSumLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
 
 class IVectorLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
     def __init__(self, incoming, ivector_input, num_units, num_pred_layers, num_pred_units,
-                 ingate=Gate(W_in=init.Orthogonal()),
-                 forgetgate=Gate(W_in=init.Orthogonal()),
-                 cell=Gate(W_in=init.Orthogonal(), W_cell=None, nonlinearity=nonlinearities.tanh),
-                 outgate=Gate(W_in=init.Orthogonal()),
+                 ingate=Gate(),
+                 forgetgate=Gate(),
+                 cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
+                 outgate=Gate(),
                  nonlinearity=nonlinearities.tanh,
                  cell_init=init.Constant(0.),
                  hid_init=init.Constant(0.),
