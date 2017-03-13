@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
-    print('Number of parameters of the network: {:.2f}M'.format(float(param_count) / 1000000))
+    print('Number of parameters of the network: {:.2f}M'.format(float(param_count) / 1000000), file=sys.stderr)
 
     print('Loading Parameters...', file=sys.stderr)
     if args.model:
@@ -118,10 +118,7 @@ if __name__ == '__main__':
         print('Writing outputs...', file=sys.stderr)
         for out_idx, (output, uttid) in enumerate(zip(net_output[0], uttid_batch[0])):
             valid_len = feat_lens[out_idx]
-            print(uttid)
-            raw_input()
-            print(numpy.log(output[:valid_len]))
             writer.write(uttid.encode('ascii'), numpy.log(output[:valid_len]))
-            raw_input()
+            print(out_idx, file=sys.stderr)
 
     writer.close()
