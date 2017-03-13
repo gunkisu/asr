@@ -57,6 +57,8 @@ def get_arg_parser():
 
 def ff(network, input_data, input_mask):
     predict_data = get_output(network, deterministic=True)
+    predict_data = predict_data - T.max(predict_data, axis=-1, keepdims=True)
+    predict_data = predict_data - T.log(T.sum(T.exp(predict_data), axis=-1, keepdims=True))
     inputs = [input_data, input_mask]
     predict_fn = theano.function(inputs=inputs,
                                  outputs=[predict_data])
@@ -120,8 +122,8 @@ if __name__ == '__main__':
             valid_len = feat_lens[out_idx]
             print(out_idx, file=sys.stderr)
             print(uttid.encode('ascii'), file=sys.stderr)
-            print(numpy.log(output[:valid_len]), file=sys.stderr)
-            writer.write(uttid.encode('ascii'), numpy.log(output[:valid_len]))
+            print(output[:valid_len], file=sys.stderr)
+            writer.write(uttid.encode('ascii'), output[:valid_len])
 
 
     writer.close()
