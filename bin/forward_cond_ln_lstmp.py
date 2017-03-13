@@ -112,7 +112,7 @@ if __name__ == '__main__':
     for batch_idx, (feat_batch, uttid_batch) in enumerate(zip(test_datastream.get_epoch_iterator(),
                                                               uttid_datastream.get_epoch_iterator())):
         input_data, input_mask = feat_batch
-        feat_lens = input_mask.sum(axis=1)
+        feat_lens = int(input_mask.sum(axis=1))
 
         print('Feed-forwarding...', file=sys.stderr)
         net_output = ff_fn(input_data, input_mask)
