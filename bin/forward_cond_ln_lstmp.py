@@ -83,8 +83,8 @@ if __name__ == '__main__':
                                                 dropout=args.dropout)[0]
 
     network_params = get_all_params(network, trainable=True)
-    # param_count = count_params(network, trainable=True)
-    # print('Number of parameters of the network: {:.2f}M'.format(float(param_count) / 1000000))
+    param_count = count_params(network, trainable=True)
+    print('Number of parameters of the network: {:.2f}M'.format(float(param_count) / 1000000))
 
     print('Loading Parameters...', file=sys.stderr)
     if args.model:
