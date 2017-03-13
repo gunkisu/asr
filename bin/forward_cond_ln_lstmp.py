@@ -46,6 +46,10 @@ def add_params(parser):
 
     parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')
 
+    parser.add_argument('--model', default=None )
+    parser.add_argument('--dataset', default='test_eval92')
+    parser.add_argument('--wxfilename', default='./test_kaldi_wer')
+
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add_params(parser)
@@ -60,11 +64,6 @@ def ff(network, input_data, input_mask):
 
 if __name__ == '__main__':
     parser = get_arg_parser()
-
-    parser.add_argument('model')
-    parser.add_argument('dataset')
-    parser.add_argument('wxfilename')
-
     args = parser.parse_args()
 
     print(args, file=sys.stderr)
