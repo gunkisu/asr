@@ -11,7 +11,7 @@ from lasagne.layers import get_all_params, count_params
 from lasagne.layers import get_output
 from libs.lasagne_libs.utils import set_model_param_value
 from models.gating_hyper_nets import deep_projection_cond_ln_model_fix
-from data.wsj.fuel_utils import get_datastream, get_uttid_stream
+from data.wsj.fuel_utils import get_feat_stream, get_uttid_stream
 
 import kaldi_io
 
@@ -83,6 +83,8 @@ if __name__ == '__main__':
                                                 dropout=args.dropout)[0]
 
     network_params = get_all_params(network, trainable=True)
+    param_count = count_params(network, trainable=True)
+    print('Number of parameters of the network: {:.2f}M'.format(float(param_count) / 1000000))
 
     print('Loading Parameters...', file=sys.stderr)
     if args.model:
@@ -96,9 +98,9 @@ if __name__ == '__main__':
         sys.exit(1)
 
     ff_fn = ff(network, input_data, input_mask)
-    test_datastream = get_datastream(path=args.data_path,
-                                     which_set=args.dataset,
-                                     batch_size=args.batch_size)
+    test_datastream = get_feat_stream(path=args.data_path,
+                                      which_set=args.dataset,
+                                      batch_size=args.batch_size)
     uttid_datastream = get_uttid_stream(path=args.data_path,
                                         which_set=args.dataset,
                                         batch_size=args.batch_size)
@@ -107,11 +109,7 @@ if __name__ == '__main__':
 
     for batch_idx, (feat_batch, uttid_batch) in enumerate(zip(test_datastream.get_epoch_iterator(),
                                                               uttid_datastream.get_epoch_iterator())):
-        input_data = feat_batch[0].astype(floatX)
-        input_mask = feat_batch[1].astype(floatX)
-
-        target_data = feat_batch[2]
-        target_mask = feat_batch[3].astype(floatX)
+        input_data, input_mask = feat_batch
         feat_lens = input_mask.sum(axis=1)
 
         print('Feed-forwarding...', file=sys.stderr)
