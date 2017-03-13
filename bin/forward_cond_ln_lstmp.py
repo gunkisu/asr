@@ -48,7 +48,7 @@ def add_params(parser):
 
     parser.add_argument('--model', default=None )
     parser.add_argument('--dataset', default='test_eval92')
-    parser.add_argument('--wxfilename', default='./test_kaldi_wer')
+    parser.add_argument('wxfilename')
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
