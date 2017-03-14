@@ -73,7 +73,7 @@ with open(all_utt2spk) as f:
     for row_idx, spk in enumerate(utt2spk):
         spks_ds[row_idx] = spk
 
-feat = 'ark:add-detlas scp:{} ark:- | apply-global-cmvn.py --global-stats=ark:{} ark:- ark:-|'.format(all_fbank41_scp, cmvn_stats)
+feat = 'ark:add-deltas scp:{} ark:- | apply-global-cmvn.py --global-stats=ark:{} ark:- ark:-|'.format(all_fbank41_scp, cmvn_stats)
 
 # Add features (deltas added and globally normalized on the fly)
 for row_idx, (uttid, value) in enumerate(kaldi_io.SequentialBaseFloatMatrixReader(feat)):
@@ -100,9 +100,9 @@ for row_idx, (uttid, value) in enumerate(kaldi_io.SequentialBaseFloatVectorReade
 
 
 split_dict = {
-        'train': {'features': (0, 92500), 'targets': (0, 92500), 'uttids': (0, 92500), 'spks': (0, 92500)},
-        'dev': {'features': (92500, 92500+498), 'targets': (92500, 92500+498), 'uttids': (92500, 92500+498), 'spks': (92500, 92500+498)},
-        'test': {'features': (92500+498, 92500+498+1147), 'targets': (92500+498, 92500+498+1147), 'uttids': (92500+498, 92500+498+1147), 'spks': (92500+498, 92500+498+1147)}
+        'train': {'features': (0, 92500), 'targets': (0, 92500), 'ivectors': (0, 92500), 'uttids': (0, 92500), 'spks': (0, 92500)},
+        'dev': {'features': (92500, 92500+498), 'targets': (92500, 92500+498), 'ivectors': (92500, 92500+498), 'uttids': (92500, 92500+498), 'spks': (92500, 92500+498)},
+        'test': {'features': (92500+498, 92500+498+1147), 'targets': (92500+498, 92500+498+1147), 'ivectors': (92500+498, 92500+498+1147), 'uttids': (92500+498, 92500+498+1147), 'spks': (92500+498, 92500+498+1147)}
         }
 
 f.attrs['split'] = H5PYDataset.create_split_array(split_dict)
