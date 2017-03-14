@@ -120,9 +120,6 @@ if __name__ == '__main__':
         print('Writing outputs...', file=sys.stderr)
         for out_idx, (output, uttid) in enumerate(zip(net_output[0], uttid_batch[0])):
             valid_len = feat_lens[out_idx]
-            print(out_idx, file=sys.stderr)
-            print(uttid.encode('ascii'), file=sys.stderr)
-            print(output[:valid_len], file=sys.stderr)
             writer.write(uttid.encode('ascii'), output[:valid_len])
 
 
