@@ -5,6 +5,7 @@ from lasagne.layers import InputLayer, DenseLayer, ConcatLayer, SliceLayer, Glob
 from libs.lasagne_libs.hyper_layers import ScalingHyperLSTMLayer, ProjectionHyperLSTMLayer
 from libs.lasagne_libs.recurrent_layers import (LSTMLayer,
                                                 ProjectLSTMLayer,
+                                                FixedLayerNormProjectLSTMLayer,
                                                 LayerNormProjectLSTMLayer,
                                                 LayerNormLSTMLayer,
                                                 CondLayerNormProjectLSTMLayer,
@@ -374,6 +375,59 @@ def deep_projection_cond_ln_model(input_var,
                                       num_outputs=num_outputs,
                                       nonlinearity=None)
     return output_layer, cond_layer_list
+
+def deep_projection_ln_lstm_model_fix(input_var,
+                                      mask_var,
+                                      num_inputs,
+                                      num_outputs,
+                                      num_layers,
+                                      num_factors,
+                                      num_units,
+                                      grad_clipping=1,
+                                      dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    prev_input_layer = input_layer
+    for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+
+        fwd_feat_layer = FixedLayerNormProjectLSTMLayer(incoming=prev_input_layer,
+                                                        mask_input=mask_layer,
+                                                        num_units=num_units,
+                                                        num_factors=num_factors,
+                                                        grad_clipping=grad_clipping,
+                                                        backwards=False)
+
+        # backward
+        bwd_feat_layer = FixedLayerNormProjectLSTMLayer(incoming=prev_input_layer,
+                                                        mask_input=mask_layer,
+                                                        num_units=num_units,
+                                                        num_factors=num_factors,
+                                                        grad_clipping=grad_clipping,
+                                                        backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer
 
 def deep_projection_cond_ln_model_fix(input_var,
                                       mask_var,

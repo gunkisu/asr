@@ -285,11 +285,11 @@ if __name__ == '__main__':
         with open(args.reload_model, 'rb') as f:
             [pretrain_network_params_val,
              pretrain_update_params_val,
-             pretrain_total_epoch_cnt] = pickle.load(f)
+             pretrain_total_batch_cnt] = pickle.load(f)
         set_model_param_value(network_params, pretrain_network_params_val)
     else:
         pretrain_update_params_val = None
-        pretrain_total_epoch_cnt = 0
+        pretrain_total_batch_cnt = 0
 
     EvalRecord = namedtuple('EvalRecord', ['train_ce_frame',
                                            'valid_ce_frame',
@@ -337,15 +337,13 @@ if __name__ == '__main__':
     # start training #
     ##################
     print('Starting')
+    total_batch_cnt = 0
     # for each epoch
     for e_idx in range(1, args.num_epochs+1):
         # control learning rate
         new_lr = args.learn_rate/(1.04**max(e_idx/2-1, 0))
         print("Learning Rate: " + str(new_lr))
         train_lr.set_value(lasagne.utils.floatX(new_lr))
-        if e_idx <= pretrain_total_epoch_cnt:
-            print('Skipping Epoch {}'.format(e_idx))
-            continue
 
         epoch_sw = StopWatch()
         print('--')
@@ -356,6 +354,10 @@ if __name__ == '__main__':
         status_sw = StopWatch()
         # for each batch
         for batch_idx, batch_data in enumerate(train_datastream.get_epoch_iterator(), start=1):
+            total_batch_cnt += 1
+            if total_batch_cnt <= pretrain_total_batch_cnt:
+                continue
+
             # get data
             input_data, input_mask, input_cond, _,  target_data, target_mask = batch_data
 
@@ -384,13 +386,20 @@ if __name__ == '__main__':
                 status_sw.reset()
             train_frame_loss_sum += train_frame_loss
 
+            if batch_idx%1000 == 0:
+                print('Saving the network')
+                save_network(network_params=network_params,
+                             trainer_params=updater_params,
+                             epoch_cnt=total_batch_cnt,
+                             save_path=args.save_path + '_last_model.pkl')
+
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
 
         print('Saving the network')
         save_network(network_params=network_params,
                      trainer_params=updater_params,
-                     epoch_cnt=e_idx,
+                     epoch_cnt=total_batch_cnt,
                      save_path=args.save_path + '_last_model.pkl')
 
         print('Evaluating the network on the validation dataset')
@@ -405,9 +414,10 @@ if __name__ == '__main__':
 
         if valid_fer<best_fer(eval_history):
             # symlink_force('{}_last_model.pkl'.format(args.save_path), '{}_best_model.pkl'.format(args.save_path))
+            print('Best model saved based on FER')
             save_network(network_params=network_params,
                          trainer_params=updater_params,
-                         epoch_cnt=e_idx,
+                         epoch_cnt=total_batch_cnt,
                          save_path=args.save_path + '_best_model.pkl')
 
         print('Saving the evaluation history')
