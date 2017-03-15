@@ -15,7 +15,7 @@ from lasagne.layers import count_params
 from lasagne.layers import get_output, get_all_params
 from libs.utils import save_network, save_eval_history, best_fer, show_status, symlink_force
 from libs.utils import StopWatch, Rsync
-from models.gating_hyper_nets import deep_projection_ln_lstm_model
+from models.gating_hyper_nets import deep_projection_ln_lstm_model_fix
 from data.wsj.fuel_utils import get_datastream
 from libs.lasagne_libs.updates import momentum, adam
 
