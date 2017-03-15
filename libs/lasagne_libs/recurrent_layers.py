@@ -2207,7 +2207,7 @@ class FixedCondLayerNormProjectLSTMLayer(MergeLayer):
                                      regularizable=False)
 
         self.W_alpha_cell = self.add_param(spec=init.Constant(1.0),
-                                           shape=(num_factors,),
+                                           shape=(num_units,),
                                            name="W_alpha_cell")
 
         self.W_beta_cell = self.add_param(spec=init.Constant(0.0),
@@ -2476,7 +2476,7 @@ class FixedInputCondLayerNormProjectLSTMLayer(MergeLayer):
                                      regularizable=False)
 
         self.W_alpha_cell = self.add_param(spec=init.Constant(1.0),
-                                           shape=(num_factors,),
+                                           shape=(num_units,),
                                            name="W_alpha_cell")
 
         self.W_beta_cell = self.add_param(spec=init.Constant(0.0),
