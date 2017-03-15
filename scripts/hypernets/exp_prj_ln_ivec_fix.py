@@ -76,7 +76,6 @@ def build_trainer(input_data,
                   target_mask,
                   network_params,
                   output_layer,
-                  feat_reg,
                   updater,
                   learning_rate,
                   load_updater_params=None):
@@ -300,7 +299,6 @@ if __name__ == '__main__':
                                      target_mask=target_mask,
                                      network_params=network_params,
                                      output_layer=network,
-                                     feat_reg=args.feat_reg,
                                      updater=eval(args.updater),
                                      learning_rate=args.learn_rate,
                                      load_updater_params=pretrain_update_params_val)
