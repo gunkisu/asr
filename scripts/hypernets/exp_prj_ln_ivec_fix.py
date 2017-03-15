@@ -27,7 +27,7 @@ output_dim = 3436
 
 def add_params(parser):
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
-    parser.add_argument('--num_conds', default=1, help='number of hidden units', type=int)
+    parser.add_argument('--num_conds', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_layers', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_units', default=512, help='number of hidden units', type=int)
     parser.add_argument('--num_factors', default=64, help='number of factors', type=int)
@@ -39,8 +39,6 @@ def add_params(parser):
     parser.add_argument('--num_epochs', help='number of epochs', default=50, type=int)
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
     parser.add_argument('--train_disp_freq', help='how ferquently to display progress', default=100, type=int)
-
-    parser.add_argument('--feat_reg', default=0.0, help='feat_reg', type=float)
 
     parser.add_argument('--train_dataset', help='dataset for training', default='train_si284')
     parser.add_argument('--valid_dataset', help='dataset for validation', default='test_dev93')
@@ -59,7 +57,7 @@ def get_arg_parser():
 
 def get_save_path(args):
     path = args.save_path
-    path += '/wsj_prj_ln_ivector_fix'
+    path += '/wsj_lstmp_ivec_dln'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
     path += '_do{}'.format(args.dropout)
@@ -68,7 +66,6 @@ def get_save_path(args):
     path += '_nf{}'.format(args.num_factors)
     path += '_nu{}'.format(args.num_units)
     path += '_nb{}'.format(args.batch_size)
-    path += '_fr{}'.format(args.feat_reg)
 
     return path
 
@@ -79,7 +76,6 @@ def build_trainer(input_data,
                   target_mask,
                   network_params,
                   output_layer,
-                  cond_layer_list,
                   feat_reg,
                   updater,
                   learning_rate,
@@ -104,15 +100,7 @@ def build_trainer(input_data,
 
     frame_accr = T.sum(T.eq(frame_prd_idx, target_data)*target_mask)/T.sum(target_mask)
 
-    train_feat_loss = 0
-    for cond_layer in cond_layer_list:
-        sample_feat = cond_layer.get_sample_feat()
-        sample_feat_cost = T.var(sample_feat, axis=0)
-        sample_feat_cost = -T.mean(sample_feat_cost)
-        train_feat_loss += sample_feat_cost
-    train_feat_loss /= len(cond_layer_list)
-
-    train_total_loss = train_loss + train_feat_loss*feat_reg
+    train_total_loss = train_loss
 
     network_grads = theano.grad(cost=train_total_loss, wrt=network_params)
     network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
@@ -130,7 +118,6 @@ def build_trainer(input_data,
                                           target_mask],
                                   outputs=[frame_loss,
                                            frame_accr,
-                                           train_feat_loss,
                                            network_grads_norm],
                                   updates=train_updates)
     return training_fn, train_lr, updater_params
@@ -260,17 +247,17 @@ if __name__ == '__main__':
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-    network_output, cond_layer_list = deep_projection_ivector_ln_model_fix(input_var=input_data,
-                                                                           cond_var=input_cond,
-                                                                           mask_var=input_mask,
-                                                                           num_inputs=input_dim,
-                                                                           num_outputs=output_dim,
-                                                                           num_layers=args.num_layers,
-                                                                           num_conds=args.num_conds,
-                                                                           num_factors=args.num_factors,
-                                                                           num_units=args.num_units,
-                                                                           grad_clipping=args.grad_clipping,
-                                                                           dropout=args.dropout)
+    network_output = deep_projection_ivector_ln_model_fix(input_var=input_data,
+                                                          cond_var=input_cond,
+                                                          mask_var=input_mask,
+                                                          num_inputs=input_dim,
+                                                          num_outputs=output_dim,
+                                                          num_layers=args.num_layers,
+                                                          num_conds=args.num_conds,
+                                                          num_factors=args.num_factors,
+                                                          num_units=args.num_units,
+                                                          grad_clipping=args.grad_clipping,
+                                                          dropout=args.dropout)[0]
 
     network = network_output
     network_params = get_all_params(network, trainable=True)
@@ -313,7 +300,6 @@ if __name__ == '__main__':
                                      target_mask=target_mask,
                                      network_params=network_params,
                                      output_layer=network,
-                                     cond_layer_list=cond_layer_list,
                                      feat_reg=args.feat_reg,
                                      updater=eval(args.updater),
                                      learning_rate=args.learn_rate,
@@ -367,8 +353,7 @@ if __name__ == '__main__':
                                     target_mask)
             train_frame_loss = train_output[0]
             train_frame_accr = train_output[1]
-            train_feat_loss = train_output[2]
-            train_grads_norm = train_output[3]
+            train_grads_norm = train_output[2]
             train_frame_loss_sum += train_frame_loss
 
             # show results
@@ -380,9 +365,8 @@ if __name__ == '__main__':
                             batch_size=args.batch_size,
                             epoch_idx=e_idx)
                 print('Frame Accr: {}'.format(train_frame_accr))
-                print('Feat loss: {}'.format(train_feat_loss))
 
-            if batch_idx%100==0:
+            if batch_idx%250==0:
                 print('Saving the network')
                 save_network(network_params=network_params,
                              trainer_params=updater_params,

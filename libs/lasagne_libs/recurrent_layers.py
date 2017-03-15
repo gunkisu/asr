@@ -2206,6 +2206,15 @@ class FixedCondLayerNormProjectLSTMLayer(MergeLayer):
                                      name="b_beta",
                                      regularizable=False)
 
+        self.W_alpha_cell = self.add_param(spec=init.Constant(1.0),
+                                           shape=(num_factors,),
+                                           name="W_alpha_cell")
+
+        self.W_beta_cell = self.add_param(spec=init.Constant(0.0),
+                                          shape=(num_units,),
+                                          name="num_factors",
+                                          regularizable=False)
+
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
         if self.only_return_hidden:
@@ -2284,7 +2293,7 @@ class FixedCondLayerNormProjectLSTMLayer(MergeLayer):
             forgetgate = T.nnet.sigmoid(forgetgate)
             cell_input = T.tanh(cell_input)
             cell = forgetgate*cell_previous + ingate*cell_input
-            outcell = cell
+            outcell = ln(cell, self.W_alpha_cell, self.W_beta_cell)
             if self.grad_clipping:
                 outcell = theano.gradient.grad_clip(outcell,
                                                     -self.grad_clipping,
@@ -2319,7 +2328,9 @@ class FixedCondLayerNormProjectLSTMLayer(MergeLayer):
                     alpha_in,
                     alpha_hid,
                     beta,
-                    self.W_hid_prj]
+                    self.W_hid_prj,
+                    self.W_alpha_cell,
+                    self.W_beta_cell]
 
         cell_out, hid_out = theano.scan(fn=step_fun,
                                         sequences=sequences,
@@ -2439,18 +2450,9 @@ class FixedInputCondLayerNormProjectLSTMLayer(MergeLayer):
                                        trainable=False,
                                        regularizable=False)
 
-        #### conditional mapping ####
-        self.W_cond_prj = self.add_param(spec=init.Orthogonal(),
-                                         shape=(num_conds, num_factors),
-                                         name="W_cond_prj")
-        self.b_cond_prj = self.add_param(spec=init.Constant(0.),
-                                         shape=(num_factors, ),
-                                         name="b_cond_prj",
-                                         regularizable=False)
-
         #### input layer norm ####
         self.W_alpha_in = self.add_param(spec=init.Constant(0.),
-                                         shape=(num_factors, num_units*4),
+                                         shape=(num_conds, num_units*4),
                                          name="W_alpha_in")
         self.b_alpha_in = self.add_param(spec=init.Constant(1.),
                                          shape=(num_units*4, ),
@@ -2458,7 +2460,7 @@ class FixedInputCondLayerNormProjectLSTMLayer(MergeLayer):
 
         #### hidden layer norm ####
         self.W_alpha_hid = self.add_param(spec=init.Constant(0.),
-                                          shape=(num_factors, num_units*4),
+                                          shape=(num_conds, num_units*4),
                                           name="W_alpha_hid")
         self.b_alpha_hid = self.add_param(spec=init.Constant(1.),
                                           shape=(num_units*4, ),
@@ -2466,12 +2468,21 @@ class FixedInputCondLayerNormProjectLSTMLayer(MergeLayer):
 
         #### beta  for all ####
         self.W_beta = self.add_param(spec=init.Constant(0.),
-                                     shape=(num_factors, num_units*4),
+                                     shape=(num_conds, num_units*4),
                                      name="W_beta")
         self.b_beta = self.add_param(spec=init.Constant(0.),
                                      shape=(num_units*4, ),
                                      name="b_beta",
                                      regularizable=False)
+
+        self.W_alpha_cell = self.add_param(spec=init.Constant(1.0),
+                                           shape=(num_factors,),
+                                           name="W_alpha_cell")
+
+        self.W_beta_cell = self.add_param(spec=init.Constant(0.0),
+                                          shape=(num_units,),
+                                          name="num_factors",
+                                          regularizable=False)
 
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
@@ -2491,16 +2502,11 @@ class FixedInputCondLayerNormProjectLSTMLayer(MergeLayer):
         cond_data = inputs[1]
         mask = inputs[2]
 
-        # get ln params
-        ln_input = T.dot(cond_data,  self.W_cond_prj)  + self.b_cond_prj.dimshuffle('x', 'x', 0)
-        ln_input = T.tanh(ln_input)
-        ln_input = T.sum(ln_input*mask.dimshuffle(0, 1, 'x'), axis=1)/T.sum(mask, axis=1, keepdims=True)
+        ln_data = cond_data[:, 0, :]
 
-        self.sample_feat = ln_input
-
-        alpha_in = T.dot(ln_input, self.W_alpha_in) + self.b_alpha_in
-        alpha_hid = T.dot(ln_input, self.W_alpha_hid) + self.b_alpha_hid
-        beta = T.dot(ln_input, self.W_beta) + self.b_beta
+        alpha_in = T.dot(ln_data, self.W_alpha_in) + self.b_alpha_in
+        alpha_hid = T.dot(ln_data, self.W_alpha_hid) + self.b_alpha_hid
+        beta = T.dot(ln_data, self.W_beta) + self.b_beta
 
         input = input.dimshuffle(1, 0, 2)
         mask = mask.dimshuffle(1, 0, 'x')
@@ -2551,7 +2557,7 @@ class FixedInputCondLayerNormProjectLSTMLayer(MergeLayer):
             forgetgate = T.nnet.sigmoid(forgetgate)
             cell_input = T.tanh(cell_input)
             cell = forgetgate*cell_previous + ingate*cell_input
-            outcell = cell
+            outcell = ln(cell, self.W_alpha_cell, self.W_beta_cell)
             if self.grad_clipping:
                 outcell = theano.gradient.grad_clip(outcell,
                                                     -self.grad_clipping,
@@ -2586,7 +2592,9 @@ class FixedInputCondLayerNormProjectLSTMLayer(MergeLayer):
                     alpha_in,
                     alpha_hid,
                     beta,
-                    self.W_hid_prj]
+                    self.W_hid_prj,
+                    self.W_alpha_cell,
+                    self.W_beta_cell]
 
         cell_out, hid_out = theano.scan(fn=step_fun,
                                         sequences=sequences,

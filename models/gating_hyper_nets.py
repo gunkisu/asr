@@ -381,7 +381,6 @@ def deep_projection_ln_lstm_model_fix(input_var,
                                       num_inputs,
                                       num_outputs,
                                       num_layers,
-                                      num_factors,
                                       num_units,
                                       grad_clipping=1,
                                       dropout=0.2):
@@ -404,7 +403,6 @@ def deep_projection_ln_lstm_model_fix(input_var,
         fwd_feat_layer = FixedLayerNormProjectLSTMLayer(incoming=prev_input_layer,
                                                         mask_input=mask_layer,
                                                         num_units=num_units,
-                                                        num_factors=num_factors,
                                                         grad_clipping=grad_clipping,
                                                         backwards=False)
 
@@ -412,7 +410,6 @@ def deep_projection_ln_lstm_model_fix(input_var,
         bwd_feat_layer = FixedLayerNormProjectLSTMLayer(incoming=prev_input_layer,
                                                         mask_input=mask_layer,
                                                         num_units=num_units,
-                                                        num_factors=num_factors,
                                                         grad_clipping=grad_clipping,
                                                         backwards=True)
 

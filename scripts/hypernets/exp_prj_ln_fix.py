@@ -27,7 +27,7 @@ output_dim = 3436
 
 def add_params(parser):
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
-    parser.add_argument('--num_conds', default=1, help='number of hidden units', type=int)
+    parser.add_argument('--num_conds', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_layers', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_units', default=512, help='number of hidden units', type=int)
     parser.add_argument('--num_factors', default=64, help='number of factors', type=int)
@@ -59,7 +59,7 @@ def get_arg_parser():
 
 def get_save_path(args):
     path = args.save_path
-    path += '/wsj_lstmp_dln'
+    path += '/wsj_lstmp_uttr_dln'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
     path += '_do{}'.format(args.dropout)
@@ -368,7 +368,7 @@ if __name__ == '__main__':
                 print('Frame Accr: {}'.format(train_frame_accr))
                 print('Feat loss: {}'.format(train_feat_loss))
 
-            if batch_idx%100==0:
+            if batch_idx%250==0:
                 print('Saving the network')
                 save_network(network_params=network_params,
                              trainer_params=updater_params,
