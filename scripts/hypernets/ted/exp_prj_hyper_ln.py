@@ -418,6 +418,7 @@ if __name__ == '__main__':
 
         if valid_fer<best_fer(eval_history):
             # symlink_force('{}_last_model.pkl'.format(args.save_path), '{}_best_model.pkl'.format(args.save_path))
+            print('Best model saved based on FER')
             save_network(network_params=network_params,
                          trainer_params=updater_params,
                          epoch_cnt=total_batch_cnt,
