@@ -386,7 +386,7 @@ if __name__ == '__main__':
                 train_frame_loss_sum = 0.0
 
                 if valid_fer < best_fer(eval_history):
-                    print('Best model saved based on FER from ' + best_fer(eval_history) + ' to ' + valid_fer)
+                    print('Best model saved based on FER from ' + str(best_fer(eval_history)) + ' to ' + str(valid_fer))
                     save_network(network_params=network_params,
                                  trainer_params=updater_params,
                                  epoch_cnt=total_batch_cnt,
