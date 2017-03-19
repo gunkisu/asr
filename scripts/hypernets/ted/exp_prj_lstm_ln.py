@@ -266,7 +266,14 @@ if __name__ == '__main__':
                                            'valid_fer',
                                            'test_ce_frame',
                                            'test_fer'])
-    eval_history =[EvalRecord(10.1, 10.0, 1.0, 10.0, 1.0)]
+
+    eval_path = args.save_path + '_eval_history.pkl'
+    if os.path.exists(eval_path):
+        print('Previously trained history detected: {}'.format(eval_path))
+        with open(eval_path, 'rb') as f:
+            eval_history = pickle.load(f)
+    else:
+        eval_history = [EvalRecord(10.1, 10.0, 1.0, 10.0, 1.0)]
 
 
     #################
