@@ -141,7 +141,8 @@ if __name__ == '__main__':
     ####################
     data_stream = get_datastream(path=args.data_path,
                                  which_set=args.test_dataset,
-                                 batch_size=args.batch_size)
+                                 batch_size=args.batch_size,
+                                 shuffled=False)
     id_stream = get_spkid_stream(path=args.data_path,
                                  which_set=args.test_dataset,
                                  batch_size=args.batch_size)
