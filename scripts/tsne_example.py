@@ -19,55 +19,43 @@ def Hbeta(D, beta=1.0):
 
 
 def x2p(X, tol=1e-5, perplexity=30.0):
-    # Initialize some variables
-    # print "Computing pairwise distances..."
-    (n, d) = X.shape
-    sum_X = Math.sum(Math.square(X), 1)
-    D = Math.add(Math.add(-2 * Math.dot(X, X.T), sum_X).T, sum_X)
-    P = Math.zeros((n, n))
-    beta = Math.ones((n, 1))
-    logU = Math.log(perplexity)
-
-    # Loop over all datapoints
-    for i in range(n):
-        # Print progress
-        if i % 500 == 0:
-            print "Computing P-values for point ", i, " of ", n, "..."
-        # Compute the Gaussian kernel and entropy for the current precision
-        betamin = -Math.inf
-        betamax = Math.inf
-        Di = D[i, Math.concatenate((Math.r_[0:i], Math.r_[i + 1:n]))]
-        (H, thisP) = Hbeta(Di, beta[i])
-
-		# Evaluate whether the perplexity is within tolerance
+	(n, d) = X.shape
+	sum_X = Math.sum(Math.square(X), 1)
+	D = Math.add(Math.add(-2 * Math.dot(X, X.T), sum_X).T, sum_X)
+	P = Math.zeros((n, n))
+	beta = Math.ones((n, 1))
+	logU = Math.log(perplexity)
+	# Loop over all datapoints
+	for i in range(n):
+		# Print progress
+		if i % 500 == 0:
+			print "Computing P-values for point ", i, " of ", n, "..."
+		betamin = -Math.inf
+		betamax = Math.inf
+		Di = D[i, Math.concatenate((Math.r_[0:i], Math.r_[i + 1:n]))]
+		(H, thisP) = Hbeta(Di, beta[i])
 		Hdiff = H - logU
 		tries = 0
 		while Math.abs(Hdiff) > tol and tries < 50:
-			# If not, increase or decrease precision
 			if Hdiff > 0:
 				betamin = beta[i].copy()
 				if betamax == Math.inf or betamax == -Math.inf:
 					beta[i] = beta[i] * 2
-                else:
-                    beta[i] = (beta[i] + betamax) / 2
-            else:
-                betamax = beta[i].copy()
-                if betamin == Math.inf or betamin == -Math.inf:
-                    beta[i] = beta[i] / 2
-                else:
-                    beta[i] = (beta[i] + betamin) / 2
+				else:
+					beta[i] = (beta[i] + betamax) / 2
+			else:
+				betamax = beta[i].copy()
+				if betamin == Math.inf or betamin == -Math.inf:
+					beta[i] = beta[i] / 2
+				else:
+					beta[i] = (beta[i] + betamin) / 2
+			(H, thisP) = Hbeta(Di, beta[i])
+			Hdiff = H - logU
+			tries = tries + 1
+		P[i, Math.concatenate((Math.r_[0:i], Math.r_[i + 1:n]))] = thisP
 
-            # Recompute the values
-            (H, thisP) = Hbeta(Di, beta[i])
-            Hdiff = H - logU
-            tries = tries + 1
-
-        # Set the final row of P
-        P[i, Math.concatenate((Math.r_[0:i], Math.r_[i + 1:n]))] = thisP
-
-    # Return final P-matrix
-    print "Mean value of sigma: ", Math.mean(Math.sqrt(1 / beta))
-    return P
+	print "Mean value of sigma: ", Math.mean(Math.sqrt(1 / beta))
+	return P
 
 
 def tsne(X, no_dims=2, initial_dims=50, perplexity=30.0):
