@@ -338,6 +338,7 @@ if __name__ == '__main__':
     id_data = spk_to_ids(spk_list=spk_list,
                          spks=id_data)
 
-    new_feat_data = tsne(X=feat_data, no_dims=2, initial_dims=64)
-    with open(args.save_path + '_feat.pkl', 'wb') as f:
-        pickle.dump([new_feat_data, id_data], f)
+    for i in range(3):
+        new_feat_data = tsne(X=feat_data[:, i*128:(i+1)*128], no_dims=2, initial_dims=64)
+        with open(args.save_path + '_feat{}.pkl'.format(i), 'wb') as f:
+            pickle.dump([new_feat_data, id_data], f)
