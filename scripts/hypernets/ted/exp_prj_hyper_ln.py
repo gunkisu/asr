@@ -27,7 +27,7 @@ output_dim = 4174
 
 def add_params(parser):
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
-    parser.add_argument('--num_conds', default=1, help='number of hidden units', type=int)
+    parser.add_argument('--num_conds', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_layers', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_units', default=512, help='number of hidden units', type=int)
     parser.add_argument('--num_factors', default=64, help='number of factors', type=int)
@@ -52,6 +52,7 @@ def add_params(parser):
 
     parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')
 
+
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add_params(parser)
@@ -59,7 +60,7 @@ def get_arg_parser():
 
 def get_save_path(args):
     path = args.save_path
-    path += '/ted_prj_hyper_ln'
+    path += '/ted_lstmp_uttr_dln'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
     path += '_do{}'.format(args.dropout)
@@ -161,24 +162,6 @@ def build_predictor(input_data,
                                    target_mask],
                            outputs=[frame_prd_idx,
                                     frame_loss])
-
-def build_uttr_feat_extractor(input_data,
-                              input_mask,
-                              output_layer,
-                              cond_layer_list):
-    output_score = get_output(output_layer, deterministic=True)
-
-    uttr_feat_list = []
-    for cond_layer in cond_layer_list:
-        sample_feat = cond_layer.get_sample_feat()
-        uttr_feat_list.append(sample_feat)
-
-    return theano.function(inputs=[input_data,
-                                   input_mask],
-                           outputs=[frame_prd_idx,
-                                    frame_loss])
-
-
 
 def eval_network(predict_fn,
                  data_stream):
@@ -303,7 +286,14 @@ if __name__ == '__main__':
                                            'valid_fer',
                                            'test_ce_frame',
                                            'test_fer'])
-    eval_history =[EvalRecord(10.1, 10.0, 1.0, 10.0, 1.0)]
+
+    eval_path = args.save_path + '_eval_history.pkl'
+    if os.path.exists(eval_path):
+        print('Previously trained history detected: {}'.format(eval_path))
+        with open(eval_path, 'rb') as f:
+            eval_history = pickle.load(f)
+    else:
+        eval_history = [EvalRecord(10.1, 10.0, 1.0, 10.0, 1.0)]
 
 
     #################
@@ -350,13 +340,11 @@ if __name__ == '__main__':
         print("Learning Rate: " + str(new_lr))
         train_lr.set_value(lasagne.utils.floatX(new_lr))
 
-        epoch_sw = StopWatch()
         print('--')
         print('Epoch {} starts'.format(e_idx))
         print('--')
 
         train_frame_loss_sum = 0.0
-        status_sw = StopWatch()
         # for each batch
         for batch_idx, batch_data in enumerate(train_datastream.get_epoch_iterator(), start=1):
             total_batch_cnt += 1
@@ -375,6 +363,7 @@ if __name__ == '__main__':
             train_frame_accr = train_output[1]
             train_feat_loss = train_output[2]
             train_grads_norm = train_output[3]
+            train_frame_loss_sum += train_frame_loss
 
             # show results
             if batch_idx%args.train_disp_freq == 0:
@@ -386,44 +375,33 @@ if __name__ == '__main__':
                             epoch_idx=e_idx)
                 print('Frame Accr: {}'.format(train_frame_accr))
                 print('Feat loss: {}'.format(train_feat_loss))
-                status_sw.print_elapsed()
-                status_sw.reset()
-            train_frame_loss_sum += train_frame_loss
 
-            if batch_idx%1000 == 0:
+            if batch_idx%250==0:
                 print('Saving the network')
                 save_network(network_params=network_params,
                              trainer_params=updater_params,
                              epoch_cnt=total_batch_cnt,
                              save_path=args.save_path + '_last_model.pkl')
 
+            if batch_idx%1000==0:
+                print('Evaluating the network on the validation dataset')
+                valid_frame_loss, valid_fer = eval_network(predict_fn, valid_datastream)
+                test_frame_loss, test_fer = eval_network(predict_fn, test_datastream)
+                print('Train CE: {}'.format(train_frame_loss_sum / batch_idx))
+                print('Valid CE: {}, FER: {}'.format(valid_frame_loss, valid_fer))
+                print('Test  CE: {}, FER: {}'.format(test_frame_loss, test_fer))
+                train_frame_loss_sum = 0.0
+
+                if valid_fer < best_fer(eval_history):
+                    print('Best model saved based on FER from ' + str(best_fer(eval_history)) + ' to ' + str(valid_fer))
+                    save_network(network_params=network_params,
+                                 trainer_params=updater_params,
+                                 epoch_cnt=total_batch_cnt,
+                                 save_path=args.save_path + '_best_model.pkl')
+                print('Saving the evaluation history')
+                er = EvalRecord(train_frame_loss_sum / batch_idx, valid_frame_loss, valid_fer, test_frame_loss,
+                                test_fer)
+                eval_history.append(er)
+                save_eval_history(eval_history, args.save_path + '_eval_history.pkl')
+
         print('End of Epoch {}'.format(e_idx))
-        epoch_sw.print_elapsed()
-
-        print('Saving the network')
-        save_network(network_params=network_params,
-                     trainer_params=updater_params,
-                     epoch_cnt=total_batch_cnt,
-                     save_path=args.save_path + '_last_model.pkl')
-
-        print('Evaluating the network on the validation dataset')
-        eval_sw = StopWatch()
-        valid_frame_loss, valid_fer = eval_network(predict_fn, valid_datastream)
-        test_frame_loss, test_fer = eval_network(predict_fn, test_datastream)
-        eval_sw.print_elapsed()
-
-        print('Train CE: {}'.format(train_frame_loss_sum/batch_idx))
-        print('Valid CE: {}, FER: {}'.format(valid_frame_loss, valid_fer))
-        print('Test  CE: {}, FER: {}'.format(test_frame_loss, test_fer))
-
-        if valid_fer<best_fer(eval_history):
-            # symlink_force('{}_last_model.pkl'.format(args.save_path), '{}_best_model.pkl'.format(args.save_path))
-            save_network(network_params=network_params,
-                         trainer_params=updater_params,
-                         epoch_cnt=total_batch_cnt,
-                         save_path=args.save_path + '_best_model.pkl')
-
-        print('Saving the evaluation history')
-        er = EvalRecord(train_frame_loss_sum /batch_idx, valid_frame_loss, valid_fer, test_frame_loss, test_fer)
-        eval_history.append(er)
-        save_eval_history(eval_history, args.save_path + '_eval_history.pkl')

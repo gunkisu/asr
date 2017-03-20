@@ -15,7 +15,7 @@ from lasagne.layers import count_params
 from lasagne.layers import get_output, get_all_params
 from libs.utils import save_network, save_eval_history, best_fer, show_status, symlink_force
 from libs.utils import StopWatch, Rsync
-from models.gating_hyper_nets import deep_projection_ln_lstm_model
+from models.gating_hyper_nets import deep_projection_ln_lstm_model_fix
 from data.wsj.fuel_utils import get_datastream
 from libs.lasagne_libs.updates import momentum, adam
 
@@ -29,7 +29,6 @@ def add_params(parser):
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
     parser.add_argument('--num_layers', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_units', default=512, help='number of hidden units', type=int)
-    parser.add_argument('--num_factors', default=256, help='number of factors', type=int)
     parser.add_argument('--learn_rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad_clipping', default=1.0, help='gradient clipping', type=float)
     parser.add_argument('--dropout', default=0.2, help='dropout', type=float)
@@ -56,12 +55,11 @@ def get_arg_parser():
 
 def get_save_path(args):
     path = args.save_path
-    path += '/ted_prj_lstm_ln'
+    path += '/ted_lstmp_ln'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
     path += '_do{}'.format(args.dropout)
     path += '_nl{}'.format(args.num_layers)
-    path += '_nf{}'.format(args.num_factors)
     path += '_nu{}'.format(args.num_units)
     path += '_nb{}'.format(args.batch_size)
 
@@ -235,15 +233,14 @@ if __name__ == '__main__':
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-    network_output = deep_projection_ln_lstm_model(input_var=input_data,
-                                                   mask_var=input_mask,
-                                                   num_inputs=input_dim,
-                                                   num_outputs=output_dim,
-                                                   num_layers=args.num_layers,
-                                                   num_factors=args.num_factors,
-                                                   num_units=args.num_units,
-                                                   grad_clipping=args.grad_clipping,
-                                                   dropout=args.dropout)
+    network_output = deep_projection_ln_lstm_model_fix(input_var=input_data,
+                                                       mask_var=input_mask,
+                                                       num_inputs=input_dim,
+                                                       num_outputs=output_dim,
+                                                       num_layers=args.num_layers,
+                                                       num_units=args.num_units,
+                                                       grad_clipping=args.grad_clipping,
+                                                       dropout=args.dropout)
 
     network = network_output
     network_params = get_all_params(network, trainable=True)
@@ -269,7 +266,14 @@ if __name__ == '__main__':
                                            'valid_fer',
                                            'test_ce_frame',
                                            'test_fer'])
-    eval_history =[EvalRecord(10.1, 10.0, 1.0, 10.0, 1.0)]
+
+    eval_path = args.save_path + '_eval_history.pkl'
+    if os.path.exists(eval_path):
+        print('Previously trained history detected: {}'.format(eval_path))
+        with open(eval_path, 'rb') as f:
+            eval_history = pickle.load(f)
+    else:
+        eval_history = [EvalRecord(10.1, 10.0, 1.0, 10.0, 1.0)]
 
 
     #################
@@ -320,8 +324,6 @@ if __name__ == '__main__':
         print('--')
 
         train_frame_loss_sum = 0.0
-        status_sw = StopWatch()
-
         # for each batch
         for batch_idx, batch_data in enumerate(train_datastream.get_epoch_iterator(), start=1):
             total_batch_cnt += 1
@@ -339,6 +341,7 @@ if __name__ == '__main__':
             train_frame_loss = train_output[0]
             train_frame_accr = train_output[1]
             train_grads_norm = train_output[2]
+            train_frame_loss_sum += train_frame_loss
 
             # show results
             if batch_idx%args.train_disp_freq == 0:
@@ -349,43 +352,33 @@ if __name__ == '__main__':
                             batch_size=args.batch_size,
                             epoch_idx=e_idx)
                 print('Frame Accr: {}'.format(train_frame_accr))
-                status_sw.print_elapsed()
-                status_sw.reset()
-            train_frame_loss_sum += train_frame_loss
 
-            if batch_idx%1000 == 0:
+            if batch_idx % 250 == 0:
                 print('Saving the network')
                 save_network(network_params=network_params,
                              trainer_params=updater_params,
                              epoch_cnt=total_batch_cnt,
                              save_path=args.save_path + '_last_model.pkl')
 
+            if batch_idx % 1000 == 0:
+                print('Evaluating the network on the validation dataset')
+                valid_frame_loss, valid_fer = eval_network(predict_fn, valid_datastream)
+                test_frame_loss, test_fer = eval_network(predict_fn, test_datastream)
+                print('Train CE: {}'.format(train_frame_loss_sum / batch_idx))
+                print('Valid CE: {}, FER: {}'.format(valid_frame_loss, valid_fer))
+                print('Test  CE: {}, FER: {}'.format(test_frame_loss, test_fer))
+                train_frame_loss_sum = 0.0
+
+                if valid_fer < best_fer(eval_history):
+                    print('Best model saved based on FER from ' + str(best_fer(eval_history)) + ' to ' + str(valid_fer))
+                    save_network(network_params=network_params,
+                                 trainer_params=updater_params,
+                                 epoch_cnt=total_batch_cnt,
+                                 save_path=args.save_path + '_best_model.pkl')
+                print('Saving the evaluation history')
+                er = EvalRecord(train_frame_loss_sum / batch_idx, valid_frame_loss, valid_fer, test_frame_loss,
+                                test_fer)
+                eval_history.append(er)
+                save_eval_history(eval_history, args.save_path + '_eval_history.pkl')
+
         print('End of Epoch {}'.format(e_idx))
-        epoch_sw.print_elapsed()
-
-        print('Saving the network')
-        save_network(network_params=network_params,
-                     trainer_params=updater_params,
-                     epoch_cnt=total_batch_cnt,
-                     save_path=args.save_path + '_last_model.pkl')
-
-        print('Evaluating the network on the validation dataset')
-        eval_sw = StopWatch()
-        valid_frame_loss, valid_fer = eval_network(predict_fn, valid_datastream)
-        test_frame_loss, test_fer = eval_network(predict_fn, test_datastream)
-        eval_sw.print_elapsed()
-
-        print('Train CE: {}'.format(train_frame_loss_sum/batch_idx))
-        print('Valid CE: {}, FER: {}'.format(valid_frame_loss, valid_fer))
-        print('Test  CE: {}, FER: {}'.format(test_frame_loss, test_fer))
-
-        if valid_fer<best_fer(eval_history):
-            # symlink_force('{}_last_model.pkl'.format(args.save_path), '{}_best_model.pkl'.format(args.save_path))
-            save_network(network_params=network_params,
-                         trainer_params=updater_params,
-                         epoch_cnt=total_batch_cnt,
-                         save_path=args.save_path + '_best_model.pkl')
-        print('Saving the evaluation history')
-        er = EvalRecord(train_frame_loss_sum /batch_idx, valid_frame_loss, valid_fer, test_frame_loss, test_fer)
-        eval_history.append(er)
-        save_eval_history(eval_history, args.save_path + '_eval_history.pkl')

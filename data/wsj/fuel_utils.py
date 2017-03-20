@@ -44,7 +44,7 @@ def get_feat_stream(path, which_set='test_eval92', batch_size=1,
         fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors'])
         if truncate_ivectors:
             fs = TruncateTransformer(fs, 'ivectors', ivector_dim)
-        fs = ConcatenateTransformer(fs, ['features', 'ivectors'], 'features')
+        # fs = ConcatenateTransformer(fs, ['features', 'ivectors'], 'features')
     else:
         fs = FilterSources(data_stream=base_stream, sources=['features'])
     return Padding(fs)

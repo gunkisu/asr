@@ -15,7 +15,7 @@ from lasagne.layers import count_params
 from lasagne.layers import get_output, get_all_params
 from libs.utils import save_network, save_eval_history, best_fer, show_status, symlink_force
 from libs.utils import StopWatch, Rsync
-from models.gating_hyper_nets import deep_projection_ivector_ln_model_fix
+from models.gating_hyper_nets import deep_projection_ln_lstm_model_fix
 from data.wsj.fuel_utils import get_datastream
 from libs.lasagne_libs.updates import momentum, adam
 
@@ -23,26 +23,24 @@ floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
 input_dim = 123
-output_dim = 4174
+output_dim = 3436
 
 def add_params(parser):
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
-    parser.add_argument('--num_conds', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_layers', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_units', default=512, help='number of hidden units', type=int)
-    parser.add_argument('--num_factors', default=64, help='number of factors', type=int)
     parser.add_argument('--learn_rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad_clipping', default=1.0, help='gradient clipping', type=float)
     parser.add_argument('--dropout', default=0.2, help='dropout', type=float)
-    parser.add_argument('--data_path', help='data path', default='/data/lisatmp3/speech/tedlium_fbank123_out4174.h5')
+    parser.add_argument('--data_path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--save_path', help='save path', default='./')
     parser.add_argument('--num_epochs', help='number of epochs', default=50, type=int)
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
     parser.add_argument('--train_disp_freq', help='how ferquently to display progress', default=100, type=int)
 
-    parser.add_argument('--train_dataset', help='dataset for training', default='train')
-    parser.add_argument('--valid_dataset', help='dataset for validation', default='dev')
-    parser.add_argument('--test_dataset', help='dataset for test', default='test')
+    parser.add_argument('--train_dataset', help='dataset for training', default='train_si284')
+    parser.add_argument('--valid_dataset', help='dataset for validation', default='test_dev93')
+    parser.add_argument('--test_dataset', help='dataset for test', default='test_eval92')
 
     parser.add_argument('--reload_model', help='model path to load')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally',
@@ -57,20 +55,17 @@ def get_arg_parser():
 
 def get_save_path(args):
     path = args.save_path
-    path += '/ted_lstmp_ivec_dln'
+    path += '/wsj_lstmp_ln'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
     path += '_do{}'.format(args.dropout)
-    path += '_nc{}'.format(args.num_conds)
     path += '_nl{}'.format(args.num_layers)
-    path += '_nf{}'.format(args.num_factors)
     path += '_nu{}'.format(args.num_units)
     path += '_nb{}'.format(args.batch_size)
 
     return path
 
 def build_trainer(input_data,
-                  input_cond,
                   input_mask,
                   target_data,
                   target_mask,
@@ -99,6 +94,7 @@ def build_trainer(input_data,
 
     frame_accr = T.sum(T.eq(frame_prd_idx, target_data)*target_mask)/T.sum(target_mask)
 
+
     train_total_loss = train_loss
 
     network_grads = theano.grad(cost=train_total_loss, wrt=network_params)
@@ -111,7 +107,6 @@ def build_trainer(input_data,
                                             load_params_dict=load_updater_params)
 
     training_fn = theano.function(inputs=[input_data,
-                                          input_cond,
                                           input_mask,
                                           target_data,
                                           target_mask],
@@ -122,7 +117,6 @@ def build_trainer(input_data,
     return training_fn, train_lr, updater_params
 
 def build_predictor(input_data,
-                    input_cond,
                     input_mask,
                     target_data,
                     target_mask,
@@ -145,7 +139,6 @@ def build_predictor(input_data,
     frame_loss = T.sum(frame_loss)/T.sum(target_mask)
 
     return theano.function(inputs=[input_data,
-                                   input_cond,
                                    input_mask,
                                    target_data,
                                    target_mask],
@@ -163,13 +156,11 @@ def eval_network(predict_fn,
     for batch_cnt, data in enumerate(data_iterator, start=1):
         input_data = data[0].astype(floatX)
         input_mask = data[1].astype(floatX)
-        input_cond = data[2].astype(floatX)
 
-        target_data = data[4]
-        target_mask = data[5].astype(floatX)
+        target_data = data[2]
+        target_mask = data[3].astype(floatX)
 
         predict_output = predict_fn(input_data,
-                                    input_cond,
                                     input_mask,
                                     target_data,
                                     target_mask)
@@ -226,37 +217,30 @@ if __name__ == '__main__':
     ####################
     train_datastream = get_datastream(path=args.data_path,
                                       which_set=args.train_dataset,
-                                      batch_size=args.batch_size,
-                                      use_ivectors=True)
+                                      batch_size=args.batch_size)
     valid_datastream = get_datastream(path=args.data_path,
                                       which_set=args.valid_dataset,
-                                      batch_size=args.batch_size,
-                                      use_ivectors=True)
+                                      batch_size=args.batch_size)
     test_datastream = get_datastream(path=args.data_path,
                                      which_set=args.test_dataset,
-                                     batch_size=args.batch_size,
-                                     use_ivectors=True)
+                                     batch_size=args.batch_size)
 
     #################
     # build network #
     #################
     print('Building and compiling network')
     input_data = T.ftensor3('input_data')
-    input_cond = T.ftensor3('input_cond')
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-    network_output = deep_projection_ivector_ln_model_fix(input_var=input_data,
-                                                          cond_var=input_cond,
-                                                          mask_var=input_mask,
-                                                          num_inputs=input_dim,
-                                                          num_outputs=output_dim,
-                                                          num_layers=args.num_layers,
-                                                          num_conds=args.num_conds,
-                                                          num_factors=args.num_factors,
-                                                          num_units=args.num_units,
-                                                          grad_clipping=args.grad_clipping,
-                                                          dropout=args.dropout)[0]
+    network_output = deep_projection_ln_lstm_model_fix(input_var=input_data,
+                                                       mask_var=input_mask,
+                                                       num_inputs=input_dim,
+                                                       num_outputs=output_dim,
+                                                       num_layers=args.num_layers,
+                                                       num_units=args.num_units,
+                                                       grad_clipping=args.grad_clipping,
+                                                       dropout=args.dropout)
 
     network = network_output
     network_params = get_all_params(network, trainable=True)
@@ -291,7 +275,6 @@ if __name__ == '__main__':
     else:
         eval_history = [EvalRecord(10.1, 10.0, 1.0, 10.0, 1.0)]
 
-
     #################
     # build trainer #
     #################
@@ -300,7 +283,6 @@ if __name__ == '__main__':
     [train_fn,
      train_lr,
      updater_params] = build_trainer(input_data=input_data,
-                                     input_cond=input_cond,
                                      input_mask=input_mask,
                                      target_data=target_data,
                                      target_mask=target_mask,
@@ -317,7 +299,6 @@ if __name__ == '__main__':
     print('Building predictor')
     sw.reset()
     predict_fn = build_predictor(input_data=input_data,
-                                 input_cond=input_cond,
                                  input_mask=input_mask,
                                  target_data=target_data,
                                  target_mask=target_mask,
@@ -336,6 +317,7 @@ if __name__ == '__main__':
         print("Learning Rate: " + str(new_lr))
         train_lr.set_value(lasagne.utils.floatX(new_lr))
 
+        epoch_sw = StopWatch()
         print('--')
         print('Epoch {} starts'.format(e_idx))
         print('--')
@@ -348,11 +330,10 @@ if __name__ == '__main__':
                 continue
 
             # get data
-            input_data, input_mask, input_cond, _,  target_data, target_mask = batch_data
+            input_data, input_mask, target_data, target_mask = batch_data
 
             # update model
             train_output = train_fn(input_data,
-                                    input_cond,
                                     input_mask,
                                     target_data,
                                     target_mask)
@@ -371,14 +352,14 @@ if __name__ == '__main__':
                             epoch_idx=e_idx)
                 print('Frame Accr: {}'.format(train_frame_accr))
 
-            if batch_idx%250==0:
+            if batch_idx % 250 == 0:
                 print('Saving the network')
                 save_network(network_params=network_params,
                              trainer_params=updater_params,
                              epoch_cnt=total_batch_cnt,
                              save_path=args.save_path + '_last_model.pkl')
 
-            if batch_idx%1000==0:
+            if batch_idx % 1000 == 0:
                 print('Evaluating the network on the validation dataset')
                 valid_frame_loss, valid_fer = eval_network(predict_fn, valid_datastream)
                 test_frame_loss, test_fer = eval_network(predict_fn, test_datastream)
