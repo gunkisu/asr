@@ -103,7 +103,7 @@ def extarct_feat(extract_fn,
 
         feat_list.append(extract_fn(input_data,
                                     input_mask))
-        id_list.append(id)
+        id_list.append(id[0])
         if i%100==0:
             print('batch process batch {}'.format(i))
     return feat_list, id_list
