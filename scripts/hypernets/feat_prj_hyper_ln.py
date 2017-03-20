@@ -77,8 +77,6 @@ def get_save_path(args):
 
 def build_feat_extractor(input_data,
                          input_mask,
-                         target_data,
-                         target_mask,
                          output_layer,
                          cond_layer_list):
     get_output(output_layer, deterministic=True)
@@ -88,9 +86,7 @@ def build_feat_extractor(input_data,
     utter_feat_list = T.concatenate(utter_feat_list, axis=1)
 
     return theano.function(inputs=[input_data,
-                                   input_mask,
-                                   target_data,
-                                   target_mask],
+                                   input_mask],
                            outputs=utter_feat_list)
 
 def extarct_feat(extract_fn,
@@ -106,9 +102,7 @@ def extarct_feat(extract_fn,
         input_data, input_mask, target_data, target_mask = data
 
         feat_list.append(extract_fn(input_data,
-                                    input_mask,
-                                    target_data,
-                                    target_mask))
+                                    input_mask))
         id_list.append(id)
 
     return numpy.concatenate(feat_list, axis=0), numpy.concatenate(id_list, axis=0)
@@ -161,8 +155,6 @@ if __name__ == '__main__':
     print('Building and compiling network')
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
-    target_data = T.imatrix('target_data')
-    target_mask = T.fmatrix('target_mask')
     network_output, cond_layer_list = deep_projection_cond_ln_model_fix(input_var=input_data,
                                                                         mask_var=input_mask,
                                                                         num_inputs=input_dim,
@@ -200,8 +192,6 @@ if __name__ == '__main__':
     sw.reset()
     extract_fn = build_feat_extractor(input_data=input_data,
                                       input_mask=input_mask,
-                                      target_data=target_data,
-                                      target_mask=target_mask,
                                       output_layer=network,
                                       cond_layer_list=cond_layer_list)
     sw.print_elapsed()
