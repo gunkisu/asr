@@ -70,14 +70,14 @@ if __name__ == '__main__':
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
 
-    network_output = deep_projection_ln_lstm_model_fix(input_var=input_data,
-                                                       mask_var=input_mask,
-                                                       num_inputs=input_dim,
-                                                       num_outputs=output_dim,
-                                                       num_layers=args.num_layers,
-                                                       num_units=args.num_units,
-                                                       grad_clipping=args.grad_clipping,
-                                                       dropout=args.dropout)
+    network = deep_projection_ln_lstm_model_fix(input_var=input_data,
+                                                mask_var=input_mask,
+                                                num_inputs=input_dim,
+                                                num_outputs=output_dim,
+                                                num_layers=args.num_layers,
+                                                num_units=args.num_units,
+                                                grad_clipping=args.grad_clipping,
+                                                dropout=args.dropout)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
