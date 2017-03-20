@@ -97,15 +97,16 @@ def extarct_feat(extract_fn,
     id_iterator = id_stream.get_epoch_iterator()
     feat_list = []
     id_list = []
-    for batch_data in itertools.izip(data_iterator, id_iterator) :
+    for i, batch_data in enumerate(itertools.izip(data_iterator, id_iterator)):
         data, id = batch_data
         input_data, input_mask, target_data, target_mask = data
 
         feat_list.append(extract_fn(input_data,
                                     input_mask))
         id_list.append(id)
-
-    return numpy.concatenate(feat_list, axis=0), numpy.concatenate(id_list, axis=0)
+        if i%100==0:
+            print('batch process batch {}'.format(i))
+    return feat_list, id_list
 
 if __name__ == '__main__':
     ###############
@@ -204,8 +205,8 @@ if __name__ == '__main__':
     feat_data, id_data = extarct_feat(extract_fn=extract_fn,
                                       data_stream=data_stream,
                                       id_stream=id_stream)
-    id_data = spk_to_ids(spk_list=spk_list,
-                         spks=id_data)
+    # id_data = spk_to_ids(spk_list=spk_list,
+    #                      spks=id_data)
 
     with open(args.save_path + '_feat.pkl', 'wb') as f:
         pickle.dump([feat_data, id_data], f)
