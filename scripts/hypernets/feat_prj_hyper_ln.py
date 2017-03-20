@@ -126,16 +126,6 @@ if __name__ == '__main__':
     else:
         output_dim = 4174
 
-    ###################
-    # get reload path #
-    ###################
-    if not args.reload_model:
-        reload_path = args.save_path + '_last_model.pkl'
-
-        if os.path.exists(reload_path):
-            print('Previously trained model detected: {}'.format(reload_path))
-            args.reload_model = reload_path
-
     ##############
     # print args #
     ##############
