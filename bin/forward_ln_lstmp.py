@@ -10,7 +10,7 @@ import numpy
 from lasagne.layers import get_all_params, count_params
 from lasagne.layers import get_output
 from libs.lasagne_libs.utils import set_model_param_value
-from models.gating_hyper_nets import deep_projection_ln_lstm_model
+from models.gating_hyper_nets import deep_projection_ln_lstm_model_fix
 from data.wsj.fuel_utils import get_feat_stream, get_uttid_stream
 
 import kaldi_io
@@ -23,7 +23,6 @@ def add_params(parser):
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
     parser.add_argument('--num_layers', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_units', default=512, help='number of hidden units', type=int)
-    parser.add_argument('--num_factors', default=256, help='number of factors', type=int)
     parser.add_argument('--learn_rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad_clipping', default=1.0, help='gradient clipping', type=float)
     parser.add_argument('--dropout', default=0.2, help='dropout', type=float)
@@ -71,15 +70,14 @@ if __name__ == '__main__':
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
 
-    network = deep_projection_ln_lstm_model(input_var=input_data,
-                                            mask_var=input_mask,
-                                            num_inputs=input_dim,
-                                            num_outputs=output_dim,
-                                            num_layers=args.num_layers,
-                                            num_factors=args.num_factors,
-                                            num_units=args.num_units,
-                                            grad_clipping=args.grad_clipping,
-                                            dropout=args.dropout)
+    network_output = deep_projection_ln_lstm_model_fix(input_var=input_data,
+                                                       mask_var=input_mask,
+                                                       num_inputs=input_dim,
+                                                       num_outputs=output_dim,
+                                                       num_layers=args.num_layers,
+                                                       num_units=args.num_units,
+                                                       grad_clipping=args.grad_clipping,
+                                                       dropout=args.dropout)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
