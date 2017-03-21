@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import os
 import pickle
 import sys
 import argparse
@@ -7,6 +8,7 @@ import theano
 from theano import tensor as T
 import numpy
 
+from libs.utils import StopWatch, Rsync
 from lasagne.layers import get_all_params, count_params
 from lasagne.layers import get_output
 from libs.lasagne_libs.utils import set_model_param_value
@@ -98,6 +100,13 @@ if __name__ == '__main__':
     else:
         print('Must specfiy network to load', file=sys.stderr)
         sys.exit(1)
+
+    if not args.no_copy:
+        print('Loading data streams from {}'.format(args.data_path), file=sys.stderr)
+        print('Copying data to local machine...', file=sys.stderr)
+        rsync = Rsync(args.tmpdir)
+        rsync.sync(args.data_path)
+        args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
 
     ff_fn = ff(network, input_data, input_mask)
     test_datastream = get_feat_stream(path=args.data_path,
