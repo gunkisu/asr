@@ -13,10 +13,10 @@ from libs.utils import save_network, save_eval_history, best_fer, show_status
 from libs.comp_graph_utils import trainer, predictor, eval_net
 
 from libs.lasagne_libs.utils import set_model_param_value
-from libs.lasagne_libs.updates import momentum
+from libs.lasagne_libs.updates import momentum, adam
 
 from libs.utils import StopWatch, Rsync
-from models.deep_bidir_lstm import build_deep_bidir_lstm_alex
+from models.deep_bidir_lstm import build_deep_bidir_lstm_alex, build_deep_bidir_lstm_alex_proj
 from data.wsj.fuel_utils import create_ivector_datastream
 
 if __name__ == '__main__':
@@ -57,13 +57,24 @@ if __name__ == '__main__':
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    network = build_deep_bidir_lstm_alex(input_var=input_data,
+    if args.use_proj_layer:
+        network = build_deep_bidir_lstm_alex_proj(input_var=input_data,
+                                    mask_var=input_mask,
+                                    input_dim=args.input_dim,
+                                    num_units_list=[args.num_nodes]*args.num_layers,
+                                    num_proj_units=args.num_proj_nodes,
+                                    output_dim=args.output_dim, bidir=not args.unidirectional,
+                                    ivector_var=ivector_data,
+                                    ivector_dim=args.ivector_dim)
+    else:
+        network = build_deep_bidir_lstm_alex(input_var=input_data,
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
                                     num_units_list=[args.num_nodes]*args.num_layers,
                                     output_dim=args.output_dim, bidir=not args.unidirectional,
                                     ivector_var=ivector_data,
                                     ivector_dim=args.ivector_dim)
+
 
     network_params = get_all_params(network, trainable=True)
     

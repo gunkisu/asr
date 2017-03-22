@@ -4,16 +4,19 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--batch-size', default=2, help='batch size', type=int)
     parser.add_argument('--num-nodes', default=10, help='number of hidden nodes', type=int)
     parser.add_argument('--num-layers', default=1, help='number of layers', type=int)
-    parser.add_argument('--learn-rate', default=0.0001, help='learning rate', type=float)
+    parser.add_argument('--learn-rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
+    parser.add_argument('--use-proj-layer', help='whether to use projection layers', action='store_true')
+    parser.add_argument('--num-proj-nodes', help='number of units in projection layers', default=5, type=int)
+
     parser.add_argument('--data-path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--input-dim', help='input dimension', default=123, type=int)
     parser.add_argument('--output-dim', help='output dimension', default=3436, type=int)
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
     parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
     parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
-    parser.add_argument('--updater', help='sgd or momentum', default='momentum')
+    parser.add_argument('--updater', help='one of [sgd|momentum|agam]', default='adam')
     parser.add_argument('--train-dataset', help='dataset for training', default='train_si284')
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
@@ -40,6 +43,9 @@ def get_save_path(args):
         fn = '{}_iv{}'.format(fn, args.ivector_dim)
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
+    if args.use_proj_layer:
+        fn = '{}_npn{}'.format(fn, args.num_proj_nodes)
 
+    fn = '{}_{}'.format(fn, args.updater)
     return fn
 

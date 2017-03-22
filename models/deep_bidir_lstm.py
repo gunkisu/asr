@@ -4,6 +4,8 @@ from lasagne.layers import (InputLayer,
                             ConcatLayer)
 from libs.lasagne_libs.layers import SequenceDenseLayer
 from libs.lasagne_libs.layers import LSTMLayer, LSTMPLayer
+from libs.lasagne_libs.hyper_lhuc_layers import LSTMPLayer as LSTMPLayer2, LSTMLayer as LSTMLayer2
+
 from lasagne.layers import LSTMLayer as LasagneLSTMLayer
 from lasagne.layers import DenseLayer, ReshapeLayer, reshape, Gate
 from lasagne.layers import get_output_shape
@@ -256,15 +258,50 @@ def build_deep_bidir_lstm_alex(input_var, mask_var, input_dim, num_units_list, o
 
     prev_input_layer = input_layer
     for num_units in num_units_list:
-        lstm_fwd_layer = LasagneLSTMLayer(incoming=prev_input_layer,
+        lstm_fwd_layer = LSTMLayer2(incoming=prev_input_layer,
                                           mask_input=mask_layer,
                                           num_units=num_units,
                                           grad_clipping=grad_clipping,
                                           backwards=False)
         if bidir:
-            lstm_bwd_layer = LasagneLSTMLayer(incoming=prev_input_layer,
+            lstm_bwd_layer = LSTMLayer2(incoming=prev_input_layer,
                                           mask_input=mask_layer,
                                           num_units=num_units,
+                                          grad_clipping=grad_clipping,
+                                          backwards=True)
+
+            prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
+                                       axis=-1)
+        else:
+            prev_input_layer = lstm_fwd_layer
+
+
+    return build_sequence_dense_layer(input_var, prev_input_layer, output_dim)
+
+
+def build_deep_bidir_lstm_alex_proj(input_var, mask_var, input_dim, num_units_list, num_proj_units, output_dim,
+                          grad_clipping=1.0, bidir=True, 
+                          ivector_var=None, ivector_dim=100):
+    
+    input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)
+    
+    if ivector_var:
+        ivector_layer = build_ivector_layer(ivector_dim, ivector_var)
+        input_layer = concatenate_layers(input_layer, ivector_layer)
+
+    prev_input_layer = input_layer
+    for num_units in num_units_list:
+        lstm_fwd_layer = LSTMPLayer2(incoming=prev_input_layer,
+                                          mask_input=mask_layer,
+                                          num_units=num_units,
+                                          num_proj_units=num_proj_units,
+                                          grad_clipping=grad_clipping,
+                                          backwards=False)
+        if bidir:
+            lstm_bwd_layer = LSTMPLayer2(incoming=prev_input_layer,
+                                          mask_input=mask_layer,
+                                          num_units=num_units,
+                                          num_proj_units=num_proj_units,
                                           grad_clipping=grad_clipping,
                                           backwards=True)
 
