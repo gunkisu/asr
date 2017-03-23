@@ -972,7 +972,7 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
 
     def add_gate_params(self, gate, gate_name):
         # (W_h, W_x, b)
-        return (self.add_param(gate.W_hid, (self.num_proj_units, self.num_units),
+        return (self.add_param(gate.W_hid, (self.num_units, self.num_units),
                                name="W_h_{}".format(gate_name)),
                 self.add_param(gate.W_in, (self.num_inputs, self.num_units),
                                name="W_x_{}".format(gate_name)),
@@ -999,7 +999,7 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
         self.cell_init = self.add_param(self.cell_init, (1, self.num_units), name="cell_init",
             trainable=False, regularizable=False)
 
-        self.hid_init = self.add_param(self.hid_init, (1, self.num_proj_units), name="hid_init",
+        self.hid_init = self.add_param(self.hid_init, (1, self.num_units), name="hid_init",
             trainable=False, regularizable=False)
     
     
@@ -1027,9 +1027,9 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
                                 name="b_e_h_{}".format(i), regularizable=False))
 
         input_dim = embedding_dim if self.num_pred_layers == 0 else self.num_pred_units
-        self.W_pred_list.append(self.add_param(weight_init, (input_dim, self.num_proj_units),
+        self.W_pred_list.append(self.add_param(weight_init, (input_dim, self.num_units),
                             name="W_e_h_{}".format(self.num_pred_layers)))
-        self.b_pred_list.append(self.add_param(bias_init, (self.num_proj_units,),
+        self.b_pred_list.append(self.add_param(bias_init, (self.num_units,),
                             name="b_e_h_{}".format(self.num_pred_layers), regularizable=False))
 
     def init_lhuc_weights(self):
