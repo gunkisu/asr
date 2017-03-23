@@ -12,7 +12,7 @@ def add_params(parser):
     parser.add_argument('--input-dim', help='input dimension', default=123, type=int)
     parser.add_argument('--output-dim', help='output dimension', default=3436, type=int)
     parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
-    parser.add_argument('--num-hyperlstm-layers', help='number of hyperlstm layers', default=1, type=int)
+#    parser.add_argument('--num-hyperlstm-layers', help='number of hyperlstm layers', default=1, type=int)
     parser.add_argument('--num-pred-layers', help='number of prediction layers between speaker embedding and scaling factor', default=1, type=int)
     parser.add_argument('--num-pred-nodes',
                         help='number of units in prediction layers between speaker embedding and scaling factor', default=100,
@@ -23,13 +23,13 @@ def add_params(parser):
     parser.add_argument('--seqsum-output-dim', help='output dimension of sequence summarizing neural network', default=100, type=int)
 
     parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
-    parser.add_argument('--updater', help='sgd or momentum', default='momentum')
+    parser.add_argument('--updater', help='one of [sgd|momentum|adam]', default='adam')
     parser.add_argument('--train-dataset', help='dataset for training', default='train_si284')
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
 
-    parser.add_argument('--reparam', help='function for reparametrisation', default='2sigmoid')
-    parser.add_argument('--pred-act', help='activation function for the prediction network', default='tanh')
+    parser.add_argument('--reparam', help='function for reparametrisation', default='relu')
+    parser.add_argument('--pred-act', help='activation function for the prediction network', default='relu')
 
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
@@ -61,7 +61,7 @@ def get_save_path(args):
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
 
-    fn = '{}_hl{}'.format(fn, args.num_hyperlstm_layers)
+#    fn = '{}_hl{}'.format(fn, args.num_hyperlstm_layers)
 
     if 'Hyper' in args.layer_name: 
         fn = '{}_hnn{}_pnn{}'.format(fn, args.num_hyper_nodes, args.num_proj_nodes)

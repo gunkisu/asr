@@ -54,7 +54,7 @@ def get_layer(layer_name, is_hyper_layer, prev_input_layer,
 
 def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
         num_layers, num_units, num_hyper_units, num_proj_units, 
-        output_dim, grad_clipping, bidir=True, num_hyperlstm_layers=1, 
+        output_dim, grad_clipping, bidir=True,  
         use_ivector_input=False, ivector_var=None, ivector_dim=100, 
         reparam='2sigmoid', use_layer_norm=False,
         num_pred_layers=1, num_pred_units=100, pred_act='tanh',
@@ -78,7 +78,8 @@ def build_deep_hyper_lstm(layer_name, input_var, mask_var, input_dim,
 
     prev_input_layer = input_layer
     for layer_idx in range(1, num_layers+1):
-        is_hyper_layer = layer_idx <= num_hyperlstm_layers
+ #       is_hyper_layer = layer_idx <= num_hyperlstm_layers
+        is_hyper_layer = True
         
         prev_fwd_layer = get_layer(layer_name, is_hyper_layer, prev_input_layer,
                             num_units, num_hyper_units, num_proj_units,

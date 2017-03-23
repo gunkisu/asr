@@ -77,7 +77,7 @@ if __name__ == '__main__':
                              output_dim=args.output_dim,
                              grad_clipping=args.grad_clipping,
                              bidir=not args.unidirectional, 
-                             num_hyperlstm_layers=args.num_hyperlstm_layers,
+#                             num_hyperlstm_layers=args.num_hyperlstm_layers,
                              use_ivector_input=args.use_ivector_input,
                              ivector_var=ivector_data, 
                              ivector_dim=args.ivector_dim, 
