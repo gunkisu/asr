@@ -46,6 +46,5 @@ def get_save_path(args):
     if args.use_proj_layer:
         fn = '{}_npn{}'.format(fn, args.num_proj_nodes)
 
-    fn = '{}_{}'.format(fn, args.updater)
     return fn
 

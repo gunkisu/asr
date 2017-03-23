@@ -51,9 +51,9 @@ def get_arg_parser():
     return parser
 
 def get_save_path(args):
-    fn = './wsj_hyperlstm_lr{}_gc{}_nl{}_nn{}_b{}_od{}'.format(
+    fn = './wsj_hyperlstm_lr{}_gc{}_nl{}_nn{}_b{}'.format(
             args.learn_rate, args.grad_clipping, args.num_layers, args.num_nodes, 
-            args.batch_size, args.output_dim)
+            args.batch_size)
     if args.use_ivector_input:
         fn = '{}_ivi{}'.format(fn, args.ivector_dim)
     if args.use_ivector_model:
@@ -75,7 +75,6 @@ def get_save_path(args):
         fn = '{}_nsl{}_nsn{}_sod{}'.format(fn, args.num_seqsum_layers, args.num_seqsum_nodes, args.seqsum_output_dim)
         if args.use_mb_loss:
             fn = '{}_lambda{}'.format(fn, args.mb_loss_lambda)
-          
 
     if args.use_layer_norm:
         fn = '{}_ln'.format(fn)
