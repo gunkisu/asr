@@ -38,18 +38,6 @@ if __name__ == '__main__':
 
     sw = StopWatch()
        
-    print('Loading data streams from {}'.format(args.data_path))
-    if not args.no_copy:
-        print('Copying data to local machine...')
-        rsync = Rsync(args.tmpdir)
-        rsync.sync(args.data_path)
-        args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
-        sw.print_elapsed()
-    
-    datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
-    train_ds, valid_ds, test_ds = [create_ivector_datastream(path=args.data_path, which_set=dataset, 
-        batch_size=args.batch_size) for dataset in datasets]
-    
     print('Building and compiling network')
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
@@ -73,6 +61,7 @@ if __name__ == '__main__':
                              input_dim=args.input_dim,
                              num_layers=args.num_layers,
                              num_units=args.num_units,
+                             num_proj_units=args.num_proj_units,
                              output_dim=args.output_dim,
                              num_pred_layers=args.num_pred_layers,
                              num_pred_units=args.num_pred_units,
@@ -90,6 +79,7 @@ if __name__ == '__main__':
                              input_dim=args.input_dim,
                              num_layers=args.num_layers,
                              num_units=args.num_units,
+                             num_proj_units=args.num_proj_units,
                              output_dim=args.output_dim,
                              num_pred_layers=args.num_pred_layers,
                              num_pred_units=args.num_pred_units,
@@ -124,7 +114,6 @@ if __name__ == '__main__':
     print('Building trainer')
     sw.reset()
 
-
     speaker_embedding = None
     if args.use_mb_loss:
         speaker_embedding = get_output(speaker_layer)
@@ -154,6 +143,20 @@ if __name__ == '__main__':
                                        ivector_data=ivector_data)
 
     sw.print_elapsed()
+
+    print('Loading data streams from {}'.format(args.data_path))
+    if not args.no_copy:
+        print('Copying data to local machine...')
+        sw.reset()
+        rsync = Rsync(args.tmpdir)
+        rsync.sync(args.data_path)
+        args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
+        sw.print_elapsed()
+    
+    datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
+    train_ds, valid_ds, test_ds = [create_ivector_datastream(path=args.data_path, which_set=dataset, 
+        batch_size=args.batch_size) for dataset in datasets]
+    
     print('Starting')
 
     # e_idx starts from 1
