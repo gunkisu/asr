@@ -57,24 +57,24 @@ if __name__ == '__main__':
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    if not args.use_proj_layer:
-        network = build_deep_lstm(input_var=input_data,
-                                    mask_var=input_mask,
-                                    input_dim=args.input_dim,
-                                    num_layers=args.num_layers,
-                                    num_units=args.num_nodes,
-                                    output_dim=args.output_dim, 
-                                    grad_clipping=args.grad_clipping,
-                                    is_bidir=not args.unidirectional,
-                                    ivector_dim=args.ivector_dim,
-                                    ivector_var=ivector_data)
-    else:
+    if args.num_proj_nodes:
         network = build_deep_lstmp(input_var=input_data,
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
                                     num_layers=args.num_layers,
                                     num_units=args.num_nodes,
                                     num_proj_units=args.num_proj_nodes,
+                                    output_dim=args.output_dim, 
+                                    grad_clipping=args.grad_clipping,
+                                    is_bidir=not args.unidirectional,
+                                    ivector_dim=args.ivector_dim,
+                                    ivector_var=ivector_data)
+    else:
+        network = build_deep_lstm(input_var=input_data,
+                                    mask_var=input_mask,
+                                    input_dim=args.input_dim,
+                                    num_layers=args.num_layers,
+                                    num_units=args.num_nodes,
                                     output_dim=args.output_dim, 
                                     grad_clipping=args.grad_clipping,
                                     is_bidir=not args.unidirectional,

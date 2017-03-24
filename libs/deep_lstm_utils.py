@@ -7,8 +7,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--learn-rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
-    parser.add_argument('--use-proj-layer', help='whether to use projection layers', action='store_true')
-    parser.add_argument('--num-proj-nodes', help='number of units in projection layers', default=5, type=int)
+    parser.add_argument('--num-proj-nodes', help='number of units in projection layers', default=0, type=int)
 
     parser.add_argument('--data-path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--input-dim', help='input dimension', default=123, type=int)
@@ -42,7 +41,7 @@ def get_save_path(args):
         fn = '{}_iv{}'.format(fn, args.ivector_dim)
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
-    if args.use_proj_layer:
+    if args.num_proj_nodes:
         fn = '{}_pn{}'.format(fn, args.num_proj_nodes)
 
     return fn
