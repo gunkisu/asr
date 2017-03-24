@@ -36,7 +36,7 @@ def add_lhuc_params(parser):
 
 
 def get_save_path(args):
-    fn = './wsj_deep_lstm_lr{}_gc{}_nl{}_nn{}_b{}'.format(
+    fn = './wsj_deep_lstm_lr{}_gc{}_l{}_n{}_b{}'.format(
             args.learn_rate, args.grad_clipping, args.num_layers, args.num_nodes, 
             args.batch_size)
     if args.use_ivector_input:
@@ -44,7 +44,7 @@ def get_save_path(args):
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
     if args.use_proj_layer:
-        fn = '{}_npn{}'.format(fn, args.num_proj_nodes)
+        fn = '{}_pn{}'.format(fn, args.num_proj_nodes)
 
     return fn
 
