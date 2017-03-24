@@ -13,10 +13,10 @@ from libs.utils import save_network, save_eval_history, best_fer, show_status
 from libs.comp_graph_utils import trainer, predictor, eval_net
 
 from libs.lasagne_libs.utils import set_model_param_value
-from libs.lasagne_libs.updates import momentum, adam
+from libs.lasagne_libs.updates import adam
 
 from libs.utils import StopWatch, Rsync
-from models.deep_bidir_lstm import build_deep_bidir_lstm_alex, build_deep_bidir_lstm_alex_proj
+from libs.deep_lstm_builder import build_deep_lstm, build_deep_lstmp
 from data.wsj.fuel_utils import create_ivector_datastream
 
 if __name__ == '__main__':
@@ -57,24 +57,29 @@ if __name__ == '__main__':
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    if args.use_proj_layer:
-        network = build_deep_bidir_lstm_alex_proj(input_var=input_data,
+    if not args.use_proj_layer:
+        network = build_deep_lstm(input_var=input_data,
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
-                                    num_units_list=[args.num_nodes]*args.num_layers,
-                                    num_proj_units=args.num_proj_nodes,
-                                    output_dim=args.output_dim, bidir=not args.unidirectional,
-                                    ivector_var=ivector_data,
-                                    ivector_dim=args.ivector_dim)
+                                    num_layers=args.num_layers,
+                                    num_units=args.num_nodes,
+                                    output_dim=args.output_dim, 
+                                    grad_clipping=args.grad_clipping,
+                                    is_bidir=not args.unidirectional,
+                                    ivector_dim=args.ivector_dim,
+                                    ivector_var=ivector_data)
     else:
-        network = build_deep_bidir_lstm_alex(input_var=input_data,
+        network = build_deep_lstmp(input_var=input_data,
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
-                                    num_units_list=[args.num_nodes]*args.num_layers,
-                                    output_dim=args.output_dim, bidir=not args.unidirectional,
-                                    ivector_var=ivector_data,
-                                    ivector_dim=args.ivector_dim)
-
+                                    num_layers=args.num_layers,
+                                    num_units=args.num_nodes,
+                                    num_proj_units=args.num_proj_nodes,
+                                    output_dim=args.output_dim, 
+                                    grad_clipping=args.grad_clipping,
+                                    is_bidir=not args.unidirectional,
+                                    ivector_dim=args.ivector_dim,
+                                    ivector_var=ivector_data)
 
     network_params = get_all_params(network, trainable=True)
     
@@ -104,7 +109,7 @@ if __name__ == '__main__':
               target_data=target_data,
               target_mask=target_mask,
               network=network,
-              updater=eval(args.updater),
+              updater=adam,
               learning_rate=args.learn_rate,
               load_updater_params=pretrain_update_params_val, 
               ivector_data=ivector_data)
