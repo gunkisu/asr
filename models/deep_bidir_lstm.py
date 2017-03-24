@@ -4,14 +4,10 @@ from lasagne.layers import (InputLayer,
                             ConcatLayer)
 from libs.lasagne_libs.layers import SequenceDenseLayer
 from libs.lasagne_libs.layers import LSTMLayer, LSTMPLayer
-from libs.lasagne_libs.hyper_lhuc_layers import LSTMPLayer as LSTMPLayer2, LSTMLayer as LSTMLayer2
 
 from lasagne.layers import LSTMLayer as LasagneLSTMLayer
 from lasagne.layers import DenseLayer, ReshapeLayer, reshape, Gate
 from lasagne.layers import get_output_shape
-from libs.lasagne_libs.lhuc_layers import LHUCLayer, exp, two_sigmoid
-
-from models.utils import build_sequence_dense_layer, build_input_layer, build_ivector_layer, concatenate_layers
 
 def deep_bidir_lstm_model(input_var,
                           mask_var,
@@ -245,104 +241,3 @@ def deep_bidir_lstm_prj_model(input_var,
                                       num_outputs=num_outputs,
                                       nonlinearity=nonlinearities.softmax if use_softmax else None)
     return output_layer
-
-def build_deep_bidir_lstm_alex(input_var, mask_var, input_dim, num_units_list, output_dim,
-                          grad_clipping=1.0, bidir=True, 
-                          ivector_var=None, ivector_dim=100):
-    
-    input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)
-    
-    if ivector_var:
-        ivector_layer = build_ivector_layer(ivector_dim, ivector_var)
-        input_layer = concatenate_layers(input_layer, ivector_layer)
-
-    prev_input_layer = input_layer
-    for num_units in num_units_list:
-        lstm_fwd_layer = LSTMLayer2(incoming=prev_input_layer,
-                                          mask_input=mask_layer,
-                                          num_units=num_units,
-                                          grad_clipping=grad_clipping,
-                                          backwards=False)
-        if bidir:
-            lstm_bwd_layer = LSTMLayer2(incoming=prev_input_layer,
-                                          mask_input=mask_layer,
-                                          num_units=num_units,
-                                          grad_clipping=grad_clipping,
-                                          backwards=True)
-
-            prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
-                                       axis=-1)
-        else:
-            prev_input_layer = lstm_fwd_layer
-
-
-    return build_sequence_dense_layer(input_var, prev_input_layer, output_dim)
-
-
-def build_deep_bidir_lstm_alex_proj(input_var, mask_var, input_dim, num_units_list, num_proj_units, output_dim,
-                          grad_clipping=1.0, bidir=True, 
-                          ivector_var=None, ivector_dim=100):
-    
-    input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)
-    
-    if ivector_var:
-        ivector_layer = build_ivector_layer(ivector_dim, ivector_var)
-        input_layer = concatenate_layers(input_layer, ivector_layer)
-
-    prev_input_layer = input_layer
-    for num_units in num_units_list:
-        lstm_fwd_layer = LSTMPLayer2(incoming=prev_input_layer,
-                                          mask_input=mask_layer,
-                                          num_units=num_units,
-                                          num_proj_units=num_proj_units,
-                                          grad_clipping=grad_clipping,
-                                          backwards=False)
-        if bidir:
-            lstm_bwd_layer = LSTMPLayer2(incoming=prev_input_layer,
-                                          mask_input=mask_layer,
-                                          num_units=num_units,
-                                          num_proj_units=num_proj_units,
-                                          grad_clipping=grad_clipping,
-                                          backwards=True)
-
-            prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
-                                       axis=-1)
-        else:
-            prev_input_layer = lstm_fwd_layer
-
-
-    return build_sequence_dense_layer(input_var, prev_input_layer, output_dim)
-
-def build_deep_bidir_lstm_lhuc(input_var,
-                          mask_var,
-                          input_dim,
-                          num_units_list,
-                          output_dim,
-                          speaker_var,
-                          num_speakers,
-                          grad_clipping=1.0):
-    input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)
-
-    speaker_input_layer = InputLayer(shape=(None,),
-                            input_var=speaker_var)
-
-    prev_input_layer = input_layer
-    for num_units in num_units_list:
-        lstm_fwd_layer = LasagneLSTMLayer(incoming=prev_input_layer,
-                                   mask_input=mask_layer,
-                                   num_units=num_units,
-                                   grad_clipping=grad_clipping,
-                                   backwards=False)
-        lstm_bwd_layer = LasagneLSTMLayer(incoming=prev_input_layer,
-                                   mask_input=mask_layer,
-                                   num_units=num_units,
-                                   grad_clipping=grad_clipping,
-                                   backwards=True)
-
-        prev_input_layer = ConcatLayer(incomings=[lstm_fwd_layer, lstm_bwd_layer],
-                                       axis=-1)
-        prev_input_layer = LHUCLayer(prev_input_layer,
-                speaker_input_layer, num_speakers, two_sigmoid)
-
-    return build_sequence_dense_layer(input_var, prev_input_layer, output_dim)
-
