@@ -16,7 +16,7 @@ from libs.lasagne_libs.updates import momentum, adam
 from libs.comp_graph_utils import trainer, predictor, eval_net
 from libs.utils import save_network, save_eval_history, best_fer, show_status
 from libs.utils import StopWatch, Rsync
-from models.deep_hyperlstm import build_deep_hyper_lstm
+from models.deep_hyperlstm import build_deep_hyperlstm
 
 from data.wsj.fuel_utils import create_ivector_datastream
 
@@ -54,20 +54,13 @@ if __name__ == '__main__':
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
     ivector_data = None
-    if args.use_ivector_input or args.use_ivector_model:
+    if args.use_ivector_input:
         ivector_data = T.ftensor3('ivector_data')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')    
 
-    if args.layer_name == 'IVectorLHUCLSTMLayer' and not args.use_ivector_model:
-        print('--use-ivector-model not specified for IVectorLHUCLSTMLayer')
-        sys.exit(1)
 
-    if args.layer_name == 'SummarizingLHUCLSTMLayer' and args.use_ivector_model:
-        print('--use-ivector-model specified for SummarizingLHUCLSTMLayer')
-        sys.exit(1)
-
-    network, speaker_layer = build_deep_hyper_lstm(args.layer_name, input_var=input_data,
+    network = build_deep_hyperlstm(args.layer_name, input_var=input_data,
                              mask_var=input_mask,
                              input_dim=args.input_dim,
                              num_layers=args.num_layers,
@@ -76,19 +69,9 @@ if __name__ == '__main__':
                              num_proj_units=args.num_proj_nodes,
                              output_dim=args.output_dim,
                              grad_clipping=args.grad_clipping,
-                             bidir=not args.unidirectional, 
-#                             num_hyperlstm_layers=args.num_hyperlstm_layers,
-                             use_ivector_input=args.use_ivector_input,
-                             ivector_var=ivector_data, 
+                             is_bidir=not args.unidirectional, 
                              ivector_dim=args.ivector_dim, 
-                             reparam=args.reparam, 
-                             use_layer_norm=args.use_layer_norm,
-                             num_pred_layers=args.num_pred_layers,
-                             num_pred_units=args.num_pred_nodes,
-                             pred_act=args.pred_act, 
-                             num_seqsum_nodes=args.num_seqsum_nodes, 
-                             num_seqsum_layers=args.num_seqsum_layers, 
-                             seqsum_output_dim=args.seqsum_output_dim)
+                             ivector_var=ivector_data,)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
@@ -112,22 +95,16 @@ if __name__ == '__main__':
     print('Building trainer')
     sw.reset()
 
-
-    speaker_embedding = None
-    if args.use_mb_loss:
-        speaker_embedding = get_output(speaker_layer)
-
     training_fn, trainer_params = trainer(
               input_data=input_data,
               input_mask=input_mask,
               target_data=target_data,
               target_mask=target_mask,
               network=network,
-              updater=eval(args.updater),
+              updater=adam,
               learning_rate=args.learn_rate,
               load_updater_params=pretrain_update_params_val,
-              ivector_data=ivector_data, speaker_embedding=speaker_embedding,
-              mb_loss_lambda=args.mb_loss_lambda)
+              ivector_data=ivector_data)
 
 
     sw.print_elapsed()
