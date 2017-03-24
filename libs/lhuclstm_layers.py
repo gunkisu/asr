@@ -35,7 +35,10 @@ class LSTMLayer(MergeLayer):
 
     def add_gate_params(self, gate, gate_name):
         # (W_h, W_x, b)
-        return (self.add_param(gate.W_hid, (self.num_units, self.num_units),
+        
+        num_prev_units = self.num_proj_units if self.num_proj_units else self.num_units
+        
+        return (self.add_param(gate.W_hid, (num_prev_units, self.num_units),
                                name="W_h_{}".format(gate_name)),
                 self.add_param(gate.W_in, (self.num_inputs, self.num_units),
                                name="W_x_{}".format(gate_name)),
@@ -282,7 +285,7 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
         self.cell_init = self.add_param(self.cell_init, (1, self.num_units), name="cell_init",
             trainable=False, regularizable=False)
 
-       if self.num_proj_units:
+        if self.num_proj_units:
             self.hid_init = self.add_param(self.hid_init, (1, self.num_proj_units), name="hid_init",
                 trainable=False, regularizable=False)
         else:

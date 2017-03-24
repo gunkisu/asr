@@ -34,19 +34,8 @@ if __name__ == '__main__':
             args.reload_model = reload_path
 
     print(args)
-    sw = StopWatch()
-       
-    print('Load data streams from {}'.format(args.train_dataset))
-    if not args.no_copy:
-        print('Copying data to local machine...')
-        rsync = Rsync(args.tmpdir)
-        rsync.sync(args.data_path)
-        args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
-        sw.print_elapsed()
 
-    datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
-    train_ds, valid_ds, test_ds = [create_ivector_datastream(path=args.data_path, which_set=dataset, 
-        batch_size=args.batch_size) for dataset in datasets]
+    sw = StopWatch()
 
     print('Build and compile network')
     input_data = T.ftensor3('input_data')
@@ -112,6 +101,20 @@ if __name__ == '__main__':
                                        network=network, ivector_data=ivector_data)
 
     sw.print_elapsed()
+
+    print('Load data streams from {}'.format(args.train_dataset))
+    if not args.no_copy:
+        print('Copying data to local machine...')
+        sw.reset()
+        rsync = Rsync(args.tmpdir)
+        rsync.sync(args.data_path)
+        args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
+        sw.print_elapsed()
+
+    datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
+    train_ds, valid_ds, test_ds = [create_ivector_datastream(path=args.data_path, which_set=dataset, 
+        batch_size=args.batch_size) for dataset in datasets]
+
     print('Start training')
 
     # e_idx starts from 1
