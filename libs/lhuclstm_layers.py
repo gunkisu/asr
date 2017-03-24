@@ -254,8 +254,10 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
 
 
     def add_gate_params(self, gate, gate_name):
+        num_prev_units = self.num_proj_units if self.num_proj_units else self.num_units
+
         # (W_h, W_x, b)
-        return (self.add_param(gate.W_hid, (self.num_units, self.num_units),
+        return (self.add_param(gate.W_hid, (self.num_prev_units, self.num_units),
                                name="W_h_{}".format(gate_name)),
                 self.add_param(gate.W_in, (self.num_inputs, self.num_units),
                                name="W_x_{}".format(gate_name)),
