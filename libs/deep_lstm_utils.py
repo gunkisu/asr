@@ -38,7 +38,7 @@ def get_save_path(args):
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
     if args.num_proj_units:
-        fn = '{}_pn{}'.format(fn, args.num_proj_nodes)
+        fn = '{}_pn{}'.format(fn, args.num_proj_units)
 
     return fn
 
