@@ -2,7 +2,7 @@ from lasagne import nonlinearities
 from lasagne.layers import InputLayer, ConcatLayer
 from libs.lasagne_libs.hyper_lhuc_layers import HyperLSTMLayer
 
-from models.utils import build_input_layer, build_ivector_layer, concatenate_layers, \
+from libs.builder_utils import build_input_layer, build_ivector_layer, concatenate_layers, \
             build_sequence_dense_layer, build_sequence_summarizing_layer
 
 def build_deep_hyperlstm(layer_name, input_var, mask_var, input_dim,

@@ -7,7 +7,7 @@ from libs.lhuclstm_layers import LSTMPLayer, LSTMLayer
 from lasagne.layers import DenseLayer, ReshapeLayer, reshape, Gate
 from lasagne.layers import get_output_shape
 
-from models.utils import build_sequence_dense_layer, build_input_layer, build_ivector_layer, concatenate_layers
+from libs.builder_utils import build_sequence_dense_layer, build_input_layer, build_ivector_layer, concatenate_layers
 
 def build_deep_lstm(input_var, mask_var, input_dim, num_layers, num_units, output_dim,
                           grad_clipping, is_bidir, ivector_dim, ivector_var=None):
