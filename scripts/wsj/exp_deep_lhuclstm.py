@@ -16,7 +16,7 @@ from libs.lasagne_libs.updates import adam
 from libs.comp_graph_utils import trainer, predictor, eval_net
 from libs.utils import save_network, save_eval_history, best_fer, show_status
 from libs.utils import StopWatch, Rsync
-from models.deep_lhuclstm import build_deep_lhuclstm_ivector, build_deep_lhuclstm_seqsum
+from libs.deep_lhuclstm_builder import build_deep_lhuclstm_ivector, build_deep_lhuclstm_seqsum
 
 from data.wsj.fuel_utils import create_ivector_datastream
 

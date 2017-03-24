@@ -16,7 +16,7 @@ from libs.lasagne_libs.updates import momentum, adam
 from libs.comp_graph_utils import trainer, predictor, eval_net
 from libs.utils import save_network, save_eval_history, best_fer, show_status
 from libs.utils import StopWatch, Rsync
-from models.deep_hyperlstm import build_deep_hyperlstm
+from libs.deep_hyperlstm_builder import build_deep_hyperlstm
 
 from data.wsj.fuel_utils import create_ivector_datastream
 
