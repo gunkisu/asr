@@ -2,12 +2,12 @@ import argparse
 
 def add_deep_lstm_params(parser):
     parser.add_argument('--batch-size', default=2, help='batch size', type=int)
-    parser.add_argument('--num-nodes', default=10, help='number of hidden nodes', type=int)
+    parser.add_argument('--num-units', default=10, help='number of hidden units', type=int)
     parser.add_argument('--num-layers', default=1, help='number of layers', type=int)
     parser.add_argument('--learn-rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
-    parser.add_argument('--num-proj-nodes', help='number of units in projection layers', default=0, type=int)
+    parser.add_argument('--num-proj-units', help='number of units in projection layers', default=0, type=int)
 
     parser.add_argument('--data-path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--input-dim', help='input dimension', default=123, type=int)
@@ -29,19 +29,15 @@ def get_arg_parser():
     add_deep_lstm_params(parser)
     return parser
 
-def add_lhuc_params(parser):
-    parser.add_argument('simodel', help='speaker independent model for LHUC')
-
-
 def get_save_path(args):
     fn = './wsj_deep_lstm_lr{}_gc{}_l{}_n{}_b{}'.format(
-            args.learn_rate, args.grad_clipping, args.num_layers, args.num_nodes, 
+            args.learn_rate, args.grad_clipping, args.num_layers, args.num_units, 
             args.batch_size)
     if args.use_ivector_input:
         fn = '{}_iv{}'.format(fn, args.ivector_dim)
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
-    if args.num_proj_nodes:
+    if args.num_proj_units:
         fn = '{}_pn{}'.format(fn, args.num_proj_nodes)
 
     return fn

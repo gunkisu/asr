@@ -16,7 +16,7 @@ from libs.lasagne_libs.utils import set_model_param_value
 from libs.lasagne_libs.updates import adam
 
 from libs.utils import StopWatch, Rsync
-from libs.deep_lstm_builder import build_deep_lstm, build_deep_lstmp
+from libs.deep_lstm_builder import build_deep_lstm
 from data.wsj.fuel_utils import create_ivector_datastream
 
 if __name__ == '__main__':
@@ -57,24 +57,12 @@ if __name__ == '__main__':
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    if args.num_proj_nodes:
-        network = build_deep_lstmp(input_var=input_data,
+    network = build_deep_lstm(input_var=input_data,
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
                                     num_layers=args.num_layers,
-                                    num_units=args.num_nodes,
-                                    num_proj_units=args.num_proj_nodes,
-                                    output_dim=args.output_dim, 
-                                    grad_clipping=args.grad_clipping,
-                                    is_bidir=not args.unidirectional,
-                                    ivector_dim=args.ivector_dim,
-                                    ivector_var=ivector_data)
-    else:
-        network = build_deep_lstm(input_var=input_data,
-                                    mask_var=input_mask,
-                                    input_dim=args.input_dim,
-                                    num_layers=args.num_layers,
-                                    num_units=args.num_nodes,
+                                    num_units=args.num_units,
+                                    num_proj_units=args.num_proj_units,
                                     output_dim=args.output_dim, 
                                     grad_clipping=args.grad_clipping,
                                     is_bidir=not args.unidirectional,

@@ -24,6 +24,8 @@ def add_params(parser):
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
 
+    parser.add_argument('--num-proj_nodes', default=0, help='number of projection nodes', type=int)
+
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
     parser.add_argument('--use-ivector-model', help='whether to use ivectors as inputs to layers', action='store_true')
