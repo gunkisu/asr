@@ -2,7 +2,7 @@ import argparse
 
 def add_params(parser):
     parser.add_argument('--batch-size', default=2, help='batch size', type=int)
-    parser.add_argument('--num-nodes', default=10, help='number of hidden nodes', type=int)
+    parser.add_argument('--num-units', default=10, help='number of hidden units', type=int)
     parser.add_argument('--num-layers', default=1, help='number of layers', type=int)
     parser.add_argument('--learn-rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
@@ -11,12 +11,12 @@ def add_params(parser):
     parser.add_argument('--output-dim', help='output dimension', default=3436, type=int)
     parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
     parser.add_argument('--num-pred-layers', help='number of prediction layers between speaker embedding and scaling factor', default=1, type=int)
-    parser.add_argument('--num-pred-nodes',
+    parser.add_argument('--num-pred-units',
                         help='number of units in prediction layers between speaker embedding and scaling factor', default=128,
                         type=int)
 
     parser.add_argument('--num-seqsum-layers', help='number of layers in sequence summarizing neural network', default=1, type=int)
-    parser.add_argument('--num-seqsum-nodes',  help='number of units in sequence summarizing layers', default=128,type=int)
+    parser.add_argument('--num-seqsum-units',  help='number of units in sequence summarizing layers', default=128,type=int)
     parser.add_argument('--seqsum-output-dim', help='output dimension of sequence summarizing neural network', default=100, type=int)
 
     parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=50, type=int)
@@ -24,7 +24,7 @@ def add_params(parser):
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
 
-    parser.add_argument('--num-proj_nodes', default=0, help='number of projection nodes', type=int)
+    parser.add_argument('--num-proj-units', default=0, help='number of projection units', type=int)
 
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
@@ -47,7 +47,7 @@ def get_arg_parser():
 
 def get_save_path(args):
     fn = './wsj_lhuclstm_lr{}_gc{}_l{}_n{}_b{}'.format(
-            args.learn_rate, args.grad_clipping, args.num_layers, args.num_nodes, 
+            args.learn_rate, args.grad_clipping, args.num_layers, args.num_units, 
             args.batch_size)
     if args.use_ivector_input:
         fn = '{}_ivi{}'.format(fn, args.ivector_dim)
@@ -57,10 +57,10 @@ def get_save_path(args):
         fn = '{}_uni'.format(fn)
 
     if 'LHUC' in args.layer_name:
-        fn = '{}_predl{}_predn{}'.format(fn, args.num_pred_layers, args.num_pred_nodes)
+        fn = '{}_predl{}_predn{}'.format(fn, args.num_pred_layers, args.num_pred_units)
     
     if 'SeqSum' in args.layer_name:
-        fn = '{}_sl{}_sn{}_so{}'.format(fn, args.num_seqsum_layers, args.num_seqsum_nodes, args.seqsum_output_dim)
+        fn = '{}_sl{}_sn{}_so{}'.format(fn, args.num_seqsum_layers, args.num_seqsum_units, args.seqsum_output_dim)
         if args.use_mb_loss:
             fn = '{}_lambda{}'.format(fn, args.mb_loss_lambda)
 

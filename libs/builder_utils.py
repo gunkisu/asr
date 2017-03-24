@@ -46,8 +46,7 @@ def build_sequence_dense_layer(input_var, input_layer, output_dim):
     return reshape(dense_layer, (n_batch, n_time_steps, output_dim))
 
 def build_sequence_summarizing_layer(input_var, input_layer, 
-        num_nodes=512, num_layers=2, output_dim=100):
-    '''Default arguments values from the 2016 ICASSP paper'''
+        num_units, num_layers, output_dim):
 
     # input_layer: n_batch, n_time_steps, n_feat
     n_batch, n_time_steps, _ = input_var.shape
@@ -56,7 +55,7 @@ def build_sequence_summarizing_layer(input_var, input_layer,
     prev_layer = reshape(input_layer, (-1, [2]))
     for i in range(num_layers):
         prev_layer = DenseLayer(prev_layer, 
-                num_units=num_nodes, nonlinearity=nonlinearities.tanh)
+                num_units=num_units, nonlinearity=nonlinearities.tanh)
     
     dense_layer= DenseLayer(prev_layer, num_units=output_dim, nonlinearity=nonlinearities.identity)
     

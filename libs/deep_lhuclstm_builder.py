@@ -7,7 +7,7 @@ from libs.builder_utils import build_input_layer, build_ivector_layer, concatena
 
 def build_deep_lhuclstm_seqsum(layer_name, input_var, mask_var, input_dim,
         num_layers, num_units, output_dim, num_pred_layers, num_pred_units, 
-        num_seqsum_nodes, num_seqsum_layers, seqsum_output_dim, 
+        num_seqsum_units, num_seqsum_layers, seqsum_output_dim, 
         grad_clipping, is_bidir, use_ivector_input, ivector_dim, ivector_var=None):
 
     input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)
@@ -19,7 +19,7 @@ def build_deep_lhuclstm_seqsum(layer_name, input_var, mask_var, input_dim,
         input_layer = concatenate_layers(input_layer, speaker_layer)
 
     speaker_layer = build_sequence_summarizing_layer(input_var, input_layer, 
-       num_nodes=num_seqsum_nodes, num_layers=num_seqsum_layers, output_dim=seqsum_output_dim)
+       num_units=num_seqsum_units, num_layers=num_seqsum_layers, output_dim=seqsum_output_dim)
   
     prev_input_layer = input_layer
     for layer_idx in range(1, num_layers+1):
@@ -46,7 +46,7 @@ def build_deep_lhuclstm_seqsum(layer_name, input_var, mask_var, input_dim,
 
 def build_deep_lhuclstm_ivector(layer_name, input_var, mask_var, input_dim,
         num_layers, num_units, output_dim, num_pred_layers, num_pred_units, 
-        num_seqsum_nodes, num_seqsum_layers, seqsum_output_dim, 
+        num_seqsum_units, num_seqsum_layers, seqsum_output_dim, 
         grad_clipping, is_bidir, use_ivector_input, ivector_dim, ivector_var):
 
     input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)

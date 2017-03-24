@@ -173,7 +173,7 @@ class LSTMLayer(MergeLayer):
 
         hid = outgate*self.nonlinearity(cell)
 
-        if self.num_proj_nodes:
+        if self.num_proj_units:
             hid = T.dot(hid, self.W_p)
         
         return [cell, hid]
@@ -212,7 +212,7 @@ class LSTMLayer(MergeLayer):
         hid_init = T.dot(ones, self.hid_init)
         
         non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked, self.W_c_ig, self.W_c_fg, self.W_c_og]
-        if self.num_proj_nodes:
+        if self.num_proj_units:
             non_seqs.append(self.W_p)
       
         cell_out, hid_out = theano.scan(
@@ -243,7 +243,11 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
         # The shape of the input to this layer will be the first element
         # of input_shapes, whether or not a mask input is being used.
         input_shape = input_shapes[0]
-        return input_shape[0], input_shape[1], self.num_units
+
+        if self.num_proj_units:
+            return input_shape[0], input_shape[1], self.num_proj_units
+        else:
+            return input_shape[0], input_shape[1], self.num_units
 
 
     def add_gate_params(self, gate, gate_name):
@@ -262,6 +266,9 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
         (self.W_h_c, self.W_x_c, self.b_c) = self.add_gate_params(self.cell, 'c')
         (self.W_h_og, self.W_x_og, self.b_og) = self.add_gate_params(self.outgate, 'og')
 
+        if self.num_proj_units:
+            self.W_p = self.add_param(Gate().W_hid, (self.num_units, self.num_proj_units), name="W_p")
+
 		# Peephole connections
         self.W_c_ig = self.add_param(
                 self.ingate.W_cell, (self.num_units, ), name="W_c_ig")
@@ -275,9 +282,12 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
         self.cell_init = self.add_param(self.cell_init, (1, self.num_units), name="cell_init",
             trainable=False, regularizable=False)
 
-        self.hid_init = self.add_param(self.hid_init, (1, self.num_units), name="hid_init",
-            trainable=False, regularizable=False)
-    
+       if self.num_proj_units:
+            self.hid_init = self.add_param(self.hid_init, (1, self.num_proj_units), name="hid_init",
+                trainable=False, regularizable=False)
+        else:
+            self.hid_init = self.add_param(self.hid_init, (1, self.num_units), name="hid_init",
+                trainable=False, regularizable=False)    
     
     def step_masked(self, input_n, mask_n, cell_previous, hid_previous, *args):
         cell, hid = self.step(input_n, cell_previous, hid_previous, *args)
@@ -326,6 +336,7 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
                  backwards=False,
                  grad_clipping=0,
                  mask_input=None, 
+                 num_proj_units=0,
                  **kwargs):
 
         incomings = [incoming]
@@ -373,6 +384,8 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
 
         self.init_main_lstm_weights()
         self.init_lhuc_weights()
+
+        self.num_proj_units = num_proj_units
 
         self.speaker_embedding = None
     
@@ -426,7 +439,9 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
         outgate = self.nonlinearity_outgate(outgate)
 
         hid = outgate*self.nonlinearity(cell)
-     
+        if self.num_proj_units:
+            hid = T.dot(hid, self.W_p)
+
         return [cell, hid]
 
     def get_output_for(self, inputs, **kwargs):
@@ -466,6 +481,8 @@ class SpeakerLHUCLSTMLayer(MergeLayer):
         hid_init = T.dot(ones, self.hid_init)
         
         non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked, self.W_c_ig, self.W_c_fg, self.W_c_og]
+        if self.num_proj_units:
+            non_seqs.append(self.W_p)
         non_seqs.extend(self.W_pred_list)
         non_seqs.extend(self.b_pred_list)
       
@@ -502,11 +519,12 @@ class SeqSumLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
                  backwards=False,
                  grad_clipping=0,
                  mask_input=None, 
+                 num_proj_units=0,
                  **kwargs):
        
         super(SeqSumLHUCLSTMLayer, self).__init__(incoming, speaker_input, num_units, num_pred_units, num_pred_layers, 
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
-                 grad_clipping, mask_input, **kwargs)
+                 grad_clipping, mask_input, num_proj_units, **kwargs)
 
     def compute_speaker_embedding(self, inputs):        
         speaker_input = inputs[self.speaker_incoming_index]
@@ -523,12 +541,13 @@ class IVectorLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
                  hid_init=init.Constant(0.),
                  backwards=False,
                  grad_clipping=0,
-                 mask_input=None, reparam='relu', 
+                 mask_input=None,
+                 num_proj_units=0,
                  **kwargs):
 
         super(IVectorLHUCLSTMLayer, self).__init__(incoming, speaker_input, num_units, num_pred_units, num_pred_layers, 
                  ingate, forgetgate, cell, outgate, nonlinearity, cell_init, hid_init, backwards,
-                 grad_clipping, mask_input, **kwargs)
+                 grad_clipping, mask_input, num_proj_units, **kwargs)
 
     def compute_speaker_embedding(self, inputs):        
         ivector_input = inputs[self.speaker_incoming_index]
