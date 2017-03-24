@@ -4,7 +4,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--batch-size', default=2, help='batch size', type=int)
     parser.add_argument('--num-nodes', default=10, help='number of hidden nodes', type=int)
     parser.add_argument('--num-layers', default=1, help='number of layers', type=int)
-    parser.add_argument('--learn-rate', default=0.0001, help='learning rate', type=float)
+    parser.add_argument('--learn-rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
     parser.add_argument('--use-proj-layer', help='whether to use projection layers', action='store_true')

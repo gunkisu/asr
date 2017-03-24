@@ -6,7 +6,7 @@ def add_params(parser):
     parser.add_argument('--num-hyper-nodes', default=4, help='number of hyper hidden nodes', type=int)
     parser.add_argument('--num-proj-nodes', default=2, help='number of proj nodes', type=int)
     parser.add_argument('--num-layers', default=1, help='number of layers', type=int)
-    parser.add_argument('--learn-rate', default=0.0001, help='learning rate', type=float)
+    parser.add_argument('--learn-rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
     parser.add_argument('--data-path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--input-dim', help='input dimension', default=123, type=int)

@@ -11,7 +11,7 @@ from libs.hyperlstm_utils import add_params, get_arg_parser, get_save_path
 from libs.lasagne_libs.utils import set_model_param_value
 
 from lasagne.layers import get_all_params, count_params, get_output
-from libs.lasagne_libs.updates import momentum
+from libs.lasagne_libs.updates import momentum, adam
 
 from libs.comp_graph_utils import trainer, predictor, eval_net
 from libs.utils import save_network, save_eval_history, best_fer, show_status
