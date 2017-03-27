@@ -8,6 +8,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
     parser.add_argument('--use-ivector-input', help='whether to use ivectors as inputs', action='store_true')
     parser.add_argument('--num-proj-units', help='number of units in projection layers', default=0, type=int)
+    parser.add_argument('--use-layer-norm', help='whether to layer normalization', action='store_true')
 
     parser.add_argument('--data-path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--input-dim', help='input dimension', default=123, type=int)
@@ -39,6 +40,9 @@ def get_save_path(args):
         fn = '{}_uni'.format(fn)
     if args.num_proj_units:
         fn = '{}_pn{}'.format(fn, args.num_proj_units)
+
+    if args.use_layer_norm:
+        fn = '{}_ln'.format(fn)
 
     return fn
 

@@ -96,6 +96,7 @@ class LSTMLayer(MergeLayer):
                  grad_clipping=0,
                  mask_input=None,
                  num_proj_units=0,
+                 use_layer_norm=False,
                  **kwargs):
 
         incomings = [incoming]
@@ -134,6 +135,7 @@ class LSTMLayer(MergeLayer):
         self.hid_init = hid_init
 
         self.num_proj_units = num_proj_units
+        self.use_layer_norm = use_layer_norm
 
         self.init_main_lstm_weights()
 
