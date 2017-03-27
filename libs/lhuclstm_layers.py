@@ -9,9 +9,11 @@ from lasagne.layers import Layer, MergeLayer, Gate
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
-def ln(input, alpha, beta):
+def ln(input, alpha, beta=None):
     output = (input - T.mean(input, axis=1, keepdims=True)) / T.sqrt(T.var(input, axis=1, keepdims=True) + eps)
-    output = alpha[None, :] * output + beta[None, :]
+    output *= alpha[None, :]
+    if beta:
+        output += beta[None, :]
     return output
 
 from abc import ABCMeta, abstractmethod, abstractproperty
@@ -74,8 +76,20 @@ class LSTMLayer(MergeLayer):
         else:
             self.hid_init = self.add_param(self.hid_init, (1, self.num_units), name="hid_init",
                 trainable=False, regularizable=False)
-    
-    
+
+        if self.use_layer_norm:
+            # W_x_beta and W_h_beta are redundant 
+            self.W_x_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units*4,), name="W_x_alpha")
+            self.W_h_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units*4,), name="W_h_alpha")
+            self.W_c_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units,), name="W_c_alpha")
+            self.W_c_beta = self.add_param(spec=init.Constant(0.0), shape=(self.num_units,), name="W_c_beta", regularizable=False)
+
+            # Peephole connections
+            self.W_c_ig_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units,), name="W_c_ig_alpha")
+            self.W_c_fg_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units,), name="W_c_fg_alpha")
+            self.W_c_og_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units,), name="W_c_og_alpha")
+            self.W_c_og_beta = self.add_param(spec=init.Constant(0.0), shape=(self.num_units,), name="W_c_og_beta", regularizable=False)
+
     def step_masked(self, input_n, mask_n, cell_previous, hid_previous, *args):
         cell, hid = self.step(input_n, cell_previous, hid_previous, *args)
 
@@ -142,41 +156,50 @@ class LSTMLayer(MergeLayer):
     def step(self, input_n, cell_previous, hid_previous, *args):
         # Precomputed input outside of scan: input = T.dot(input, self.W_x_stacked) + self.b_stacked
 
-        gates = T.dot(hid_previous, self.W_h_stacked) + input_n
+        if self.use_layer_norm:
+            gates = ln(input_n, self.W_x_alpha)
+            gates += ln(T.dot(hid_previous, self.W_h_stacked), self.W_h_alpha)
+        else:
+            gates = T.dot(hid_previous, self.W_h_stacked) + input_n
    
         ingate, forgetgate, cell_input, outgate = \
             [self.slice_w(gates, i) for i in range(4)]
 
-        # Peephole connections
-        ingate += cell_previous*self.W_c_ig
-        forgetgate += cell_previous*self.W_c_fg
+        # Peephole
+        if self.use_layer_norm:
+            ingate += ln(cell_previous*self.W_c_ig, self.W_c_ig_alpha)
+            forgetgate += ln(cell_previous*self.W_c_fg, self.W_c_fg_alpha)
 
-        ingate = theano.gradient.grad_clip(ingate,
-                                           -self.grad_clipping,
-                                           self.grad_clipping)
-        forgetgate = theano.gradient.grad_clip(forgetgate,
-                                               -self.grad_clipping,
-                                               self.grad_clipping)
-        cell_input = theano.gradient.grad_clip(cell_input,
-                                               -self.grad_clipping,
-                                               self.grad_clipping)
+        else:
+            ingate += cell_previous*self.W_c_ig
+            forgetgate += cell_previous*self.W_c_fg
+
+        if self.grad_clipping:
+            ingate = theano.gradient.grad_clip(ingate, -self.grad_clipping, self.grad_clipping)
+            forgetgate = theano.gradient.grad_clip(forgetgate, -self.grad_clipping, self.grad_clipping)
+            cell_input = theano.gradient.grad_clip(cell_input, -self.grad_clipping, self.grad_clipping)
 
         ingate = self.nonlinearity_ingate(ingate)
         forgetgate = self.nonlinearity_forgetgate(forgetgate)
         cell_input = self.nonlinearity_cell(cell_input)
 
         cell = forgetgate*cell_previous + ingate*cell_input
-
-        # Peephole connection
-        outgate += cell * self.W_c_og
         
-        outgate = theano.gradient.grad_clip(outgate,
-                                               -self.grad_clipping,
-                                               self.grad_clipping)
+        # Peephole
+        if self.use_layer_norm:
+            outgate += ln(cell * self.W_c_og, self.W_c_og_alpha, self.W_c_og_beta)
+        else:
+            outgate += cell * self.W_c_og
+
+        if self.grad_clipping:
+            outgate = theano.gradient.grad_clip(outgate, -self.grad_clipping, self.grad_clipping)
 
         outgate = self.nonlinearity_outgate(outgate)
 
-        hid = outgate*self.nonlinearity(cell)
+        if self.use_layer_norm:
+            hid = outgate*self.nonlinearity(ln(cell, self.W_c_alpha, self.W_c_beta))
+        else:
+            hid = outgate*self.nonlinearity(cell)
 
         if self.num_proj_units:
             hid = T.dot(hid, self.W_p)
@@ -219,7 +242,10 @@ class LSTMLayer(MergeLayer):
         non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked, self.W_c_ig, self.W_c_fg, self.W_c_og]
         if self.num_proj_units:
             non_seqs.append(self.W_p)
-      
+        if self.use_layer_norm:
+            non_seqs.extend([self.W_x_alpha, self.W_h_alpha, self.W_c_alpha, self.W_c_beta, self.W_c_ig_alpha, 
+                self.W_c_fg_alpha, self.W_c_og_alpha, self.W_c_og_beta])
+
         cell_out, hid_out = theano.scan(
             fn=step_fun,
             sequences=sequences,

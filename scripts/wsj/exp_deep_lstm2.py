@@ -55,6 +55,7 @@ if __name__ == '__main__':
                                     output_dim=args.output_dim, 
                                     grad_clipping=args.grad_clipping,
                                     is_bidir=not args.unidirectional,
+                                    use_layer_norm=args.use_layer_norm,
                                     ivector_dim=args.ivector_dim,
                                     ivector_var=ivector_data)
 
