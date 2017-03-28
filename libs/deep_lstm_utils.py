@@ -15,7 +15,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--output-dim', help='output dimension', default=3436, type=int)
     parser.add_argument('--ivector-dim', help='ivector dimension', default=100, type=int)
     parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
-    parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=100, type=int)
+    parser.add_argument('--train-disp-freq', help='how ferquently to display progress', default=50, type=int)
     parser.add_argument('--train-dataset', help='dataset for training', default='train_si284')
     parser.add_argument('--valid-dataset', help='dataset for validation', default='test_dev93')
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
