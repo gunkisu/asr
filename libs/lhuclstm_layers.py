@@ -359,11 +359,12 @@ class SeqSumLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
                  grad_clipping=0,
                  mask_input=None, 
                  num_proj_units=0,
+                 use_layer_norm=False,
                  **kwargs):
        
         super(SeqSumLHUCLSTMLayer, self).__init__(incoming, 
                     speaker_input, num_units, num_pred_units, num_pred_layers, 
-                    backwards, grad_clipping, mask_input, num_proj_units, **kwargs)
+                    backwards, grad_clipping, mask_input, num_proj_units, use_layer_norm, **kwargs)
 
     def compute_speaker_embedding(self, inputs):        
         speaker_input = inputs[self.speaker_incoming_index]
@@ -375,11 +376,12 @@ class IVectorLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
                  grad_clipping=0, 
                  mask_input=None, 
                  num_proj_units=0,
+                 use_layer_norm=False,
                  **kwargs):
 
         super(IVectorLHUCLSTMLayer, self).__init__(incoming, 
                 speaker_input, num_units, num_pred_units, num_pred_layers, 
-                backwards, grad_clipping, mask_input, num_proj_units, **kwargs)
+                backwards, grad_clipping, mask_input, num_proj_units, use_layer_norm, **kwargs)
 
     def compute_speaker_embedding(self, inputs):        
         ivector_input = inputs[self.speaker_incoming_index]
