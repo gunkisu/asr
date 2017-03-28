@@ -55,9 +55,12 @@ def get_save_path(args):
         fn = '{}_ivm{}'.format(fn, args.ivector_dim)
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
-
+    if args.num_proj_units:
+        fn = '{}_pjn{}'.format(fn, args.num_proj_units)
+    if args.use_layer_norm:
+        fn = '{}_ln'.format(fn)
     if 'LHUC' in args.layer_name:
-        fn = '{}_predl{}_predn{}'.format(fn, args.num_pred_layers, args.num_pred_units)
+        fn = '{}_pdl{}_pdn{}'.format(fn, args.num_pred_layers, args.num_pred_units)
     
     if 'SeqSum' in args.layer_name:
         fn = '{}_sl{}_sn{}_so{}'.format(fn, args.num_seqsum_layers, args.num_seqsum_units, args.seqsum_output_dim)

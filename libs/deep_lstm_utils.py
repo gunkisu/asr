@@ -39,7 +39,7 @@ def get_save_path(args):
     if args.unidirectional:
         fn = '{}_uni'.format(fn)
     if args.num_proj_units:
-        fn = '{}_pn{}'.format(fn, args.num_proj_units)
+        fn = '{}_pjn{}'.format(fn, args.num_proj_units)
 
     if args.use_layer_norm:
         fn = '{}_ln'.format(fn)

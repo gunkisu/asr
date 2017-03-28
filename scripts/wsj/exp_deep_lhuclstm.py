@@ -70,6 +70,7 @@ if __name__ == '__main__':
                              seqsum_output_dim=args.seqsum_output_dim,                             
                              grad_clipping=args.grad_clipping,
                              is_bidir=not args.unidirectional, 
+                             use_layer_norm=args.use_layer_norm,
                              use_ivector_input=args.use_ivector_input,
                              ivector_dim=args.ivector_dim, 
                              ivector_var=ivector_data)
@@ -87,7 +88,8 @@ if __name__ == '__main__':
                              num_seqsum_layers=args.num_seqsum_layers, 
                              seqsum_output_dim=args.seqsum_output_dim,                             
                              grad_clipping=args.grad_clipping,
-                             is_bidir=not args.unidirectional, 
+                             is_bidir=not args.unidirectional,
+                             use_layer_norm=args.use_layer_norm,
                              use_ivector_input=args.use_ivector_input,
                              ivector_dim=args.ivector_dim, 
                              ivector_var=ivector_data)
