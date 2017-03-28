@@ -35,60 +35,43 @@ class LSTMLayer(MergeLayer):
             return input_shape[0], input_shape[1], self.num_units
 
 
-    def add_gate_params(self, gate, gate_name):
+    def add_gate_params(self, gate_name):
         # (W_h, W_x, b)
         
         num_prev_units = self.num_proj_units if self.num_proj_units else self.num_units
         
-        return (self.add_param(gate.W_hid, (num_prev_units, self.num_units),
+        return (self.add_param(init.Orthogonal(), (num_prev_units, self.num_units),
                                name="W_h_{}".format(gate_name)),
-                self.add_param(gate.W_in, (self.num_inputs, self.num_units),
+                self.add_param(init.Orthogonal(), (self.num_inputs, self.num_units),
                                name="W_x_{}".format(gate_name)),
-                self.add_param(gate.b, (self.num_units,),
+                self.add_param(init.Constant(0.0), (self.num_units,),
                                name="b_{}".format(gate_name),
                                regularizable=False))
 
     def init_main_lstm_weights(self):
-        (self.W_h_ig, self.W_x_ig, self.b_ig) = self.add_gate_params(self.ingate, 'ig')
-        (self.W_h_fg, self.W_x_fg, self.b_fg) = self.add_gate_params(self.forgetgate, 'fg')
-        (self.W_h_c, self.W_x_c, self.b_c) = self.add_gate_params(self.cell, 'c')
-        (self.W_h_og, self.W_x_og, self.b_og) = self.add_gate_params(self.outgate, 'og')
+        (self.W_h_ig, self.W_x_ig, self.b_ig) = self.add_gate_params('ig')
+        (self.W_h_fg, self.W_x_fg, self.b_fg) = self.add_gate_params('fg')
+        (self.W_h_c, self.W_x_c, self.b_c) = self.add_gate_params('c')
+        (self.W_h_og, self.W_x_og, self.b_og) = self.add_gate_params('og')
 
         if self.num_proj_units:
-            self.W_p = self.add_param(Gate().W_hid, (self.num_units, self.num_proj_units), name="W_p")
+            self.W_p = self.add_param(init.Orthogonal(), (self.num_units, self.num_proj_units), name="W_p")
 
-        # Peephole connections
-        self.W_c_ig = self.add_param(
-                self.ingate.W_cell, (self.num_units, ), name="W_c_ig")
-
-        self.W_c_fg = self.add_param(
-                self.forgetgate.W_cell, (self.num_units, ), name="W_c_fg")
-
-        self.W_c_og = self.add_param(
-                self.outgate.W_cell, (self.num_units, ), name="W_c_og")
-
-        self.cell_init = self.add_param(self.cell_init, (1, self.num_units), name="cell_init",
+        self.cell_init = self.add_param(init.Constant(0.0), (1, self.num_units), name="cell_init",
             trainable=False, regularizable=False)
 
         if self.num_proj_units:
-            self.hid_init = self.add_param(self.hid_init, (1, self.num_proj_units), name="hid_init",
+            self.hid_init = self.add_param(init.Constant(0.0), (1, self.num_proj_units), name="hid_init",
                 trainable=False, regularizable=False)
         else:
-            self.hid_init = self.add_param(self.hid_init, (1, self.num_units), name="hid_init",
+            self.hid_init = self.add_param(init.Constant(0.0), (1, self.num_units), name="hid_init",
                 trainable=False, regularizable=False)
 
         if self.use_layer_norm:
-            # W_x_beta and W_h_beta are redundant 
             self.W_x_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units*4,), name="W_x_alpha")
             self.W_h_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units*4,), name="W_h_alpha")
             self.W_c_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units,), name="W_c_alpha")
             self.W_c_beta = self.add_param(spec=init.Constant(0.0), shape=(self.num_units,), name="W_c_beta", regularizable=False)
-
-            # Peephole connections
-            self.W_c_ig_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units,), name="W_c_ig_alpha")
-            self.W_c_fg_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units,), name="W_c_fg_alpha")
-            self.W_c_og_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units,), name="W_c_og_alpha")
-            self.W_c_og_beta = self.add_param(spec=init.Constant(0.0), shape=(self.num_units,), name="W_c_og_beta", regularizable=False)
 
     def step_masked(self, input_n, mask_n, cell_previous, hid_previous, *args):
         cell, hid = self.step(input_n, cell_previous, hid_previous, *args)
@@ -99,13 +82,6 @@ class LSTMLayer(MergeLayer):
         return [cell, hid]
     
     def __init__(self, incoming, num_units, 
-                 ingate=Gate(),
-                 forgetgate=Gate(),
-                 cell=Gate(W_cell=None, nonlinearity=nonlinearities.tanh),
-                 outgate=Gate(),
-                 nonlinearity=nonlinearities.tanh,
-                 cell_init=init.Constant(0.),
-                 hid_init=init.Constant(0.),
                  backwards=False,
                  grad_clipping=0,
                  mask_input=None,
@@ -121,11 +97,6 @@ class LSTMLayer(MergeLayer):
 
         super(LSTMLayer, self).__init__(incomings, **kwargs)
 
-        if nonlinearity is None:
-            self.nonlinearity = nonlinearities.identity
-        else:
-            self.nonlinearity = nonlinearity
-
         self.num_units = num_units
      
         self.backwards = backwards
@@ -135,71 +106,47 @@ class LSTMLayer(MergeLayer):
 
         self.num_inputs = numpy.prod(input_shape[2:])
 
-        self.ingate = ingate
-        self.forgetgate = forgetgate
-        self.cell = cell
-        self.outgate = outgate
-
-        self.nonlinearity_ingate = ingate.nonlinearity
-        self.nonlinearity_forgetgate = forgetgate.nonlinearity
-        self.nonlinearity_cell = cell.nonlinearity
-        self.nonlinearity_outgate = outgate.nonlinearity
-
-        self.cell_init = cell_init
-        self.hid_init = hid_init
-
         self.num_proj_units = num_proj_units
         self.use_layer_norm = use_layer_norm
 
         self.init_main_lstm_weights()
 
     def step(self, input_n, cell_previous, hid_previous, *args):
-        # Precomputed input outside of scan: input = T.dot(input, self.W_x_stacked) + self.b_stacked
+        # Precomputed: input = T.dot(input, self.W_x_stacked)
 
         if self.use_layer_norm:
             gates = ln(input_n, self.W_x_alpha)
             gates += ln(T.dot(hid_previous, self.W_h_stacked), self.W_h_alpha)
         else:
-            gates = T.dot(hid_previous, self.W_h_stacked) + input_n
+            gates = input_n 
+            gates += T.dot(hid_previous, self.W_h_stacked)
+        gates += self.b_stacked
    
         ingate, forgetgate, cell_input, outgate = \
             [self.slice_w(gates, i) for i in range(4)]
-
-        # Peephole
-        if self.use_layer_norm:
-            ingate += ln(cell_previous*self.W_c_ig, self.W_c_ig_alpha)
-            forgetgate += ln(cell_previous*self.W_c_fg, self.W_c_fg_alpha)
-
-        else:
-            ingate += cell_previous*self.W_c_ig
-            forgetgate += cell_previous*self.W_c_fg
 
         if self.grad_clipping:
             ingate = theano.gradient.grad_clip(ingate, -self.grad_clipping, self.grad_clipping)
             forgetgate = theano.gradient.grad_clip(forgetgate, -self.grad_clipping, self.grad_clipping)
             cell_input = theano.gradient.grad_clip(cell_input, -self.grad_clipping, self.grad_clipping)
+            outgate = theano.gradient.grad_clip(outgate, -self.grad_clipping, self.grad_clipping)
 
-        ingate = self.nonlinearity_ingate(ingate)
-        forgetgate = self.nonlinearity_forgetgate(forgetgate)
-        cell_input = self.nonlinearity_cell(cell_input)
+        ingate = T.nnet.sigmoid(ingate)
+        forgetgate = T.nnet.sigmoid(forgetgate)
+        cell_input = T.tanh(cell_input)
+        outgate = T.nnet.sigmoid(outgate)
 
         cell = forgetgate*cell_previous + ingate*cell_input
         
-        # Peephole
         if self.use_layer_norm:
-            outgate += ln(cell * self.W_c_og, self.W_c_og_alpha, self.W_c_og_beta)
+            outcell = ln(cell, self.W_c_alpha, self.W_c_beta)
         else:
-            outgate += cell * self.W_c_og
+            outcell = cell
 
         if self.grad_clipping:
-            outgate = theano.gradient.grad_clip(outgate, -self.grad_clipping, self.grad_clipping)
+            outcell = theano.gradient.grad_clip(outcell, -self.grad_clipping, self.grad_clipping)
 
-        outgate = self.nonlinearity_outgate(outgate)
-
-        if self.use_layer_norm:
-            hid = outgate*self.nonlinearity(ln(cell, self.W_c_alpha, self.W_c_beta))
-        else:
-            hid = outgate*self.nonlinearity(cell)
+        hid = outgate*T.tanh(outcell)
 
         if self.num_proj_units:
             hid = T.dot(hid, self.W_p)
@@ -219,13 +166,11 @@ class LSTMLayer(MergeLayer):
         
         seq_len, num_batch, _ = input.shape
       
-        # Equation 12
         self.W_h_stacked = T.concatenate([self.W_h_ig, self.W_h_fg, self.W_h_c, self.W_h_og], axis=1)
         self.W_x_stacked = T.concatenate([self.W_x_ig, self.W_x_fg, self.W_x_c, self.W_x_og], axis=1)
         self.b_stacked = T.concatenate([self.b_ig, self.b_fg, self.b_c, self.b_og], axis=0)
 
-        # Precompute input
-        input = T.dot(input, self.W_x_stacked) + self.b_stacked
+        input = T.dot(input, self.W_x_stacked)
 
         if mask is not None:
             mask = mask.dimshuffle(1, 0, 'x')
@@ -239,12 +184,11 @@ class LSTMLayer(MergeLayer):
         cell_init = T.dot(ones, self.cell_init)
         hid_init = T.dot(ones, self.hid_init)
         
-        non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked, self.W_c_ig, self.W_c_fg, self.W_c_og]
+        non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked]
         if self.num_proj_units:
             non_seqs.append(self.W_p)
         if self.use_layer_norm:
-            non_seqs.extend([self.W_x_alpha, self.W_h_alpha, self.W_c_alpha, self.W_c_beta, self.W_c_ig_alpha, 
-                self.W_c_fg_alpha, self.W_c_og_alpha, self.W_c_og_beta])
+            non_seqs.extend([self.W_x_alpha, self.W_h_alpha, self.W_c_alpha, self.W_c_beta])
 
         cell_out, hid_out = theano.scan(
             fn=step_fun,
