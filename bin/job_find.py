@@ -34,7 +34,7 @@ args = parser.parse_args()
 if args.slurm:
     if args.all:
         jobids = extract_all_slurm_jobids()
-        for ji in sorted(jobids): 
+        for ji in sorted(jobids, reverse=True): 
             if ji: print(ji)
 
     else:
@@ -51,7 +51,7 @@ if args.slurm:
 else:
     if args.all:
         jobids = extract_all_jobids()
-        for ji in sorted(jobids): 
+        for ji in sorted(jobids, reverse=True): 
             if ji: print(ji)
     else:
         p = subprocess.Popen("qstat", shell=True, stdout=subprocess.PIPE)
