@@ -16,7 +16,7 @@ from libs.lasagne_libs.utils import set_model_param_value
 from libs.lasagne_libs.updates import adam
 
 from libs.utils import StopWatch, Rsync
-from libs.deep_lstm_builder import build_deep_lstm
+from libs.deep_lstm_builder import build_deep_lstm, build_deep_uni_lstm_tbptt
 from data.wsj.fuel_utils import create_ivector_datastream
 
 if __name__ == '__main__':
@@ -46,18 +46,37 @@ if __name__ == '__main__':
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
 
-    network = build_deep_lstm(input_var=input_data,
+    tbptt_layers = None
+    if args.num_tbptt_steps:
+
+        network, tbptt_layers = build_deep_uni_lstm_tbptt(input_var=input_data,
                                     mask_var=input_mask,
                                     input_dim=args.input_dim,
                                     num_layers=args.num_layers,
                                     num_units=args.num_units,
                                     num_proj_units=args.num_proj_units,
                                     output_dim=args.output_dim, 
+                                    batch_size=args.batch_size,
                                     grad_clipping=args.grad_clipping,
-                                    is_bidir=not args.unidirectional,
                                     use_layer_norm=args.use_layer_norm,
                                     ivector_dim=args.ivector_dim,
                                     ivector_var=ivector_data)
+
+    else:
+        network = build_deep_lstm(input_var=input_data,
+                                    mask_var=input_mask,
+                                    input_dim=args.input_dim,
+                                    num_layers=args.num_layers,
+                                    num_units=args.num_units,
+                                    num_proj_units=args.num_proj_units,
+                                    output_dim=args.output_dim, 
+                                    batch_size=args.batch_size,
+                                    grad_clipping=args.grad_clipping,
+                                    is_bidir=not args.uni,
+                                    use_layer_norm=args.use_layer_norm,
+                                    ivector_dim=args.ivector_dim,
+                                    ivector_var=ivector_data)
+
 
     network_params = get_all_params(network, trainable=True)
     
@@ -81,6 +100,7 @@ if __name__ == '__main__':
 
     print('Build trainer')
     sw.reset()
+
     training_fn, trainer_params = trainer(
               input_data=input_data,
               input_mask=input_mask,
@@ -89,8 +109,10 @@ if __name__ == '__main__':
               network=network,
               updater=adam,
               learning_rate=args.learn_rate,
+              tbptt_layers=tbptt_layers,
               load_updater_params=pretrain_update_params_val, 
               ivector_data=ivector_data)
+    
     sw.print_elapsed()
 
     print('Build predictor')
@@ -132,23 +154,57 @@ if __name__ == '__main__':
         train_ce_frame_sum = 0.0
         status_sw = StopWatch()
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
+            if tbptt_layers:
+                for layer in tbptt_layers:
+                    layer.init_cell_hid()
+
             input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = data
-            if args.use_ivector_input:
-                train_output = training_fn(input_data,
-                                           input_mask,
-                                           ivector_data,
-                                           target_data,
-                                           target_mask)
+            seq_len = input_data.shape[1]
+
+            if args.num_tbptt_steps:
+                train_outputs = []
+
+                for i in range(0, seq_len, args.num_tbptt_steps):
+                    from_idx = i; to_idx = i+args.num_tbptt_steps
+                    if args.use_ivector_input:
+                        train_output = training_fn(input_data[:,from_idx:to_idx,:],
+                                                   input_mask[:,from_idx:to_idx],
+                                                   ivector_data[:,from_idx:to_idx,:],
+                                                   target_data[:,from_idx:to_idx],
+                                                   target_mask[:,from_idx:to_idx])
+                    else:
+                        train_output = training_fn(input_data[:,from_idx:to_idx,:],
+                                                   input_mask[:,from_idx:to_idx],
+                                                   target_data[:,from_idx:to_idx],
+                                                   target_mask[:,from_idx:to_idx])
+                    train_outputs.append(train_output)
+                
+                steps_taken = len(train_outputs)
+                ce_sum = 0.0; gn_sum = 0.0
+                for to in train_outputs:
+                    ce, gn = to
+                    ce_sum += ce
+                    gn_sum += gn
+                
+                train_output = (ce_sum / steps_taken, gn_sum / steps_taken)
+
             else:
-                train_output = training_fn(input_data,
-                                           input_mask,
-                                           target_data,
-                                           target_mask)
+                if args.use_ivector_input:
+                    train_output = training_fn(input_data,
+                                               input_mask,
+                                               ivector_data,
+                                               target_data,
+                                               target_mask)
+                else:
+                    train_output = training_fn(input_data,
+                                               input_mask,
+                                               target_data,
+                                               target_mask)
 
 
             ce_frame, network_grads_norm = train_output
 
-            if b_idx%args.train_disp_freq == 0: 
+            if b_idx%args.log_freq == 0: 
                 show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size, e_idx)
                 status_sw.print_elapsed(); status_sw.reset()
             train_ce_frame_sum += ce_frame

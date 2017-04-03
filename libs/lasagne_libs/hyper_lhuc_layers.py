@@ -35,6 +35,136 @@ def weight_init(fn_name):
     else:
         return init.Constant(.0), init.Constant(1.0)
 
+class HyperLSTMOpMixin(object):
+    def add_scale_params(self, gate_name):
+        # (W_hz, W_xz, W_bz, b_0)
+        return (self.add_param(init.Constant(1.0/self.num_proj_units), (self.num_proj_units, self.num_units),
+                               name="W_hz_{}".format(gate_name)),
+                self.add_param(init.Constant(1.0/self.num_proj_units), (self.num_proj_units, self.num_units),
+                               name="W_xz_{}".format(gate_name)),
+                self.add_param(init.Constant(0.), (self.num_proj_units, self.num_units),
+                               name="W_bz_{}".format(gate_name)),
+                self.add_param(init.Constant(0.), (self.num_units,),
+                               name="b_0_{}".format(gate_name),
+                               regularizable=False))
+
+    def add_hyper_gate_params(self, gate, gate_name):
+        # (W_hhat, W_xhat, bhat)
+        return (self.add_param(gate.W_hid, (self.num_hyper_units, self.num_hyper_units),
+                               name="W_hhat_{}".format(gate_name)),
+                self.add_param(gate.W_in, (self.num_inputs+self.num_units, self.num_hyper_units),
+                               name="W_xhat_{}".format(gate_name)),
+                self.add_param(gate.b, (self.num_hyper_units,),
+                               name="bhat_{}".format(gate_name),
+                               regularizable=False))
+
+    def add_proj_params(self, gate_name):
+        """Initalization as described in the paper"""
+
+        # (W_hhat_h, b_hhat, W_hhat_x, b_hhat_x, W_hhat_b)
+        return (self.add_param(init.Constant(0.), (self.num_hyper_units, self.num_proj_units),
+                               name="W_hhat_h_{}".format(gate_name)),
+                self.add_param(init.Constant(1.), (self.num_proj_units,),
+                               name="b_hhat_h_{}".format(gate_name),
+                               regularizable=False),
+                self.add_param(init.Constant(0.), (self.num_hyper_units, self.num_proj_units),
+                               name="W_hhat_x_{}".format(gate_name)),
+                self.add_param(init.Constant(1.), (self.num_proj_units,),
+                               name="b_hhat_x_{}".format(gate_name),
+                               regularizable=False),
+                self.add_param(init.Constant(0.), (self.num_hyper_units, self.num_proj_units),
+                               name="W_hhat_b_{}".format(gate_name)))
+
+    def add_gate_params(self, gate, gate_name):
+        # (W_h, W_x)
+        return (self.add_param(gate.W_hid, (self.num_units, self.num_units),
+                               name="W_h_{}".format(gate_name)),
+                self.add_param(gate.W_in, (self.num_inputs, self.num_units),
+                               name="W_x_{}".format(gate_name))
+               )
+
+    def compute_eq10(self, hid_previous, orig_input_n, W_xhat_stacked, 
+            bhat_stacked, hyper_cell_previous, hyper_hid_previous, W_hhat_stacked):
+        hyper_input_n = T.concatenate([hid_previous, orig_input_n], axis=1)
+
+        hyper_input_n = T.dot(hyper_input_n, W_xhat_stacked) + bhat_stacked
+        hyper_gates = hyper_input_n + T.dot(hyper_hid_previous, W_hhat_stacked)
+        if self.grad_clipping:
+            hyper_gates = theano.gradient.grad_clip(
+                hyper_gates, -self.grad_clipping, self.grad_clipping)
+        
+        hyper_ig, hyper_fg, hyper_cell_input, hyper_og = \
+            [self.hyper_slice(hyper_gates, i) for i in range(4)]
+        hyper_ig = self.nonlinearity_ingate(hyper_ig)
+        hyper_fg = self.nonlinearity_forgetgate(hyper_fg)
+        hyper_cell_input = self.nonlinearity_cell(hyper_cell_input)
+
+        hyper_cell = hyper_fg * hyper_cell_previous + hyper_ig * hyper_cell_input
+        hyper_og = self.nonlinearity_outgate(hyper_og)
+
+        hyper_hid = hyper_og * self.nonlinearity(hyper_cell)
+
+        return [hyper_cell, hyper_hid]        
+
+    def init_main_lstm_weights(self):
+        (self.W_h_ig, self.W_x_ig) = self.add_gate_params(self.ingate, 'ig')
+        (self.W_h_fg, self.W_x_fg) = self.add_gate_params(self.forgetgate, 'fg')
+        (self.W_h_c, self.W_x_c) = self.add_gate_params(self.cell, 'c')
+        (self.W_h_og, self.W_x_og) = self.add_gate_params(self.outgate, 'og')
+
+        self.cell_init = self.add_param(self.cell_init, (1, self.num_units), name="cell_init",
+            trainable=False, regularizable=False)
+
+        self.hid_init = self.add_param(self.hid_init, (1, self.num_units), name="hid_init",
+            trainable=False, regularizable=False)
+
+    def init_weights(self):
+        # Equation 10
+        (self.W_hhat_ig, self.W_xhat_ig, self.bhat_ig) = self.add_hyper_gate_params(self.ingate, 'ig')
+        (self.W_hhat_fg, self.W_xhat_fg, self.bhat_fg) = self.add_hyper_gate_params(self.forgetgate, 'fg')
+        (self.W_hhat_c, self.W_xhat_c, self.bhat_c) = self.add_hyper_gate_params(self.cell, 'c')
+        (self.W_hhat_og, self.W_xhat_og, self.bhat_og) = self.add_hyper_gate_params(self.outgate, 'og')
+
+        self.hyper_cell_init = self.add_param(self.cell_init, (1, self.num_hyper_units), name="hyper_cell_init",
+            trainable=False, regularizable=False)
+
+        self.hyper_hid_init = self.add_param(self.hid_init, (1, self.num_hyper_units), name="hyper_hid_init",
+            trainable=False, regularizable=False)
+
+        # Equation 11
+        (self.W_hhat_h_ig, self.b_hhat_h_ig, self.W_hhat_x_ig, self.b_hhat_x_ig, self.W_hhat_b_ig) = self.add_proj_params('ig')
+        (self.W_hhat_h_fg, self.b_hhat_h_fg, self.W_hhat_x_fg, self.b_hhat_x_fg, self.W_hhat_b_fg) = self.add_proj_params('fg')
+        (self.W_hhat_h_c, self.b_hhat_h_c, self.W_hhat_x_c, self.b_hhat_x_c, self.W_hhat_b_c) = self.add_proj_params('c')
+        (self.W_hhat_h_og, self.b_hhat_h_og, self.W_hhat_x_og, self.b_hhat_x_og, self.W_hhat_b_og) = self.add_proj_params('og')
+
+        # Equation 12
+        (self.W_hz_ig, self.W_xz_ig, self.W_bz_ig, self.b_0_ig) = self.add_scale_params('ig')
+        (self.W_hz_fg, self.W_xz_fg, self.W_bz_fg, self.b_0_fg) = self.add_scale_params('fg')
+        (self.W_hz_c, self.W_xz_c, self.W_bz_c, self.b_0_c) = self.add_scale_params('c')
+        (self.W_hz_og, self.W_xz_og, self.W_bz_og, self.b_0_og) = self.add_scale_params('og')
+
+        self.init_main_lstm_weights()
+
+    def slice_w(self, x, n):
+        s = x[:, n*self.num_units:(n+1)*self.num_units]
+        if self.num_units == 1:
+            s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
+        return s
+
+    def hyper_slice(self, x, n):
+        s = x[:, n*self.num_hyper_units:(n+1)*self.num_hyper_units]
+        if self.num_hyper_units == 1:
+            s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
+        return s
+
+    def proj_slice(self, x, n):
+        s = x[:, n*self.num_proj_units:(n+1)*self.num_proj_units]
+        if self.num_proj_units == 1:
+            s = T.addbroadcast(s, 1)  # Theano cannot infer this by itself
+        return s
+
+
+
 class HyperLSTMLayer(MergeLayer):
     def add_scale_params(self, gate_name):
         # (W_hz, W_xz, W_bz, b_0)

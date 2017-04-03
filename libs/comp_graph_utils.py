@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import numpy
 import theano
 import lasagne
@@ -44,7 +45,7 @@ def compute_loss_speaker_embedding(network, target_data, target_mask, speaker_em
 
 
 def trainer(input_data, input_mask, target_data, target_mask, 
-        network, updater, learning_rate, load_updater_params=None,
+        network, updater, learning_rate, tbptt_layers=None, load_updater_params=None,
         ivector_data=None, speaker_embedding=None, mb_loss_lambda=.0):
 
     if speaker_embedding:
@@ -58,11 +59,20 @@ def trainer(input_data, input_mask, target_data, target_mask,
 
     network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
 
+    train_total_updates = OrderedDict()
+
     train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
     train_updates, trainer_params = updater(loss_or_grads=network_grads,
                                             params=network_params,
                                             learning_rate=train_lr,
                                             load_params_dict=load_updater_params)
+
+    train_total_updates.update(train_updates)
+
+    if tbptt_layers:
+        for layer in tbptt_layers:
+#            import ipdb; ipdb.set_trace()
+            train_total_updates.update(layer.get_cell_hid_updates())
 
     inputs = None
     if ivector_data:
@@ -73,7 +83,7 @@ def trainer(input_data, input_mask, target_data, target_mask,
     outputs = [ce_frame, network_grads_norm]
 
     training_fn = theano.function(
-            inputs=inputs, outputs=outputs, updates=train_updates)
+            inputs=inputs, outputs=outputs, updates=train_total_updates)
      
     return training_fn, trainer_params
 

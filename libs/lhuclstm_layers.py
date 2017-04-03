@@ -1,5 +1,7 @@
+from collections import OrderedDict
 import theano
 import numpy
+
 from theano import tensor as T
 from theano.tensor import tanh
 from theano.tensor.nnet import relu
@@ -44,16 +46,6 @@ class LSTMOpMixin(object):
 
         if self.num_proj_units:
             self.W_p = self.add_param(init.Orthogonal(), (self.num_units, self.num_proj_units), name="W_p")
-
-        self.cell_init = self.add_param(init.Constant(0.0), (1, self.num_units), name="cell_init",
-            trainable=False, regularizable=False)
-
-        if self.num_proj_units:
-            self.hid_init = self.add_param(init.Constant(0.0), (1, self.num_proj_units), name="hid_init",
-                trainable=False, regularizable=False)
-        else:
-            self.hid_init = self.add_param(init.Constant(0.0), (1, self.num_units), name="hid_init",
-                trainable=False, regularizable=False)
 
         if self.use_layer_norm:
             self.W_x_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units*4,), name="W_x_alpha")
@@ -103,7 +95,6 @@ class LSTMOpMixin(object):
         
         return [cell, hid]
 
-
     def get_output_shape_for(self, input_shapes):
         # The shape of the input to this layer will be the first element
         # of input_shapes, whether or not a mask input is being used.
@@ -121,9 +112,22 @@ class LSTMOpMixin(object):
 
         return [cell, hid]
 
+    def init_cell_hid(self):
+        self.cell_init.set_value(numpy.zeros_like(self.cell_init.get_value()))
+        self.hid_init.set_value(numpy.zeros_like(self.hid_init.get_value()))
+
+    def get_cell_hid_updates(self):
+        updates = OrderedDict()
+        
+        updates[self.cell_updates[0]] = self.cell_updates[1]
+        updates[self.hid_updates[0]] = self.hid_updates[1]
+        
+        return updates
+
 class LSTMLayer(LSTMOpMixin, MergeLayer):
     
-    def __init__(self, incoming, num_units, 
+    # batch_size for truncated bptt
+    def __init__(self, incoming, num_units, batch_size,
                  backwards=False,
                  grad_clipping=0,
                  mask_input=None,
@@ -140,6 +144,7 @@ class LSTMLayer(LSTMOpMixin, MergeLayer):
         super(LSTMLayer, self).__init__(incomings, **kwargs)
 
         self.num_units = num_units
+        self.batch_size = batch_size
      
         self.backwards = backwards
         self.grad_clipping = grad_clipping
@@ -150,6 +155,9 @@ class LSTMLayer(LSTMOpMixin, MergeLayer):
 
         self.num_proj_units = num_proj_units
         self.use_layer_norm = use_layer_norm
+
+        self.cell_updates = None
+        self.hid_updates = None
 
         self.init_main_lstm_weights()
 
@@ -165,6 +173,10 @@ class LSTMLayer(LSTMOpMixin, MergeLayer):
         input = input.dimshuffle(1, 0, 2)
         
         seq_len, num_batch, _ = input.shape
+
+        self.cell_init = theano.shared(numpy.zeros((self.batch_size, self.num_units), floatX))
+        num_units = self.num_proj_units if self.num_proj_units else self.num_units
+        self.hid_init = theano.shared(numpy.zeros((self.batch_size, num_units), floatX))
       
         self.W_h_stacked = T.concatenate([self.W_h_ig, self.W_h_fg, self.W_h_c, self.W_h_og], axis=1)
         self.W_x_stacked = T.concatenate([self.W_x_ig, self.W_x_fg, self.W_x_c, self.W_x_og], axis=1)
@@ -179,11 +191,7 @@ class LSTMLayer(LSTMOpMixin, MergeLayer):
         else:
             sequences = [input]
             step_fun = self.step
-
-        ones = T.ones((num_batch, 1))
-        cell_init = T.dot(ones, self.cell_init)
-        hid_init = T.dot(ones, self.hid_init)
-        
+     
         non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked]
         if self.num_proj_units:
             non_seqs.append(self.W_p)
@@ -193,13 +201,17 @@ class LSTMLayer(LSTMOpMixin, MergeLayer):
         cell_out, hid_out = theano.scan(
             fn=step_fun,
             sequences=sequences,
-            outputs_info=[cell_init, hid_init],
+            outputs_info=[self.cell_init, self.hid_init],
             go_backwards=self.backwards,
             non_sequences=non_seqs,
             strict=True)[0]
 
+        cell_out = cell_out.dimshuffle(1, 0, 2)
         hid_out = hid_out.dimshuffle(1, 0, 2)
 
+        self.cell_updates = (self.cell_init, cell_out[:, -1, :])
+        self.hid_updates = (self.hid_init, hid_out[:, -1, :])
+          
         if self.backwards:
             hid_out = hid_out[:, ::-1]
 
@@ -236,7 +248,7 @@ class SpeakerLHUCLSTMLayer(LSTMOpMixin, MergeLayer):
         self.init_lhuc_weights_helper(speaker_dim)
 
     
-    def __init__(self, incoming, speaker_input, num_units, num_pred_units, num_pred_layers, 
+    def __init__(self, incoming, speaker_input, num_units, num_pred_units, num_pred_layers, batch_size,
                  backwards=False,
                  grad_clipping=0,
                  mask_input=None, 
@@ -258,6 +270,7 @@ class SpeakerLHUCLSTMLayer(LSTMOpMixin, MergeLayer):
         self.num_units = num_units
         self.num_pred_units = num_pred_units
         self.num_pred_layers = num_pred_layers
+        self.batch_size = batch_size
 
         self.backwards = backwards
         self.grad_clipping = grad_clipping
@@ -303,6 +316,10 @@ class SpeakerLHUCLSTMLayer(LSTMOpMixin, MergeLayer):
         
         seq_len, num_batch, _ = input.shape
 
+        self.cell_init = theano.shared(numpy.zeros((self.batch_size, self.num_units), floatX))
+        num_units = self.num_proj_units if self.num_proj_units else self.num_units
+        self.hid_init = theano.shared(numpy.zeros((self.batch_size, num_units), floatX))
+
         self.speaker_embedding = self.compute_speaker_embedding(inputs)
         scaling_factor = self.compute_scaling_factor(self.speaker_embedding)
        
@@ -320,10 +337,6 @@ class SpeakerLHUCLSTMLayer(LSTMOpMixin, MergeLayer):
             sequences = [input]
             step_fun = self.step
 
-        ones = T.ones((num_batch, 1))
-        cell_init = T.dot(ones, self.cell_init)
-        hid_init = T.dot(ones, self.hid_init)
-        
         non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked]
         if self.num_proj_units:
             non_seqs.append(self.W_p)
@@ -335,15 +348,20 @@ class SpeakerLHUCLSTMLayer(LSTMOpMixin, MergeLayer):
         cell_out, hid_out = theano.scan(
             fn=step_fun,
             sequences=sequences,
-            outputs_info=[cell_init, hid_init],
+            outputs_info=[self.cell_init, self.hid_init],
             go_backwards=self.backwards,
             non_sequences=non_seqs,
             strict=True)[0]
+
+        cell_out = cell_out.dimshuffle(1, 0, 2)
 
         # LHUC
         hid_out = hid_out * self.reparam_fn(scaling_factor)
         hid_out = hid_out.dimshuffle(1, 0, 2)
 
+        self.cell_updates = (self.cell_init, cell_out[:, -1, :])
+        self.hid_updates = (self.hid_init, hid_out[:, -1, :])
+         
         if self.backwards:
             hid_out = hid_out[:, ::-1]
 
