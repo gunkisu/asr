@@ -77,7 +77,6 @@ if __name__ == '__main__':
                                     ivector_dim=args.ivector_dim,
                                     ivector_var=ivector_data)
 
-
     network_params = get_all_params(network, trainable=True)
     
     param_count = count_params(network, trainable=True)
@@ -117,11 +116,14 @@ if __name__ == '__main__':
 
     print('Build predictor')
     sw.reset()
+
     predict_fn = predictor(input_data=input_data,
-                                       input_mask=input_mask,
-                                       target_data=target_data,
-                                       target_mask=target_mask,
-                                       network=network, ivector_data=ivector_data)
+        input_mask=input_mask,
+        target_data=target_data,
+        target_mask=target_mask, 
+        network=network, 
+        tbptt_layers=tbptt_layers,
+        ivector_data=ivector_data)
 
     sw.print_elapsed()
 
@@ -153,13 +155,17 @@ if __name__ == '__main__':
         
         train_ce_frame_sum = 0.0
         status_sw = StopWatch()
+
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
             if tbptt_layers:
                 for layer in tbptt_layers:
                     layer.init_cell_hid()
 
             input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = data
-            seq_len = input_data.shape[1]
+            n_examples, seq_len, _ = input_data.shape
+
+            if n_examples < args.batch_size:
+                continue
 
             if args.num_tbptt_steps:
                 train_outputs = []
@@ -186,7 +192,7 @@ if __name__ == '__main__':
                     ce_sum += ce
                     gn_sum += gn
                 
-                train_output = (ce_sum / steps_taken, gn_sum / steps_taken)
+                train_output = (ce_sum / target_mask.sum(), gn_sum / steps_taken)
 
             else:
                 if args.use_ivector_input:
@@ -209,6 +215,7 @@ if __name__ == '__main__':
                 status_sw.print_elapsed(); status_sw.reset()
             train_ce_frame_sum += ce_frame
 
+
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
 
@@ -218,8 +225,8 @@ if __name__ == '__main__':
         print('Evaluating the network on the validation dataset')
         eval_sw = StopWatch()
         #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
-        valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds, args.use_ivector_input)
-        test_ce_frame, test_fer = eval_net(predict_fn, test_ds, args.use_ivector_input)
+        valid_ce_frame, valid_fer = eval_net(predict_fn, valid_ds, args.batch_size, args.use_ivector_input, tbptt_layers, args.num_tbptt_steps)
+        test_ce_frame, test_fer = eval_net(predict_fn, test_ds, args.batch_size, args.use_ivector_input, tbptt_layers, args.num_tbptt_steps)
         eval_sw.print_elapsed()
 
         print('Train CE: {}'.format(train_ce_frame_sum / b_idx))

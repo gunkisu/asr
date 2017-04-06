@@ -12,7 +12,7 @@ import data.wsj.fuel_utils as fuel_utils
 
 floatX = theano.config.floatX
 
-def compute_loss(network, target_data, target_mask):
+def compute_loss(network, target_data, target_mask, tbptt_layers=None):
     o = get_output(network, deterministic=False)
     num_seqs = o.shape[0]
     ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
@@ -21,11 +21,15 @@ def compute_loss(network, target_data, target_mask):
     ce = ce * T.flatten(target_mask, 1)
 
     ce_cost = ce.sum()/num_seqs
-    ce_frame = ce.sum()/target_mask.sum()
+
+    if tbptt_layers:
+        ce_frame = ce.sum()
+    else:
+        ce_frame = ce.sum()/target_mask.sum()
 
     return ce_cost, ce_frame
 
-def compute_loss_speaker_embedding(network, target_data, target_mask, speaker_embedding=None, mb_loss_lambda=.0):
+def compute_loss_speaker_embedding(network, target_data, target_mask, speaker_embedding=None, mb_loss_lambda=.0, tbptt_layers=None):
     o = get_output(network, deterministic=False)
     num_seqs = o.shape[0]
     ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
@@ -34,7 +38,10 @@ def compute_loss_speaker_embedding(network, target_data, target_mask, speaker_em
     ce = ce * T.flatten(target_mask, 1)
 
     ce_cost = ce.sum()/num_seqs
-    ce_frame = ce.sum()/target_mask.sum()
+    if tbptt_layers:
+        ce_frame = ce.sum()
+    else:
+        ce_frame = ce.sum()/target_mask.sum()
 
     if speaker_embedding:
         # speaker_embedding's shape: (n_batch, n_feat)    
@@ -49,9 +56,9 @@ def trainer(input_data, input_mask, target_data, target_mask,
         ivector_data=None, speaker_embedding=None, mb_loss_lambda=.0):
 
     if speaker_embedding:
-        ce_cost, ce_frame = compute_loss_speaker_embedding(network, target_data, target_mask, speaker_embedding, mb_loss_lambda)
+        ce_cost, ce_frame = compute_loss_speaker_embedding(network, target_data, target_mask, speaker_embedding, mb_loss_lambda, tbptt_layers)
     else:
-        ce_cost, ce_frame = compute_loss(network, target_data, target_mask)
+        ce_cost, ce_frame = compute_loss(network, target_data, target_mask, tbptt_layers)
   
     network_params = get_all_params(network, trainable=True)
     network_grads = theano.grad(cost=ce_cost,
@@ -87,40 +94,8 @@ def trainer(input_data, input_mask, target_data, target_mask,
      
     return training_fn, trainer_params
 
-def trainer_lhuc(input_data,
-                        input_mask,
-                        target_data,
-                        target_mask,
-                        speaker_data,
-                        network,
-                        updater,
-                        learning_rate,
-                        load_updater_params=None):
-    
-    ce_cost, ce_frame = compute_loss(network, target_data, target_mask)
 
-    network_params = get_all_params(network, trainable=True, speaker_independent=False)
-    network_grads = theano.grad(cost=ce_cost,
-                                wrt=network_params)
-
-    network_grads_norm = T.sqrt(sum(T.sum(grad**2) for grad in network_grads))
-
-    train_lr = theano.shared(lasagne.utils.floatX(learning_rate))
-    train_updates, trainer_params = updater(loss_or_grads=network_grads,
-                                            params=network_params,
-                                            learning_rate=train_lr,
-                                            load_params_dict=load_updater_params)
-
-    training_fn = theano.function(inputs=[input_data,
-                                          input_mask,
-                                          target_data,
-                                          target_mask, speaker_data],
-                                  outputs=[ce_frame,
-                                           network_grads_norm],
-                                  updates=train_updates)
-    return training_fn, trainer_params
-
-def predictor(input_data, input_mask, target_data, target_mask, network, ivector_data=None):
+def predictor(input_data, input_mask, target_data, target_mask, network, tbptt_layers=None, ivector_data=None):
     o = get_output(network, deterministic=False)
     num_seqs = o.shape[0]
     ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
@@ -129,7 +104,15 @@ def predictor(input_data, input_mask, target_data, target_mask, network, ivector
     pred_idx = T.argmax(o, axis=-1)
     ce = ce * T.flatten(target_mask, 1)
 
-    ce_frame = ce.sum()/target_mask.sum()
+    predictor_updates = OrderedDict()
+
+    if tbptt_layers:
+        ce_frame = ce.sum()
+        for layer in tbptt_layers:
+            predictor_updates.update(layer.get_cell_hid_updates())
+
+    else:
+        ce_frame = ce.sum()/target_mask.sum()
 
     inputs = None
     if ivector_data:
@@ -138,60 +121,71 @@ def predictor(input_data, input_mask, target_data, target_mask, network, ivector
         inputs = [input_data, input_mask, target_data, target_mask]
     outputs = [pred_idx, ce_frame]
 
-    fn = theano.function(inputs=inputs, outputs=outputs)
+    if tbptt_layers:
+        fn = theano.function(inputs=inputs, outputs=outputs, updates=predictor_updates)
+    else:
+        fn = theano.function(inputs=inputs, outputs=outputs)
 
     return fn
 
-def predictor_lhuc(input_data,
-                          input_mask,
-                          target_data,
-                          target_mask,
-                          speaker_data,
-                          network):
-    o = get_output(network, deterministic=False)
-    num_seqs = o.shape[0]
-    ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
-            targets=T.flatten(target_data, 1))
-
-    pred_idx = T.argmax(o, axis=-1)
-    ce = ce * T.flatten(target_mask, 1)
-
-    ce_frame = ce.sum()/target_mask.sum()
-
-    return theano.function(inputs=[input_data,
-                                         input_mask,
-                                         target_data,
-                                         target_mask, speaker_data],
-                                 outputs=[pred_idx,
-                                          ce_frame])
-
-def eval_net(predict_fn, data_stream, use_ivectors=False):
+def eval_net(predict_fn, data_stream, batch_size, use_ivectors=False, tbptt_layers=None, num_tbptt_steps=0):
 
     data_iterator = data_stream.get_epoch_iterator()
 
     total_nll = 0.
     total_fer = 0.
-
+        
     for batch_cnt, data in enumerate(data_iterator, start=1):
+        if tbptt_layers:
+            for layer in tbptt_layers:
+                layer.init_cell_hid()
+
         input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = data
-     
-        if use_ivectors:
-            predict_output = predict_fn(input_data,
-                                    input_mask,
-                                    ivector_data,
-                                    target_data,
-                                    target_mask)
-        else:
-            predict_output = predict_fn(input_data,
-                                    input_mask,
-                                    target_data,
-                                    target_mask)
- 
-        predict_idx = predict_output[0]
-        predict_cost = predict_output[1]
+        n_examples, seq_len, _ = input_data.shape
+        if n_examples < batch_size:
+            continue
+
+        if num_tbptt_steps:
+            pred_idx_list = []
+            pred_cost_list = []
+
+            for i in range(0, seq_len, num_tbptt_steps):
+                from_idx = i; to_idx = i+num_tbptt_steps
+                if use_ivectors:
+                    predict_output = predict_fn(input_data[:,from_idx:to_idx,:],
+                                               input_mask[:,from_idx:to_idx],
+                                               ivector_data[:,from_idx:to_idx,:],
+                                               target_data[:,from_idx:to_idx],
+                                               target_mask[:,from_idx:to_idx])
+                else:
+                    predict_output = predict_fn(input_data[:,from_idx:to_idx,:],
+                                               input_mask[:,from_idx:to_idx],
+                                               target_data[:,from_idx:to_idx],
+                                               target_mask[:,from_idx:to_idx])
+                pred_idx_list.append(predict_output[0])
+                pred_cost_list.append(predict_output[1])
+
+            predict_idx = numpy.concatenate(pred_idx_list, axis=1)
+            predict_cost = sum(pred_cost_list) / target_mask.sum()
+
+
+        else: 
+            if use_ivectors:
+                predict_output = predict_fn(input_data,
+                                        input_mask,
+                                        ivector_data,
+                                        target_data,
+                                        target_mask)
+            else:
+                predict_output = predict_fn(input_data,
+                                        input_mask,
+                                        target_data,
+                                        target_mask)
+
+            predict_idx, predict_cost = predict_output
 
         match_data = (target_data == predict_idx)*target_mask
-        match_avg = numpy.sum(match_data)/numpy.sum(target_mask)
+        match_avg = match_data.sum()/target_mask.sum()
 
         total_nll += predict_cost
         total_fer += (1.0 - match_avg)
@@ -200,37 +194,6 @@ def eval_net(predict_fn, data_stream, use_ivectors=False):
     total_fer /= batch_cnt
 
     return total_nll, total_fer
-
-def eval_net_lhuc(predict_fn,
-                       data_stream, spk_stream, spk_list):
-
-    total_nll = 0.
-    total_fer = 0.
-
-    for batch_cnt, lhuc_data in enumerate(itertools.izip(data_stream.get_epoch_iterator(),
-            spk_stream.get_epoch_iterator()), start=1):
-        data, spk_data = lhuc_data
-        input_data, input_mask, target_data, target_mask = data
-
-        predict_output = predict_fn(input_data,
-                                    input_mask,
-                                    target_data,
-                                    target_mask, fuel_utils.spk_to_ids(spk_list, spk_data[0]))
-        predict_idx = predict_output[0]
-        predict_cost = predict_output[1]
-
-        match_data = (target_data == predict_idx)*target_mask
-        match_avg = numpy.sum(match_data)/numpy.sum(target_mask)
-
-        total_nll += predict_cost
-        total_fer += (1.0 - match_avg)
-
-    total_nll /= batch_cnt 
-    total_fer /= batch_cnt
-
-    return total_nll, total_fer
-
-
 
 def ff(network, input_data, input_mask, ivector_data=None):
     predict_data = get_output(network, deterministic=True)

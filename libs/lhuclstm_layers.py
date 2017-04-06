@@ -44,8 +44,16 @@ class LSTMOpMixin(object):
         (self.W_h_c, self.W_x_c, self.b_c) = self.add_gate_params('c')
         (self.W_h_og, self.W_x_og, self.b_og) = self.add_gate_params('og')
 
+        self.W_h_stacked = T.concatenate([self.W_h_ig, self.W_h_fg, self.W_h_c, self.W_h_og], axis=1)
+        self.W_x_stacked = T.concatenate([self.W_x_ig, self.W_x_fg, self.W_x_c, self.W_x_og], axis=1)
+        self.b_stacked = T.concatenate([self.b_ig, self.b_fg, self.b_c, self.b_og], axis=0)
+
         if self.num_proj_units:
             self.W_p = self.add_param(init.Orthogonal(), (self.num_units, self.num_proj_units), name="W_p")
+
+        self.cell_init = theano.shared(numpy.zeros((self.batch_size, self.num_units), floatX))
+        num_units = self.num_proj_units if self.num_proj_units else self.num_units
+        self.hid_init = theano.shared(numpy.zeros((self.batch_size, num_units), floatX))
 
         if self.use_layer_norm:
             self.W_x_alpha = self.add_param(spec=init.Constant(1.0), shape=(self.num_units*4,), name="W_x_alpha")
@@ -116,6 +124,10 @@ class LSTMOpMixin(object):
         self.cell_init.set_value(numpy.zeros_like(self.cell_init.get_value()))
         self.hid_init.set_value(numpy.zeros_like(self.hid_init.get_value()))
 
+#        self.cell_init.set_value(numpy.zeros((self.batch_size, self.num_units), floatX))
+#        num_units = self.num_proj_units if self.num_proj_units else self.num_units
+#        self.hid_init.set_value(numpy.zeros((self.batch_size, num_units), floatX))
+
     def get_cell_hid_updates(self):
         updates = OrderedDict()
         
@@ -174,14 +186,6 @@ class LSTMLayer(LSTMOpMixin, MergeLayer):
         
         seq_len, num_batch, _ = input.shape
 
-        self.cell_init = theano.shared(numpy.zeros((self.batch_size, self.num_units), floatX))
-        num_units = self.num_proj_units if self.num_proj_units else self.num_units
-        self.hid_init = theano.shared(numpy.zeros((self.batch_size, num_units), floatX))
-      
-        self.W_h_stacked = T.concatenate([self.W_h_ig, self.W_h_fg, self.W_h_c, self.W_h_og], axis=1)
-        self.W_x_stacked = T.concatenate([self.W_x_ig, self.W_x_fg, self.W_x_c, self.W_x_og], axis=1)
-        self.b_stacked = T.concatenate([self.b_ig, self.b_fg, self.b_c, self.b_og], axis=0)
-
         input = T.dot(input, self.W_x_stacked)
 
         if mask is not None:
@@ -206,8 +210,8 @@ class LSTMLayer(LSTMOpMixin, MergeLayer):
             non_sequences=non_seqs,
             strict=True)[0]
 
-        cell_out = cell_out.dimshuffle(1, 0, 2)
         hid_out = hid_out.dimshuffle(1, 0, 2)
+        cell_out = cell_out.dimshuffle(1, 0, 2)
 
         self.cell_updates = (self.cell_init, cell_out[:, -1, :])
         self.hid_updates = (self.hid_init, hid_out[:, -1, :])
@@ -372,7 +376,7 @@ class SpeakerLHUCLSTMLayer(LSTMOpMixin, MergeLayer):
 
 class SeqSumLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
 
-    def __init__(self, incoming, speaker_input, num_units, num_pred_units, num_pred_layers,
+    def __init__(self, incoming, speaker_input, num_units, num_pred_units, num_pred_layers, batch_size,
                  backwards=False,
                  grad_clipping=0,
                  mask_input=None, 
@@ -381,7 +385,7 @@ class SeqSumLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
                  **kwargs):
        
         super(SeqSumLHUCLSTMLayer, self).__init__(incoming, 
-                    speaker_input, num_units, num_pred_units, num_pred_layers, 
+                    speaker_input, num_units, num_pred_units, num_pred_layers, batch_size,
                     backwards, grad_clipping, mask_input, num_proj_units, use_layer_norm, **kwargs)
 
     def compute_speaker_embedding(self, inputs):        
@@ -389,7 +393,7 @@ class SeqSumLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
         return speaker_input
 
 class IVectorLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
-    def __init__(self, incoming, speaker_input, num_units, num_pred_units, num_pred_layers, 
+    def __init__(self, incoming, speaker_input, num_units, num_pred_units, num_pred_layers, batch_size,
                  backwards=False, 
                  grad_clipping=0, 
                  mask_input=None, 
@@ -398,7 +402,7 @@ class IVectorLHUCLSTMLayer(SpeakerLHUCLSTMLayer):
                  **kwargs):
 
         super(IVectorLHUCLSTMLayer, self).__init__(incoming, 
-                speaker_input, num_units, num_pred_units, num_pred_layers, 
+                speaker_input, num_units, num_pred_units, num_pred_layers, batch_size,
                 backwards, grad_clipping, mask_input, num_proj_units, use_layer_norm, **kwargs)
 
     def compute_speaker_embedding(self, inputs):        
