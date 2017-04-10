@@ -77,6 +77,56 @@ class TruncateTransformer(Transformer):
         batch[src_idx] = trans_data
         return numpy.asarray(batch)
 
+class DelayTransformer(Transformer):
+    '''Delay targets for a few steps for training unidirectional rnns'''
+    def __init__(self, data_stream, delay, **kwargs):
+        if data_stream.produces_examples:
+                 raise ValueError('the wrapped data stream must produce batches of '
+                                                      'examples, not examples')
+        super(DelayTransformer, self).__init__(
+            data_stream=data_stream,
+            produces_examples=False,
+            **kwargs)
+
+        self.delay = delay
+
+    def _delayed_feat(self, feat_batch):
+        new_batch = []
+        for ex in feat_batch:
+            last_item = ex[-1,:]
+            delay_items = numpy.tile(last_item, (self.delay, 1))
+            delayed_feat = numpy.concatenate([ex, delay_items])
+            new_batch.append(delayed_feat)
+        return new_batch
+
+    def _delayed_targets(self, target_batch):
+        new_batch = []
+        for ex in target_batch:
+            zero_pad = numpy.zeros((self.delay,), dtype=numpy.int32)
+            new_batch.append(numpy.concatenate([zero_pad, ex]))
+        return new_batch
+
+    def _idx(self, src):
+        return self.data_stream.sources.index(src)
+
+    def transform_batch(self, batch):
+        trans_data = []
+
+        feat = batch[self._idx('features')]
+        new_feat = self._delayed_feat(feat)
+
+        ivectors = batch[self._idx('ivectors')]
+        new_ivectors = self._delayed_feat(ivectors)
+        
+        targets = batch[self._idx('targets')]
+        new_targets = self._delayed_targets(targets)
+        
+        batch[self._idx('features')] = new_feat
+        batch[self._idx('ivectors')] = new_ivectors
+        batch[self._idx('targets')] = new_targets
+
+        return batch
+
 
 class MaximumFrameCache(Transformer):
     """Cache examples, and create batches of maximum number of frames.

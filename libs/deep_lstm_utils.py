@@ -10,6 +10,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--num-proj-units', help='number of units in projection layers', default=0, type=int)
     parser.add_argument('--use-layer-norm', help='whether to layer normalization', action='store_true')
     parser.add_argument('--num-tbptt-steps', help='number of truncated bptt steps', default=0, type=int)
+    parser.add_argument('--delay', help='number of frames to delay for delayed targets', default=0, type=int)
 
     parser.add_argument('--data-path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--input-dim', help='input dimension', default=123, type=int)
@@ -46,6 +47,9 @@ def get_save_path(args):
         fn = '{}_ln'.format(fn)
     if args.num_tbptt_steps:
         fn = '{}_tb{}'.format(fn, args.num_tbptt_steps)
+
+    if args.delay:
+        fn = '{}_d{}'.format(fn, args.delay)
 
     return fn
 
