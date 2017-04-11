@@ -8,6 +8,8 @@ from theano.tensor.nnet import relu
 from lasagne import init, nonlinearities
 from lasagne.layers import Layer, MergeLayer, Gate
 
+from theano.ifelse import ifelse
+
 floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
@@ -232,7 +234,7 @@ class TBPTTLSTMLayer(TBPTTLSTMOpMixin, MergeLayer):
                  grad_clipping=0,
                  mask_input=None,
                  num_proj_units=0,
-                 use_layer_norm=False,
+                 use_layer_norm=False, context=0,
                  **kwargs):
 
         incomings = [incoming]
@@ -256,11 +258,13 @@ class TBPTTLSTMLayer(TBPTTLSTMOpMixin, MergeLayer):
         self.num_proj_units = num_proj_units
         self.use_layer_norm = use_layer_norm
 
+        self.context = context
+
         self.cell_update = None
         self.hid_update = None
 
         self.init_main_lstm_weights()
-
+ 
     def get_output_for(self, inputs, **kwargs):
         input = inputs[0]
         mask = None
@@ -301,8 +305,13 @@ class TBPTTLSTMLayer(TBPTTLSTMOpMixin, MergeLayer):
         cell_out = cell_out.dimshuffle(1, 0, 2)
         hid_out = hid_out.dimshuffle(1, 0, 2)
 
-        self.cell_update = (self.cell_init, cell_out[:,-1,:])
-        self.hid_update = (self.hid_init, hid_out[:,-1,:])
+        last_step_idx = -1
+        if self.context:
+            self.context_len = theano.shared(self.context)
+            last_step_idx = ifelse(T.lt(n_seq, self.context_len), -1, self.context_len-1)
+        
+        self.cell_update = (self.cell_init, cell_out[:,last_step_idx,:])
+        self.hid_update = (self.hid_init, hid_out[:,last_step_idx,:])
         
         if self.backwards:
             hid_out = hid_out[:, ::-1]
