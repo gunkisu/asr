@@ -24,6 +24,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--reload-model', help='model path to load')
     parser.add_argument('--uni', help='make the network unidirectional', action='store_true')
     parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')
+    parser.add_argument('--no-reload', help='do not load model', action='store_true')
 
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
     
