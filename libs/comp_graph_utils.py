@@ -145,7 +145,7 @@ def predictor_tbptt(input_data, input_mask, target_data, target_mask, network,
         inputs = [input_data, input_mask, target_data, target_mask, is_first_win]
     outputs = [ce_frame_sum, pred_idx]
 
-    fn = theano.function(inputs=inputs, outputs=outputs)
+    fn = theano.function(inputs=inputs, outputs=outputs, updates=predict_updates)
     return fn
 
 def predictor(input_data, input_mask, target_data, target_mask, network, ivector_data=None, delay=0):

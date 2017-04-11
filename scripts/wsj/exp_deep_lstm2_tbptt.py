@@ -37,6 +37,10 @@ if __name__ == '__main__':
         print('Cannot specify --delay and --right-context at the same time')
         sys.exit(1)
 
+    if args.right_context and args.uni:
+        print('--right--context can be specified only for bidirectional models')
+        sys.exit(1)
+
     sw = StopWatch()
 
     print('Build and compile network')

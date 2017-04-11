@@ -272,7 +272,7 @@ class TBPTTLSTMLayer(TBPTTLSTMOpMixin, MergeLayer):
 
         input = input.dimshuffle(1, 0, 2)
         
-        seq_len, num_batch, _ = input.shape
+        n_seq, num_batch, _ = input.shape
 
         input = T.dot(input, self.W_x_stacked)
 
