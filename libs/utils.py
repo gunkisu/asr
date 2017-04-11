@@ -136,3 +136,19 @@ def uid_find(jobid, log_dir='SMART_DISPATCH_LOGS'):
                 return os.path.dirname(jf)
 
     return ''
+
+
+def gen_win(batch, win_size):
+    input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = batch
+    
+    n_batch, n_seq, n_feat = input_data.shape
+
+    for i in range(0, n_seq, win_size):
+        from_idx = i
+        to_idx = i+win_size
+        
+        yield (input_data[:,from_idx:to_idx,:], input_mask[:,from_idx:to_idx], \
+            ivector_data[:,from_idx:to_idx,:], ivector_mask[:,from_idx:to_idx],  \
+            target_data[:,from_idx:to_idx], target_mask[:,from_idx:to_idx])
+   
+    return

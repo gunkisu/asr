@@ -19,21 +19,6 @@ from libs.utils import StopWatch, Rsync
 from libs.deep_lstm_builder import build_deep_lstm
 from data.fuel_utils import create_ivector_datastream
 
-def gen_win(batch, win_size):
-    input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = batch
-    
-    n_batch, n_seq, n_feat = input_data.shape
-
-    for i in range(0, n_seq, win_size):
-        from_idx = i
-        to_idx = i+win_size
-        
-        yield (input_data[:,from_idx:to_idx,:], input_mask[:,from_idx:to_idx], \
-            ivector_data[:,from_idx:to_idx,:], ivector_mask[:,from_idx:to_idx],  \
-            target_data[:,from_idx:to_idx], target_mask[:,from_idx:to_idx]
-   
-    return
-
 if __name__ == '__main__':
     parser = get_arg_parser()
     args = parser.parse_args()
@@ -65,7 +50,7 @@ if __name__ == '__main__':
         ivector_data = T.ftensor3('ivector_data')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-
+ 
     network = build_deep_lstm(input_var=input_data,
                                 mask_var=input_mask,
                                 input_dim=args.input_dim,

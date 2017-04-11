@@ -1,5 +1,5 @@
 from lasagne.layers import ConcatLayer
-from libs.lhuclstm_layers import LSTMLayer
+from libs.lhuclstm_layers import LSTMLayer, TBPTTLSTMLayer
 
 from lasagne.layers import DenseLayer, ReshapeLayer, reshape, Gate
 from lasagne.layers import get_output_shape
