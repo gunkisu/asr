@@ -101,7 +101,7 @@ def trainer_tbptt(input_data, input_mask, target_data, target_mask, network, upd
     network_grads = theano.grad(cost=ce_cost,
                                 wrt=network_params)
 
-    network_grads_norm = sum(T.sum(grad**2) for grad in network_grads)
+    network_grads_norm_sum = sum(T.sum(grad**2) for grad in network_grads)
 
     train_total_updates = OrderedDict()
 
@@ -122,7 +122,7 @@ def trainer_tbptt(input_data, input_mask, target_data, target_mask, network, upd
     else:
         inputs = [input_data, input_mask, target_data, target_mask, is_first_win]
 
-    outputs = [ce_frame_sum, network_grads_norm]
+    outputs = [ce_frame_sum, network_grads_norm_sum]
 
     training_fn = theano.function(
             inputs=inputs, outputs=outputs, updates=train_total_updates)

@@ -142,10 +142,10 @@ if __name__ == '__main__':
                 ce_frame_sum, network_grads_norm_sum = train_output
 
                 ce_frame += ce_frame_sum
-                network_grads_norm_sum += network_grads_norm_sum
+                network_grads_norm += network_grads_norm_sum
 
             ce_frame = ce_frame / t_mask[:,args.delay:].sum()
-            network_grads_norm = math.sqrt(network_grads_norm_sum)
+            network_grads_norm = math.sqrt(network_grads_norm)
 
             if b_idx%args.log_freq == 0: 
                 show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size, e_idx)
