@@ -91,6 +91,7 @@ if __name__ == '__main__':
               tbptt_layers=tbptt_layers, 
               is_first_win=is_first_win,
               delay=args.delay,
+              context=args.context,
               load_updater_params=pretrain_update_params_val, 
               ivector_data=ivector_data)
     sw.print_elapsed()
@@ -106,6 +107,7 @@ if __name__ == '__main__':
         tbptt_layers=tbptt_layers, 
         is_first_win=is_first_win,
         delay=args.delay,
+        context=args.context,
         ivector_data=ivector_data)
     sw.print_elapsed()
 

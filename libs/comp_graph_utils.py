@@ -93,7 +93,7 @@ def trainer(input_data, input_mask, target_data, target_mask, network, updater,
     return training_fn, trainer_params
 
 def trainer_tbptt(input_data, input_mask, target_data, target_mask, network, updater, 
-        learning_rate, tbptt_layers, is_first_win, delay, load_updater_params=None, ivector_data=None):
+        learning_rate, tbptt_layers, is_first_win, delay, context, load_updater_params=None, ivector_data=None):
 
     ce_cost, ce_frame_sum, _ = compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay)
   
@@ -130,7 +130,7 @@ def trainer_tbptt(input_data, input_mask, target_data, target_mask, network, upd
     return training_fn, trainer_params
 
 def predictor_tbptt(input_data, input_mask, target_data, target_mask, network, 
-        tbptt_layers, is_first_win, delay, ivector_data=None):
+        tbptt_layers, is_first_win, delay, context, ivector_data=None):
     _, ce_frame_sum, pred_idx = compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay)
 
     predict_updates = OrderedDict()
