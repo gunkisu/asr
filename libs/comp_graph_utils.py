@@ -23,7 +23,7 @@ def delayed_tbptt(o, target_data, target_mask, is_first_win, delay):
         ifelse(is_first_win, target_data[:,delay:], target_data), \
         ifelse(is_first_win, target_mask[:,delay:], target_mask)
 
-def compute_loss(network, target_data, target_mask, delay=0):
+def compute_loss(network, target_data, target_mask, delay):
     o = get_output(network, deterministic=False)
         
     n_batch, n_seq, n_feat  = o.shape
@@ -41,7 +41,7 @@ def compute_loss(network, target_data, target_mask, delay=0):
 
     return ce_cost, ce_frame_avg, pred_idx
 
-def compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay=0):
+def compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay):
     o = get_output(network, deterministic=False)
         
     n_batch, n_seq, n_feat  = o.shape
@@ -59,7 +59,7 @@ def compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay=0)
     return ce_cost, ce_frame_sum, pred_idx
 
 def trainer(input_data, input_mask, target_data, target_mask, network, updater, 
-        learning_rate, load_updater_params=None, ivector_data=None, delay=0):
+        learning_rate, delay, load_updater_params=None, ivector_data=None):
 
     ce_cost, ce_frame, _ = compute_loss(network, target_data, target_mask, delay)
   
@@ -148,7 +148,7 @@ def predictor_tbptt(input_data, input_mask, target_data, target_mask, network,
     fn = theano.function(inputs=inputs, outputs=outputs, updates=predict_updates)
     return fn
 
-def predictor(input_data, input_mask, target_data, target_mask, network, ivector_data=None, delay=0):
+def predictor(input_data, input_mask, target_data, target_mask, network, delay, ivector_data=None):
     _, ce_frame, pred_idx = compute_loss(network, target_data, target_mask, delay)
 
     inputs = None

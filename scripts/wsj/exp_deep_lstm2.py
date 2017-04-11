@@ -78,8 +78,9 @@ if __name__ == '__main__':
               network=network,
               updater=adam,
               learning_rate=args.learn_rate,
+              delay=args.delay,
               load_updater_params=pretrain_update_params_val, 
-              ivector_data=ivector_data, delay=args.delay)
+              ivector_data=ivector_data)
     
     sw.print_elapsed()
 
@@ -91,7 +92,8 @@ if __name__ == '__main__':
         target_data=target_data,
         target_mask=target_mask, 
         network=network, 
-        ivector_data=ivector_data, delay=args.delay)
+        delay=args.delay,
+        ivector_data=ivector_data)
 
     sw.print_elapsed()
 
