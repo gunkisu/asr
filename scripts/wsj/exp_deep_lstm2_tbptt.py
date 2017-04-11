@@ -62,6 +62,7 @@ if __name__ == '__main__':
                                 num_proj_units=args.num_proj_units,
                                 output_dim=args.output_dim, 
                                 batch_size=args.batch_size,
+                                context=args.context,
                                 grad_clipping=args.grad_clipping,
                                 is_bidir=not args.uni,
                                 use_layer_norm=args.use_layer_norm,
