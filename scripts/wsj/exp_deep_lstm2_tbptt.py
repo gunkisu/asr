@@ -90,8 +90,9 @@ if __name__ == '__main__':
               learning_rate=args.learn_rate,
               tbptt_layers=tbptt_layers, 
               is_first_win=is_first_win,
+              delay=args.delay,
               load_updater_params=pretrain_update_params_val, 
-              ivector_data=ivector_data, delay=args.delay)
+              ivector_data=ivector_data)
     sw.print_elapsed()
 
     sw.reset()
@@ -104,7 +105,8 @@ if __name__ == '__main__':
         network=network, 
         tbptt_layers=tbptt_layers, 
         is_first_win=is_first_win,
-        ivector_data=ivector_data, delay=args.delay)
+        delay=args.delay,
+        ivector_data=ivector_data)
     sw.print_elapsed()
 
     print('Load data streams from {}'.format(args.train_dataset))
