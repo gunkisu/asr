@@ -7,6 +7,8 @@ from theano import tensor as T
 from lasagne.layers import get_output, get_all_params
 from lasagne.objectives import categorical_crossentropy
 
+from libs.utils import gen_win
+
 import itertools
 
 from theano.ifelse import ifelse
@@ -187,7 +189,7 @@ def eval_net(predict_fn, data_stream, use_ivectors=False, delay=0):
 
     return total_nll, total_fer
 
-def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, use_ivectors=False, delay=0):
+def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, batch_size, use_ivectors=False, delay=0):
     data_iterator = data_stream.get_epoch_iterator()
 
     total_nll = 0.
@@ -197,10 +199,12 @@ def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, use_i
         for l in tbptt_layers:
             l.reset()
 
-        _, _, _, _, t_data, t_mask = batch
+        i_data, _, _, _, t_data, t_mask = batch
+        n_batch, _, _ = i_data.shape
+        if n_batch < batch_size: continue
 
         ce_frame = 0.0
-        pre_idx_list = []
+        pred_idx_list = []
         for win_idx, win in enumerate(gen_win(batch, num_tbptt_steps), start=1):
             input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = win
             is_first_win = 1 if win_idx == 1 else 0
@@ -213,9 +217,9 @@ def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, use_i
             ce_frame_sum, pred_idx = predict_output
 
             ce_frame += ce_frame_sum
-            pre_idx_list.append(pred_idx)
+            pred_idx_list.append(pred_idx)
 
-        ce_frame = ce_frame / mask[:,delay:].sum() 
+        ce_frame = ce_frame / t_mask[:,delay:].sum() 
 
         pred_idx = numpy.concatenate(pred_idx_list, axis=1)
 

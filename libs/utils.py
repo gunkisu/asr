@@ -12,7 +12,8 @@ import sys
 
 import pickle
 
-from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values
+from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values, set_model_param_value
+from lasagne.layers import count_params
 
 def run_and_wait_for_output_on_stderr(cmd, expected_str):
     proc = subprocess.Popen(cmd, shell=True, 
@@ -137,6 +138,39 @@ def uid_find(jobid, log_dir='SMART_DISPATCH_LOGS'):
 
     return ''
 
+def sync_data(args):
+    sw = StopWatch()
+    if not args.no_copy:
+        print('Copying data to local machine...')
+        sw.reset()
+        rsync = Rsync(args.tmpdir)
+        rsync.sync(args.data_path)
+        args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
+        sw.print_elapsed()
+
+def load_or_init_model(network_params, args):
+    pretrain_update_params_val = None
+    pretrain_total_epoch_cnt = 0
+ 
+    if args.reload_model:
+        print('Loading the model: {}'.format(args.reload_model))
+        with open(args.reload_model, 'rb') as f:
+            pretrain_network_params_val,  pretrain_update_params_val, \
+                    pretrain_total_epoch_cnt = pickle.load(f)
+
+        set_model_param_value(network_params, pretrain_network_params_val)
+ 
+    return pretrain_update_params_val, pretrain_total_epoch_cnt
+
+def find_reload_model(args):
+    if not args.reload_model and not args.no_reload:
+        reload_path = args.save_path + '_last_model.pkl'
+
+        if os.path.exists(reload_path):
+            print('Previously trained model detected: {}'.format(reload_path))
+            print('Training continues')
+            args.reload_model = reload_path
+
 
 def gen_win(batch, win_size):
     input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = batch
@@ -152,3 +186,8 @@ def gen_win(batch, win_size):
             target_data[:,from_idx:to_idx], target_mask[:,from_idx:to_idx])
    
     return
+
+def print_param_count(network):    
+    param_count = count_params(network, trainable=True)
+    print('Number of parameters of the network: {:.2f}M'.format(float(param_count)/1000000))
+
