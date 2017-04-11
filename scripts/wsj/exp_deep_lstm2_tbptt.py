@@ -33,6 +33,10 @@ if __name__ == '__main__':
         print('You must specify --num-tbptt-steps')
         sys.exit(1)
 
+    if args.delay and args.right_context:
+        print('Cannot specify --delay and --right-context at the same time')
+        sys.exit(1)
+
     sw = StopWatch()
 
     print('Build and compile network')
