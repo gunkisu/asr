@@ -130,7 +130,7 @@ if __name__ == '__main__':
 
             ce_frame = 0.0
             network_grads_norm = 0.0
-            for win_idx, win in enumerate(gen_win(batch, args.num_tbptt_steps), start=1):
+            for win_idx, win in enumerate(gen_win(batch, args.num_tbptt_steps, args.right_context), start=1):
                 input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = win
                 is_first_win = 1 if win_idx == 1 else 0
 
@@ -162,9 +162,9 @@ if __name__ == '__main__':
         eval_sw = StopWatch()
         #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
         valid_ce_frame, valid_fer = eval_net_tbptt(predict_fn, valid_ds, tbptt_layers, args.num_tbptt_steps, 
-            args.batch_size, args.use_ivector_input, delay=args.delay)
+            args.batch_size, args.right_context, args.use_ivector_input, delay=args.delay)
         test_ce_frame, test_fer = eval_net_tbptt(predict_fn, test_ds, tbptt_layers, args.num_tbptt_steps, 
-            args.batch_size, args.use_ivector_input, delay=args.delay)
+            args.batch_size, args.right_context, args.use_ivector_input, delay=args.delay)
         eval_sw.print_elapsed()
 
         print('Train CE: {}'.format(train_ce_frame_sum / b_idx))

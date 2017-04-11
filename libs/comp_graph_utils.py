@@ -189,7 +189,7 @@ def eval_net(predict_fn, data_stream, use_ivectors=False, delay=0):
 
     return total_nll, total_fer
 
-def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, batch_size, use_ivectors=False, delay=0):
+def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, batch_size, right_context, use_ivectors=False, delay=0):
     data_iterator = data_stream.get_epoch_iterator()
 
     total_nll = 0.
@@ -205,7 +205,7 @@ def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, batch
 
         ce_frame = 0.0
         pred_idx_list = []
-        for win_idx, win in enumerate(gen_win(batch, num_tbptt_steps), start=1):
+        for win_idx, win in enumerate(gen_win(batch, num_tbptt_steps, right_context), start=1):
             input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = win
             is_first_win = 1 if win_idx == 1 else 0
 
