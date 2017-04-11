@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
-from libs.utils import log_find
 import argparse
 
 def param_extract(param, opt_line):
