@@ -60,9 +60,6 @@ class LSTMOpMixin(object):
         if self.num_proj_units:
             self.W_p = self.add_param(init.Orthogonal(), (self.num_units, self.num_proj_units), name="W_p")
 
-        self.cell_init = self.add_param(init.Constant(0.0), (1, self.num_units), name="cell_init",
-                trainable=False, regularizable=False)
-
         self.init_states()
 
         if self.use_layer_norm:
@@ -130,7 +127,7 @@ class LSTMOpMixin(object):
 
         return [cell, hid]
 
-class LSTMTBPTTOpMixin(LSTMOpMixin):
+class TBPTTLSTMOpMixin(LSTMOpMixin):
     def init_states(self):
         self.cell_init = self.add_param(init.Constant(0.0), (self.batch_size, self.num_units), name="cell_init",
                 trainable=False, regularizable=False)
@@ -140,8 +137,6 @@ class LSTMTBPTTOpMixin(LSTMOpMixin):
                 trainable=False, regularizable=False)
 
 class LSTMLayer(LSTMOpMixin, MergeLayer):
-    
-    # batch_size for truncated bptt
     def __init__(self, incoming, num_units, 
                  backwards=False,
                  grad_clipping=0,
@@ -215,6 +210,100 @@ class LSTMLayer(LSTMOpMixin, MergeLayer):
 
         hid_out = hid_out.dimshuffle(1, 0, 2)
           
+        if self.backwards:
+            hid_out = hid_out[:, ::-1]
+
+        return hid_out
+
+class TBPTTLSTMLayer(TBPTTLSTMOpMixin, MergeLayer):
+    def reset(self):
+        self.cell_init.set_value(numpy.zeros_like(self.cell_init.get_value()))
+        self.hid_init.set_value(numpy.zeros_like(self.hid_init.get_value()))
+    
+    def get_updates(self):
+        updates = OrderedDict()
+        updates[self.cell_update[0]] = self.cell_update[1]
+        updates[self.hid_update[0]] = self.hid_update[1]
+
+        return updates
+
+    def __init__(self, incoming, num_units, batch_size,
+                 backwards=False,
+                 grad_clipping=0,
+                 mask_input=None,
+                 num_proj_units=0,
+                 use_layer_norm=False,
+                 **kwargs):
+
+        incomings = [incoming]
+        self.mask_incoming_index = -1
+        if mask_input is not None:
+            incomings.append(mask_input)
+            self.mask_incoming_index = len(incomings)-1
+
+        super(TBPTTLSTMLayer, self).__init__(incomings, **kwargs)
+
+        self.num_units = num_units
+        self.batch_size = batch_size
+     
+        self.backwards = backwards
+        self.grad_clipping = grad_clipping
+
+        input_shape = self.input_shapes[0]
+
+        self.num_inputs = numpy.prod(input_shape[2:])
+
+        self.num_proj_units = num_proj_units
+        self.use_layer_norm = use_layer_norm
+
+        self.cell_update = None
+        self.hid_update = None
+
+        self.init_main_lstm_weights()
+
+    def get_output_for(self, inputs, **kwargs):
+        input = inputs[0]
+        mask = None
+        if self.mask_incoming_index > 0:
+            mask = inputs[self.mask_incoming_index]
+   
+        if input.ndim > 3:
+            input = T.flatten(input, 3)
+
+        input = input.dimshuffle(1, 0, 2)
+        
+        seq_len, num_batch, _ = input.shape
+
+        input = T.dot(input, self.W_x_stacked)
+
+        if mask is not None:
+            mask = mask.dimshuffle(1, 0, 'x')
+            sequences = [input, mask]
+            step_fun = self.step_masked
+        else:
+            sequences = [input]
+            step_fun = self.step
+     
+        non_seqs = [self.W_h_stacked, self.W_x_stacked, self.b_stacked]
+        if self.num_proj_units:
+            non_seqs.append(self.W_p)
+        if self.use_layer_norm:
+            non_seqs.extend([self.W_x_alpha, self.W_h_alpha, self.W_c_alpha, self.W_c_beta])
+
+        cell_out, hid_out = theano.scan(
+            fn=step_fun,
+            sequences=sequences,
+            outputs_info=[self.cell_init, self.hid_init],
+            go_backwards=self.backwards,
+            non_sequences=non_seqs,
+            strict=True)[0]
+
+        cell_out = cell_out.dimshuffle(1, 0, 2)
+        hid_out = hid_out.dimshuffle(1, 0, 2)
+
+        self.cell_update = (self.cell_init, cell_out[:,-1,:])
+        self.hid_update = (self.hid_init, hid_out[:,-1,:])
+        
         if self.backwards:
             hid_out = hid_out[:, ::-1]
 
