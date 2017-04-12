@@ -10,7 +10,7 @@ from lasagne.layers import get_all_params, count_params
 
 from libs.deep_lstm_utils import get_arg_parser, get_save_path
 from libs.utils import StopWatch, Rsync, gen_win, save_network, save_eval_history, best_fer, show_status, sync_data, \
-    find_reload_model, load_or_init_model, print_param_count
+    find_reload_model, load_or_init_model
 from libs.comp_graph_utils import trainer, predictor, eval_net
 
 from libs.lasagne_libs.utils import set_model_param_value
