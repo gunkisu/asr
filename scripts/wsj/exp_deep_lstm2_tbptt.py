@@ -15,6 +15,7 @@ from libs.utils import StopWatch, Rsync, gen_win, save_network, save_eval_histor
 from libs.comp_graph_utils import trainer_tbptt, predictor_tbptt, eval_net_tbptt
 
 from libs.lasagne_libs.updates import adam
+from lasagne.layers import count_params
 
 from libs.deep_lstm_builder import build_deep_lstm_tbptt
 from data.fuel_utils import create_ivector_datastream
@@ -62,7 +63,7 @@ if __name__ == '__main__':
                                 num_proj_units=args.num_proj_units,
                                 output_dim=args.output_dim, 
                                 batch_size=args.batch_size,
-                                context=args.context,
+                                context=args.num_tbptt_steps,
                                 grad_clipping=args.grad_clipping,
                                 is_bidir=not args.uni,
                                 use_layer_norm=args.use_layer_norm,
@@ -70,9 +71,9 @@ if __name__ == '__main__':
                                 ivector_var=ivector_data)
 
     network_params = get_all_params(network, trainable=True)
+    param_count = count_params(network, trainable=True)
+    print('Number of parameters of the network: {:.2f}M'.format(float(param_count)/1000000))
 
-    print_param_count(network)
-    
     pretrain_update_params_val, pretrain_total_epoch_cnt = load_or_init_model(network_params, args)
 
     EvalRecord = namedtuple('EvalRecord', ['train_ce_frame', 'valid_ce_frame', 'valid_fer', 'test_ce_frame', 'test_fer'])
@@ -91,7 +92,7 @@ if __name__ == '__main__':
               tbptt_layers=tbptt_layers, 
               is_first_win=is_first_win,
               delay=args.delay,
-              context=args.context,
+              context=args.num_tbptt_steps,
               load_updater_params=pretrain_update_params_val, 
               ivector_data=ivector_data)
     sw.print_elapsed()
@@ -107,7 +108,7 @@ if __name__ == '__main__':
         tbptt_layers=tbptt_layers, 
         is_first_win=is_first_win,
         delay=args.delay,
-        context=args.context,
+        context=args.num_tbptt_steps,
         ivector_data=ivector_data)
     sw.print_elapsed()
 

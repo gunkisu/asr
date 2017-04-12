@@ -308,7 +308,7 @@ class TBPTTLSTMLayer(TBPTTLSTMOpMixin, MergeLayer):
         last_step_idx = -1
         if self.context:
             self.context_len = theano.shared(self.context)
-            last_step_idx = ifelse(T.lt(n_seq, self.context_len), -1, self.context_len-1)
+            last_step_idx = ifelse(T.lt(n_seq, self.context_len), n_seq-1, self.context_len-1)
         
         self.cell_update = (self.cell_init, cell_out[:,last_step_idx,:])
         self.hid_update = (self.hid_init, hid_out[:,last_step_idx,:])

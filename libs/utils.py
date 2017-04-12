@@ -13,7 +13,6 @@ import sys
 import pickle
 
 from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values, set_model_param_value
-from lasagne.layers import count_params
 
 def run_and_wait_for_output_on_stderr(cmd, expected_str):
     proc = subprocess.Popen(cmd, shell=True, 
@@ -186,8 +185,3 @@ def gen_win(batch, win_size, right_context=0):
             target_data[:,from_idx:to_idx], target_mask[:,from_idx:to_idx])
    
     return
-
-def print_param_count(network):    
-    param_count = count_params(network, trainable=True)
-    print('Number of parameters of the network: {:.2f}M'.format(float(param_count)/1000000))
-

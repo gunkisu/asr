@@ -23,6 +23,9 @@ def delayed_tbptt(o, target_data, target_mask, is_first_win, delay):
         ifelse(is_first_win, target_data[:,delay:], target_data), \
         ifelse(is_first_win, target_mask[:,delay:], target_mask)
 
+def context_tbptt(o, target_data, target_mask, context):
+    return o[:,:context,:], target_data[:,:context], target_mask[:,:context]
+
 def compute_loss(network, target_data, target_mask, delay):
     o = get_output(network, deterministic=False)
         
@@ -41,12 +44,16 @@ def compute_loss(network, target_data, target_mask, delay):
 
     return ce_cost, ce_frame_avg, pred_idx
 
-def compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay):
+def compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay, context):
     o = get_output(network, deterministic=False)
         
     n_batch, n_seq, n_feat  = o.shape
-   
-    o, target_data, target_mask = delayed_tbptt(o, target_data, target_mask, is_first_win, delay)
+  
+    if delay:
+        o, target_data, target_mask = delayed_tbptt(o, target_data, target_mask, is_first_win, delay)
+    elif context:
+        o, target_data, target_mask = context_tbptt(o, target_data, target_mask, context)
+
     ce = categorical_crossentropy(predictions=T.reshape(o, (-1, o.shape[-1]), ndim=2), 
             targets=T.flatten(target_data, 1))
     
@@ -95,7 +102,7 @@ def trainer(input_data, input_mask, target_data, target_mask, network, updater,
 def trainer_tbptt(input_data, input_mask, target_data, target_mask, network, updater, 
         learning_rate, tbptt_layers, is_first_win, delay, context, load_updater_params=None, ivector_data=None):
 
-    ce_cost, ce_frame_sum, _ = compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay)
+    ce_cost, ce_frame_sum, _ = compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay, context)
   
     network_params = get_all_params(network, trainable=True)
     network_grads = theano.grad(cost=ce_cost,
@@ -125,13 +132,13 @@ def trainer_tbptt(input_data, input_mask, target_data, target_mask, network, upd
     outputs = [ce_frame_sum, network_grads_norm_sum]
 
     training_fn = theano.function(
-            inputs=inputs, outputs=outputs, updates=train_total_updates)
+            inputs=inputs, outputs=outputs, updates=train_total_updates, on_unused_input='warn')
      
     return training_fn, trainer_params
 
 def predictor_tbptt(input_data, input_mask, target_data, target_mask, network, 
         tbptt_layers, is_first_win, delay, context, ivector_data=None):
-    _, ce_frame_sum, pred_idx = compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay)
+    _, ce_frame_sum, pred_idx = compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay, context)
 
     predict_updates = OrderedDict()
 
@@ -145,7 +152,7 @@ def predictor_tbptt(input_data, input_mask, target_data, target_mask, network,
         inputs = [input_data, input_mask, target_data, target_mask, is_first_win]
     outputs = [ce_frame_sum, pred_idx]
 
-    fn = theano.function(inputs=inputs, outputs=outputs, updates=predict_updates)
+    fn = theano.function(inputs=inputs, outputs=outputs, updates=predict_updates, on_unused_input='warn')
     return fn
 
 def predictor(input_data, input_mask, target_data, target_mask, network, delay, ivector_data=None):

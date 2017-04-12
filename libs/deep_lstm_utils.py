@@ -57,6 +57,7 @@ def get_save_path(args):
     if args.right_context:
         fn = '{}_rc{}'.format(fn, args.right_context)
 
+    fn = '{}_{}'.format(fn, args.train_dataset)
 
     return fn
 

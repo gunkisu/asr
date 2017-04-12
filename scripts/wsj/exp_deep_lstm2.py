@@ -15,6 +15,7 @@ from libs.comp_graph_utils import trainer, predictor, eval_net
 
 from libs.lasagne_libs.utils import set_model_param_value
 from libs.lasagne_libs.updates import adam
+from lasagne.layers import count_params
 
 from libs.deep_lstm_builder import build_deep_lstm
 from data.fuel_utils import create_ivector_datastream
@@ -60,7 +61,8 @@ if __name__ == '__main__':
 
     network_params = get_all_params(network, trainable=True)
     
-    print_param_count(network)
+    param_count = count_params(network, trainable=True)
+    print('Number of parameters of the network: {:.2f}M'.format(float(param_count)/1000000))
 
     pretrain_update_params_val, pretrain_total_epoch_cnt = load_or_init_model(network_params, args)
 
