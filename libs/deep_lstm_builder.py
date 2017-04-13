@@ -42,7 +42,7 @@ def build_deep_lstm(input_var, mask_var, input_dim, num_layers, num_units, num_p
     return build_sequence_dense_layer(input_var, prev_input_layer, output_dim)
 
 def build_deep_lstm_tbptt(input_var, mask_var, input_dim, num_layers, num_units, num_proj_units, output_dim, batch_size, context,
-                          grad_clipping, is_bidir, use_layer_norm, ivector_dim, ivector_var=None):
+                          grad_clipping, is_bidir, use_layer_norm, ivector_dim, ivector_var=None, backward_on_top=False):
     
     input_layer, mask_layer = build_input_layer(input_dim, input_var, mask_var)
     
@@ -64,6 +64,10 @@ def build_deep_lstm_tbptt(input_var, mask_var, input_dim, num_layers, num_units,
                                           use_layer_norm=use_layer_norm,
                                           context=context)
         tbptt_layers.append(fwd_layer)
+
+        if backward_on_top and layer_idx < num_layers:
+            prev_input_layer = fwd_layer
+            continue
         
         if is_bidir:
             bwd_layer = LSTMLayer(incoming=prev_input_layer,
@@ -76,7 +80,9 @@ def build_deep_lstm_tbptt(input_var, mask_var, input_dim, num_layers, num_units,
 
             prev_input_layer = ConcatLayer(incomings=[fwd_layer, bwd_layer],
                                        axis=-1)
+
         else:
             prev_input_layer = fwd_layer
+
 
     return build_sequence_dense_layer(input_var, prev_input_layer, output_dim), tbptt_layers

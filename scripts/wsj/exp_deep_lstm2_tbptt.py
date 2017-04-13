@@ -68,7 +68,7 @@ if __name__ == '__main__':
                                 is_bidir=not args.uni,
                                 use_layer_norm=args.use_layer_norm,
                                 ivector_dim=args.ivector_dim,
-                                ivector_var=ivector_data)
+                                ivector_var=ivector_data, backward_on_top=args.backward_on_top)
 
     network_params = get_all_params(network, trainable=True)
     param_count = count_params(network, trainable=True)
@@ -135,12 +135,12 @@ if __name__ == '__main__':
         status_sw = StopWatch()
 
         for b_idx, batch in enumerate(train_ds.get_epoch_iterator(), start=1):
-            for l in tbptt_layers:
-                l.reset()
 
             i_data, _, _, _, _, t_mask = batch
             n_batch, _, _ = i_data.shape
-            if n_batch < args.batch_size: continue
+            
+            for l in tbptt_layers:
+                l.reset(n_batch)
 
             ce_frame = 0.0
             network_grads_norm = 0.0

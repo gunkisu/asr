@@ -218,9 +218,14 @@ class LSTMLayer(LSTMOpMixin, MergeLayer):
         return hid_out
 
 class TBPTTLSTMLayer(TBPTTLSTMOpMixin, MergeLayer):
-    def reset(self):
-        self.cell_init.set_value(numpy.zeros_like(self.cell_init.get_value()))
-        self.hid_init.set_value(numpy.zeros_like(self.hid_init.get_value()))
+    def reset(self, batch_size):
+#        self.cell_init.set_value(numpy.zeros_like(self.cell_init.get_value()))
+#        self.hid_init.set_value(numpy.zeros_like(self.hid_init.get_value()))
+
+        self.cell_init.set_value(numpy.zeros((batch_size, self.num_units), dtype=numpy.float32))
+
+        num_hid_units = self.num_proj_units if self.num_proj_units else self.num_units
+        self.hid_init.set_value(numpy.zeros((batch_size, num_hid_units), dtype=numpy.float32))
     
     def get_updates(self):
         updates = OrderedDict()

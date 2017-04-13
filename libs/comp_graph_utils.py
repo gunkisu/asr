@@ -202,13 +202,13 @@ def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, batch
     total_nll = 0.
     total_fer = 0.
         
-    for batch_cnt, batch in enumerate(data_iterator, start=1):
-        for l in tbptt_layers:
-            l.reset()
+    for b_idx, batch in enumerate(data_iterator, start=1):
 
         i_data, _, _, _, t_data, t_mask = batch
         n_batch, _, _ = i_data.shape
-        if n_batch < batch_size: continue
+
+        for l in tbptt_layers:
+            l.reset(n_batch)
 
         ce_frame = 0.0
         pred_idx_list = []
@@ -237,8 +237,8 @@ def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, batch
         total_nll += ce_frame
         total_fer += fer
 
-    total_nll /= batch_cnt 
-    total_fer /= batch_cnt
+    total_nll /= b_idx 
+    total_fer /= b_idx
 
     return total_nll, total_fer
 

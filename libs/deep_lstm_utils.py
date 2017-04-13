@@ -27,6 +27,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--uni', help='make the network unidirectional', action='store_true')
     parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')
     parser.add_argument('--no-reload', help='do not load model', action='store_true')
+    parser.add_argument('--backward-on-top', help='use backward layer only on the top', action='store_true')
 
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
     
@@ -58,6 +59,9 @@ def get_save_path(args):
         fn = '{}_rc{}'.format(fn, args.right_context)
 
     fn = '{}_{}'.format(fn, args.train_dataset)
+
+    if args.backward_on_top:
+        fn = '{}_btop'.format(fn)
 
     return fn
 
