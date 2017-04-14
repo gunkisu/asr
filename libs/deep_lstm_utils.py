@@ -37,31 +37,29 @@ def get_arg_parser():
     return parser
 
 def get_save_path(args):
-    fn = './wsj_deep_lstm_lr{}_gc{}_l{}_n{}_b{}'.format(
-            args.learn_rate, args.grad_clipping, args.num_layers, args.num_units, 
-            args.batch_size)
-    if args.use_ivector_input:
-        fn = '{}_iv{}'.format(fn, args.ivector_dim)
-    if args.uni:
-        fn = '{}_uni'.format(fn)
+    fn = './wsj_deep_lstm'
+    fn = '{}_lr{}'.format(fn, args.learn_rate)
+    fn = '{}_gc{}'.format(fn, args.grad_clipping)
+    fn = '{}_l{}'.format(fn, args.num_layers)
+    fn = '{}_n{}'.format(fn, args.num_units)
     if args.num_proj_units:
         fn = '{}_pjn{}'.format(fn, args.num_proj_units)
-
+    if args.use_ivector_input:
+        fn = '{}_iv{}'.format(fn, args.ivector_dim)
+    fn = '{}_b{}'.format(fn, args.batch_size)
     if args.use_layer_norm:
         fn = '{}_ln'.format(fn)
+    if args.uni:
+        fn = '{}_uni'.format(fn)
     if args.num_tbptt_steps:
         fn = '{}_tb{}'.format(fn, args.num_tbptt_steps)
-
     if args.delay:
         fn = '{}_d{}'.format(fn, args.delay)
-
     if args.right_context:
         fn = '{}_rc{}'.format(fn, args.right_context)
-
-    fn = '{}_{}'.format(fn, args.train_dataset)
-
     if args.backward_on_top:
         fn = '{}_btop'.format(fn)
+    fn = '{}_{}'.format(fn, args.train_dataset)
 
     return fn
 
