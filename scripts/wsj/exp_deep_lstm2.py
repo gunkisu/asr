@@ -119,7 +119,7 @@ if __name__ == '__main__':
         print('--')
         
         total_ce_sum = 0.0
-        total_frame_count
+        total_frame_count = 0
         status_sw = StopWatch()
 
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
