@@ -118,7 +118,8 @@ if __name__ == '__main__':
         print('Epoch {} starts'.format(e_idx))
         print('--')
         
-        train_ce_frame_sum = 0.0
+        total_ce_sum = 0.0
+        total_frame_count
         status_sw = StopWatch()
 
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
@@ -129,13 +130,14 @@ if __name__ == '__main__':
             else:
                 train_output = training_fn(input_data, input_mask, target_data, target_mask)
 
-            ce_frame, network_grads_norm = train_output
+            ce_frame_sum, network_grads_norm = train_output
+            total_ce_sum += ce_frame_sum
+            total_frame_count += target_mask.sum()
 
             if b_idx%args.log_freq == 0: 
-                show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size, e_idx)
+                show_status(args.save_path, total_ce_sum / total_frame_count, network_grads_norm, b_idx, args.batch_size, e_idx)
                 status_sw.print_elapsed(); status_sw.reset()
-            train_ce_frame_sum += ce_frame
-
+            
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
 
@@ -149,7 +151,8 @@ if __name__ == '__main__':
         test_ce_frame, test_fer = eval_net(predict_fn, test_ds, args.use_ivector_input, delay=args.delay)
         eval_sw.print_elapsed()
 
-        print('Train CE: {}'.format(train_ce_frame_sum / b_idx))
+        avg_train_ce = total_ce_sum / total_frame_count
+        print('Train CE: {}'.format(avg_train_ce))
         print('Valid CE: {}, FER: {}'.format(valid_ce_frame, valid_fer))
         print('Test  CE: {}, FER: {}'.format(test_ce_frame, test_fer))
        
@@ -157,7 +160,7 @@ if __name__ == '__main__':
             save_network(network_params, trainer_params, e_idx, '{}_best_model.pkl'.format(args.save_path))
         
         print('Saving the evaluation history')
-        er = EvalRecord(train_ce_frame_sum / b_idx, valid_ce_frame, valid_fer, test_ce_frame, test_fer)
+        er = EvalRecord(avg_train_ce, valid_ce_frame, valid_fer, test_ce_frame, test_fer)
         eval_history.append(er)
         save_eval_history(eval_history, args.save_path + '_eval_history.pkl')
 
