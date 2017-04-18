@@ -38,11 +38,11 @@ def compute_loss(network, target_data, target_mask, delay):
     
     ce = ce * T.flatten(target_mask, 1)
     ce_cost = ce.sum()/n_batch
-    ce_frame_avg = ce.sum()/target_mask.sum()
+    ce_frame_sum = ce.sum()
 
     pred_idx = T.argmax(o, axis=-1)
 
-    return ce_cost, ce_frame_avg, pred_idx
+    return ce_cost, ce_frame_sum, pred_idx
 
 def compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay, context):
     o = get_output(network, deterministic=False)
@@ -68,7 +68,7 @@ def compute_loss_tbptt(network, target_data, target_mask, is_first_win, delay, c
 def trainer(input_data, input_mask, target_data, target_mask, network, updater, 
         learning_rate, delay, load_updater_params=None, ivector_data=None):
 
-    ce_cost, ce_frame, _ = compute_loss(network, target_data, target_mask, delay)
+    ce_cost, ce_frame_sum, _ = compute_loss(network, target_data, target_mask, delay)
   
     network_params = get_all_params(network, trainable=True)
     network_grads = theano.grad(cost=ce_cost,
@@ -92,7 +92,7 @@ def trainer(input_data, input_mask, target_data, target_mask, network, updater,
     else:
         inputs = [input_data, input_mask, target_data, target_mask]
 
-    outputs = [ce_frame, network_grads_norm]
+    outputs = [ce_frame_sum, network_grads_norm]
 
     training_fn = theano.function(
             inputs=inputs, outputs=outputs, updates=train_total_updates)
@@ -156,14 +156,14 @@ def predictor_tbptt(input_data, input_mask, target_data, target_mask, network,
     return fn
 
 def predictor(input_data, input_mask, target_data, target_mask, network, delay, ivector_data=None):
-    _, ce_frame, pred_idx = compute_loss(network, target_data, target_mask, delay)
+    _, ce_frame_sum, pred_idx = compute_loss(network, target_data, target_mask, delay)
 
     inputs = None
     if ivector_data:
         inputs = [input_data, input_mask, ivector_data, target_data, target_mask]
     else:
         inputs = [input_data, input_mask, target_data, target_mask]
-    outputs = [ce_frame, pred_idx]
+    outputs = [ce_frame_sum, pred_idx]
 
     fn = theano.function(inputs=inputs, outputs=outputs)
     return fn
@@ -171,8 +171,9 @@ def predictor(input_data, input_mask, target_data, target_mask, network, delay, 
 def eval_net(predict_fn, data_stream, use_ivectors=False, delay=0):
     data_iterator = data_stream.get_epoch_iterator()
 
-    total_nll = 0.
-    total_fer = 0.
+    total_ce_sum = 0.
+    total_accuracy_sum = 0
+    total_frame_count = 0
         
     for batch_cnt, data in enumerate(data_iterator, start=1):
         input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = data
@@ -182,26 +183,26 @@ def eval_net(predict_fn, data_stream, use_ivectors=False, delay=0):
         else:
             predict_output = predict_fn(input_data, input_mask, target_data, target_mask)
 
-        ce_frame, pred_idx = predict_output
+        ce_frame_sum, pred_idx = predict_output
         
         target_data, target_mask = target_data[:,delay:], target_mask[:,delay:] 
         match_data = (target_data == pred_idx)*target_mask
-        fer = (1.0 - match_data.sum()/target_mask.sum())
 
-        total_nll += ce_frame
-        total_fer += fer
+        total_accuracy_sum += match_data.sum()
+        total_ce_sum += ce_frame_sum
+        total_frame_count += target_mask.sum()
 
-    total_nll /= batch_cnt 
-    total_fer /= batch_cnt
+    avg_ce = total_ce_sum / total_frame_count
+    avg_fer = 1.0 - (total_accuracy_sum / total_frame_count)
 
-    return total_nll, total_fer
+    return avg_ce, avg_fer
 
 def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, batch_size, right_context, use_ivectors=False, delay=0):
     data_iterator = data_stream.get_epoch_iterator()
 
-    total_nll = 0.
-    total_fer = 0.
-        
+    total_accuracy_sum = 0
+    total_ce_sum = 0.
+    total_frame_count = 0
     for b_idx, batch in enumerate(data_iterator, start=1):
 
         i_data, _, _, _, t_data, t_mask = batch
@@ -223,24 +224,21 @@ def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, batch
 
             ce_frame_sum, pred_idx = predict_output
 
-            ce_frame += ce_frame_sum
+            total_ce_sum += ce_frame_sum
             pred_idx_list.append(pred_idx)
 
-        ce_frame = ce_frame / t_mask[:,delay:].sum() 
+        target_data, target_mask = t_data[:,delay:], t_mask[:,delay:] 
 
         pred_idx = numpy.concatenate(pred_idx_list, axis=1)
-
-        target_data, target_mask = t_data[:,delay:], t_mask[:,delay:] 
         match_data = (target_data == pred_idx)*target_mask
-        fer = (1.0 - match_data.sum()/target_mask.sum())
 
-        total_nll += ce_frame
-        total_fer += fer
+        total_accuracy_sum += match_data.sum()
+        total_frame_count += target_mask.sum() 
 
-    total_nll /= b_idx 
-    total_fer /= b_idx
+    avg_ce = total_ce_sum / total_frame_count
+    avg_fer = 1.0 - (total_accuracy_sum / total_frame_count)
 
-    return total_nll, total_fer
+    return avg_ce, avg_fer
 
 def ff(network, input_data, input_mask, ivector_data=None):
     predict_data = get_output(network, deterministic=True)

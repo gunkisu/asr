@@ -134,6 +134,7 @@ if __name__ == '__main__':
         train_ce_frame_sum = 0.0
         status_sw = StopWatch()
 
+        total_ce_sum = 0.0; total_frame_count = 0 
         for b_idx, batch in enumerate(train_ds.get_epoch_iterator(), start=1):
 
             i_data, _, _, _, _, t_mask = batch
@@ -142,7 +143,6 @@ if __name__ == '__main__':
             for l in tbptt_layers:
                 l.reset(n_batch)
 
-            ce_frame = 0.0
             network_grads_norm = 0.0
             for win_idx, win in enumerate(gen_win(batch, args.num_tbptt_steps, args.right_context), start=1):
                 input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = win
@@ -155,16 +155,16 @@ if __name__ == '__main__':
 
                 ce_frame_sum, network_grads_norm_sum = train_output
 
-                ce_frame += ce_frame_sum
+                total_ce_sum += ce_frame_sum
                 network_grads_norm += network_grads_norm_sum
 
-            ce_frame = ce_frame / t_mask[:,args.delay:].sum()
             network_grads_norm = math.sqrt(network_grads_norm)
+            total_frame_count += t_mask[:,args.delay:].sum()
 
             if b_idx%args.log_freq == 0: 
-                show_status(args.save_path, ce_frame, network_grads_norm, b_idx, args.batch_size, e_idx)
+                show_status(args.save_path, total_ce_sum / total_frame_count, network_grads_norm, b_idx, args.batch_size, e_idx)
                 status_sw.print_elapsed(); status_sw.reset()
-            train_ce_frame_sum += ce_frame
+
 
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
@@ -181,7 +181,8 @@ if __name__ == '__main__':
             args.batch_size, args.right_context, args.use_ivector_input, delay=args.delay)
         eval_sw.print_elapsed()
 
-        print('Train CE: {}'.format(train_ce_frame_sum / b_idx))
+        avg_train_ce = total_ce_sum / total_frame_count
+        print('Train CE: {}'.format(avg_train_ce))
         print('Valid CE: {}, FER: {}'.format(valid_ce_frame, valid_fer))
         print('Test  CE: {}, FER: {}'.format(test_ce_frame, test_fer))
        
@@ -189,7 +190,7 @@ if __name__ == '__main__':
             save_network(network_params, trainer_params, e_idx, '{}_best_model.pkl'.format(args.save_path))
         
         print('Saving the evaluation history')
-        er = EvalRecord(train_ce_frame_sum / b_idx, valid_ce_frame, valid_fer, test_ce_frame, test_fer)
+        er = EvalRecord(avg_train_ce, valid_ce_frame, valid_fer, test_ce_frame, test_fer)
         eval_history.append(er)
         save_eval_history(eval_history, args.save_path + '_eval_history.pkl')
 
