@@ -1,7 +1,8 @@
 from __future__ import print_function
 
 import time
-
+import random
+import numpy as np
 import os
 import subprocess
 from operator import attrgetter
@@ -185,3 +186,18 @@ def gen_win(batch, win_size, right_context=0):
             target_data[:,from_idx:to_idx], target_mask[:,from_idx:to_idx])
    
     return
+
+def skip_frames(batch, every_n, random_choice=False):
+    new_batch = []    
+    for src_data in batch:
+        new_src_data = []
+        for ex in src_data:
+            n_seq, n_feat = ex.shape
+            if random_choice:
+                idx_list = [min(i+random.randint(0, every_n-1), n_seq-1) for i in range(0, n_seq, every_n)]
+                new_src_data.append(ex[idx_list,:])
+            else:
+                new_src_data.append(ex[::every_n,:])
+
+        new_batch.append(new_src_data)
+    return new_batch
