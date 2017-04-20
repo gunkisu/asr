@@ -145,6 +145,8 @@ if __name__ == '__main__':
                 show_status(args.save_path, total_ce_sum / total_frame_count, network_grads_norm, b_idx, args.batch_size, e_idx)
                 status_sw.print_elapsed(); status_sw.reset()
             
+            break
+
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
 
@@ -154,8 +156,8 @@ if __name__ == '__main__':
         print('Evaluating the network on the validation dataset')
         eval_sw = StopWatch()
         #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
-        valid_ce_frame, valid_fer = eval_net_skip(predict_fn, valid_ds, args.use_ivector_input, args.skip)
-        test_ce_frame, test_fer = eval_net_skip(predict_fn, test_ds, args.use_ivector_input, args.skip)
+        valid_ce_frame, valid_fer = eval_net_skip(predict_fn, valid_ds, args.skip, args.skip_random, args.use_ivector_input)
+        test_ce_frame, test_fer = eval_net_skip(predict_fn, test_ds, args.skip, args.skip_random, args.use_ivector_input)
         eval_sw.print_elapsed()
 
         avg_train_ce = total_ce_sum / total_frame_count
