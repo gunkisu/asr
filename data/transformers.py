@@ -5,6 +5,8 @@ import numpy
 from theano import config
 import itertools
 
+import random
+
 from fuel.transformers import Transformer
 from picklable_itertools.extras import equizip
 
@@ -127,6 +129,35 @@ class DelayTransformer(Transformer):
 
         return batch
 
+class FrameSkipTransformer(Transformer):
+    '''Skip some of the elements'''
+    def __init__(self, data_stream, every_n, random_choice=False, **kwargs):
+        if data_stream.produces_examples:
+                 raise ValueError('the wrapped data stream must produce batches of '
+                                                      'examples, not examples')
+        super(FrameSkipTransformer, self).__init__(
+            data_stream=data_stream,
+            produces_examples=False,
+            **kwargs)
+
+        self.every_n = every_n
+        self.random_choice = random_choice
+
+    def _skip(self, src_data):
+        new_src_data = []
+        for ex in src_data:
+            n_seq, n_feat = ex.shape
+            if self.random_choice:
+                idx_list = [min(i+random.randint(0, every_n-1), n_seq-1) for i in range(0, n_seq, every_n)]
+                new_src_data.append(ex[idx_list,:])
+            else:
+                new_src_data.append(ex[::self.every_n,:])
+        return new_src_data
+
+    def transform_batch(self, batch):
+        trans_data = []
+        
+        return [self._skip(src_data) for src_data in batch]
 
 class MaximumFrameCache(Transformer):
     """Cache examples, and create batches of maximum number of frames.

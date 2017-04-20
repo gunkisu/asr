@@ -3,7 +3,7 @@ from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme, SequentialScheme
 from fuel.transformers import Padding, FilterSources
 
-from data.transformers import ConcatenateTransformer, TruncateTransformer, Normalize, DelayTransformer
+from data.transformers import ConcatenateTransformer, TruncateTransformer, Normalize, DelayTransformer, FrameSkipTransformer
 
 import numpy
 
@@ -102,8 +102,6 @@ def create_ivector_datastream(path, which_set, batch_size=1, delay=0):
     if delay:
         fs = DelayTransformer(fs, delay)
     return Padding(fs)
-
-
 
 def create_ivector_test_datastream(path, which_set, batch_size=1):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))

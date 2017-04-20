@@ -29,12 +29,16 @@ if __name__ == '__main__':
     find_reload_model(args)
 
     print(args)
-   
-    if args.num_tbptt_steps:
-        if args.delay >= args.num_tbptt_steps:
-            print('delay >= num_tbptt_steps')
-            sys.exit(1)
 
+
+    if args.num_tbptt_steps:
+        print('--num-tbptt-steps not supported')
+        sys.exit(1)
+
+    if args.delay and not args.uni:
+        print('--delay cannot be specified for bidirectional models')
+        sys.exit(1)
+   
     sw = StopWatch()
 
     print('Build and compile network')

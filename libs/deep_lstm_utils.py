@@ -11,6 +11,8 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--use-layer-norm', help='whether to layer normalization', action='store_true')
     parser.add_argument('--num-tbptt-steps', help='number of truncated bptt steps', default=0, type=int)
     parser.add_argument('--right-context', help='number of right context frames', default=0, type=int)
+    parser.add_argument('--skip', help='keep only every n frame', default=0, type=int)
+    parser.add_argument('--skip-random', help='randomly choose which to frame to skip for every n frame', action='store_true')
 
     parser.add_argument('--delay', help='number of frames to delay for delayed targets', default=0, type=int)
 
@@ -60,6 +62,11 @@ def get_save_path(args):
     if args.backward_on_top:
         fn = '{}_btop'.format(fn)
     fn = '{}_{}'.format(fn, args.train_dataset)
-
+    if args.skip:
+        fn = '{}_skip'.format(fn)
+        if args.skip_random:
+            fn = '{}r{}'.format(fn, args.skip)
+        else:
+            fn = '{}{}'.format(fn, args.skip)
     return fn
 

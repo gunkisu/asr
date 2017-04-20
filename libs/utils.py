@@ -192,12 +192,21 @@ def skip_frames(batch, every_n, random_choice=False):
     for src_data in batch:
         new_src_data = []
         for ex in src_data:
-            n_seq, n_feat = ex.shape
+            n_seq = ex.shape[0]
             if random_choice:
                 idx_list = [min(i+random.randint(0, every_n-1), n_seq-1) for i in range(0, n_seq, every_n)]
-                new_src_data.append(ex[idx_list,:])
+                if len(ex.shape) == 1:
+
+                    new_src_data.append(ex[idx_list])
+                else:
+                    new_src_data.append(ex[idx_list,:])
+                
             else:
-                new_src_data.append(ex[::every_n,:])
+                if len(ex.shape) == 1: 
+                    new_src_data.append(ex[::every_n])
+                else:
+                    new_src_data.append(ex[::every_n,:])    
+
 
         new_batch.append(new_src_data)
     return new_batch
