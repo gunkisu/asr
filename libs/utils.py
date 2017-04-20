@@ -188,7 +188,8 @@ def gen_win(batch, win_size, right_context=0):
     return
 
 def skip_frames(batch, every_n, random_choice=False):
-    new_batch = []    
+    new_batch = []
+
     for src_data in batch:
         new_src_data = []
         for ex in src_data:

@@ -7,7 +7,7 @@ from theano import tensor as T
 from lasagne.layers import get_output, get_all_params
 from lasagne.objectives import categorical_crossentropy
 
-from libs.utils import gen_win
+from libs.utils import gen_win, skip_frames
 
 import itertools
 
