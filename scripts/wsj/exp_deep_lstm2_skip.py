@@ -145,8 +145,6 @@ if __name__ == '__main__':
                 show_status(args.save_path, total_ce_sum / total_frame_count, network_grads_norm, b_idx, args.batch_size, e_idx)
                 status_sw.print_elapsed(); status_sw.reset()
             
-            break
-
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
 
