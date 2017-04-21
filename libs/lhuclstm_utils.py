@@ -48,7 +48,7 @@ def get_arg_parser():
     return parser
 
 def get_save_path(args):
-    fn = os.path.basename(args.data_path)
+    fn = os.path.splitext(os.path.basename(args.data_path))[0]
     fn = '{}_lr{}'.format(fn, args.learn_rate)
     fn = '{}_gc{}'.format(fn, args.grad_clipping)
     fn = '{}_l{}'.format(fn, args.num_layers)
