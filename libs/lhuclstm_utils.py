@@ -1,4 +1,5 @@
 import argparse
+import os
 
 def add_params(parser):
     parser.add_argument('--batch-size', default=2, help='batch size', type=int)
@@ -47,19 +48,24 @@ def get_arg_parser():
     return parser
 
 def get_save_path(args):
-    fn = './wsj_lhuclstm_lr{}_gc{}_l{}_n{}_b{}'.format(
-            args.learn_rate, args.grad_clipping, args.num_layers, args.num_units, 
-            args.batch_size)
-    if args.use_ivector_input:
-        fn = '{}_ivi{}'.format(fn, args.ivector_dim)
-    if args.use_ivector_model:
-        fn = '{}_ivm{}'.format(fn, args.ivector_dim)
-    if args.uni:
-        fn = '{}_uni'.format(fn)
+    fn = os.path.basename(args.data_path)
+    fn = '{}_lr{}'.format(fn, args.learn_rate)
+    fn = '{}_gc{}'.format(fn, args.grad_clipping)
+    fn = '{}_l{}'.format(fn, args.num_layers)
+    fn = '{}_n{}'.format(fn, args.num_units)
     if args.num_proj_units:
         fn = '{}_pjn{}'.format(fn, args.num_proj_units)
+    if args.use_ivector_input:
+        fn = '{}_iv{}'.format(fn, args.ivector_dim)
+    fn = '{}_b{}'.format(fn, args.batch_size)
     if args.use_layer_norm:
         fn = '{}_ln'.format(fn)
+    if args.uni:
+        fn = '{}_uni'.format(fn)
+    
+    if args.use_ivector_model:
+        fn = '{}_ivm{}'.format(fn, args.ivector_dim)
+
     if 'LHUC' in args.layer_name:
         fn = '{}_pdl{}_pdn{}'.format(fn, args.num_pred_layers, args.num_pred_units)
     
@@ -72,6 +78,8 @@ def get_save_path(args):
 
     if args.num_tbptt_steps:
         fn = '{}_tb{}'.format(fn, args.num_tbptt_steps)
- 
+
+    fn = '{}_{}'.format(fn, args.train_dataset)
+
     return fn
 

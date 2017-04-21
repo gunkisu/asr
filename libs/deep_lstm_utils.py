@@ -1,4 +1,5 @@
 import argparse
+import os
 
 def add_deep_lstm_params(parser):
     parser.add_argument('--batch-size', default=2, help='batch size', type=int)
@@ -39,7 +40,7 @@ def get_arg_parser():
     return parser
 
 def get_save_path(args):
-    fn = './wsj_deep_lstm'
+    fn = os.path.basename(args.data_path)
     fn = '{}_lr{}'.format(fn, args.learn_rate)
     fn = '{}_gc{}'.format(fn, args.grad_clipping)
     fn = '{}_l{}'.format(fn, args.num_layers)
