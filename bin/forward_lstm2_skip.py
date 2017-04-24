@@ -77,10 +77,12 @@ if __name__ == '__main__':
         input_data, input_mask, ivector_data, ivector_mask = feat_batch 
         feat_lens = input_mask.sum(axis=1)
 
-        s_input_data, s_input_mask, s_ivector_data, s_ivector_mask = \
-            skip_frames(feat_batch, args.skip, args.skip_random)
-
         _, n_seq, n_feat = input_data.shape
+
+        if args.skip:
+            s_input_data, s_input_mask, s_ivector_data, s_ivector_mask = \
+                skip_frames(feat_batch, args.skip, args.skip_random)
+
 
         print('Feed-forwarding...', file=sys.stderr)
         if args.use_ivector_input:
@@ -88,8 +90,9 @@ if __name__ == '__main__':
         else:
             net_output = ff_fn(input_data, input_mask)
 
-        net_output = numpy.repeat(net_output, args.skip, axis=1)
-        net_output = net_output[:,:n_seq,:]        
+        if args.skip:
+            net_output = numpy.repeat(net_output, args.skip, axis=1)
+            net_output = net_output[:,:n_seq,:]        
 
         print('Writing outputs...', file=sys.stderr)
         for out_idx, (output, uttid) in enumerate(zip(net_output[0], uttid_batch[0])):
