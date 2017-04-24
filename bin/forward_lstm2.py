@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from __future__ import print_function
 
 import os
@@ -79,16 +80,21 @@ if __name__ == '__main__':
 
         _, n_seq, n_feat = input_data.shape
 
+        print('Feed-forwarding...', file=sys.stderr)
+
         if args.skip:
             s_input_data, s_input_mask, s_ivector_data, s_ivector_mask = \
                 skip_frames(feat_batch, args.skip, args.skip_random)
+            if args.use_ivector_input:
+                net_output = ff_fn(s_input_data, s_input_mask, s_ivector_data)
+            else:
+                net_output = ff_fn(s_input_data, s_input_mask)
 
-
-        print('Feed-forwarding...', file=sys.stderr)
-        if args.use_ivector_input:
-            net_output = ff_fn(input_data, input_mask, ivector_data)
         else:
-            net_output = ff_fn(input_data, input_mask)
+            if args.use_ivector_input:
+                net_output = ff_fn(input_data, input_mask, ivector_data)
+            else:
+                net_output = ff_fn(input_data, input_mask)
 
         if args.skip:
             net_output = numpy.repeat(net_output, args.skip, axis=1)
