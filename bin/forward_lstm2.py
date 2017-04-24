@@ -76,6 +76,7 @@ if __name__ == '__main__':
     for batch_idx, (feat_batch, uttid_batch) in enumerate(
             zip(test_ds.get_epoch_iterator(), uttid_stream.get_epoch_iterator())):
         input_data, input_mask, ivector_data, ivector_mask = feat_batch 
+        uttid_batch, = uttid_batch
         feat_lens = input_mask.sum(axis=1)
 
         _, n_seq, n_feat = input_data.shape
@@ -86,22 +87,22 @@ if __name__ == '__main__':
             s_input_data, s_input_mask, s_ivector_data, s_ivector_mask = \
                 skip_frames(feat_batch, args.skip, args.skip_random)
             if args.use_ivector_input:
-                net_output = ff_fn(s_input_data, s_input_mask, s_ivector_data)
+                net_output, = ff_fn(s_input_data, s_input_mask, s_ivector_data)
             else:
-                net_output = ff_fn(s_input_data, s_input_mask)
+                net_output, = ff_fn(s_input_data, s_input_mask)
 
         else:
             if args.use_ivector_input:
-                net_output = ff_fn(input_data, input_mask, ivector_data)
+                net_output, = ff_fn(input_data, input_mask, ivector_data)
             else:
-                net_output = ff_fn(input_data, input_mask)
+                net_output, = ff_fn(input_data, input_mask)
 
         if args.skip:
             net_output = numpy.repeat(net_output, args.skip, axis=1)
             net_output = net_output[:,:n_seq,:]        
 
         print('Writing outputs...', file=sys.stderr)
-        for out_idx, (output, uttid) in enumerate(zip(net_output[0], uttid_batch[0])):
+        for out_idx, (output, uttid) in enumerate(zip(net_output, uttid_batch)):
             valid_len = feat_lens[out_idx]
             writer.write(uttid.encode('ascii'), numpy.log(output[:valid_len]))
 
