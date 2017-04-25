@@ -187,6 +187,21 @@ def gen_win(batch, win_size, right_context=0):
    
     return
 
+def gen_win_test(batch, win_size, right_context=0):
+    input_data, input_mask, ivector_data, ivector_mask = batch
+    
+    n_batch, n_seq, n_feat = input_data.shape
+
+    for i in range(0, n_seq, win_size):
+        from_idx = i
+        to_idx = i+win_size+right_context
+        
+        yield (input_data[:,from_idx:to_idx,:], input_mask[:,from_idx:to_idx], \
+            ivector_data[:,from_idx:to_idx,:], ivector_mask[:,from_idx:to_idx])
+   
+    return
+
+
 def skip_frames(batch, every_n, random_choice=False):
     new_batch = []
 

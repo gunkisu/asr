@@ -352,3 +352,21 @@ def ff(network, input_data, input_mask, ivector_data=None):
                                  outputs=[predict_data])
 
     return predict_fn
+
+def ff_tbptt(input_data, input_mask, network, is_first_win, delay, context, ivector_data=None):
+    o = get_output(network, deterministic=False)
+        
+    if delay:
+        o = ifelse(is_first_win, o[:,delay:,:], o)
+    elif context:
+        o = o[:,:context,:]
+
+    inputs = None
+    if ivector_data:
+        inputs = [input_data, input_mask, ivector_data, is_first_win]
+    else:
+        inputs = [input_data, input_mask, is_first_win]
+    outputs = [o]
+
+    fn = theano.function(inputs=inputs, outputs=outputs, on_unused_input='warn')
+    return fn

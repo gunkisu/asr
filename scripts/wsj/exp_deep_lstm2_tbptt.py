@@ -10,8 +10,8 @@ import math
 from lasagne.layers import get_all_params, count_params
 
 from libs.deep_lstm_utils import get_arg_parser, get_save_path
-from libs.utils import StopWatch, Rsync, gen_win, save_network, save_eval_history, best_fer, show_status, sync_data, \
-    find_reload_model, load_or_init_model
+from libs.utils import StopWatch, Rsync, gen_win, save_network, save_eval_history, \
+    best_fer, show_status, sync_data, find_reload_model, load_or_init_model
 from libs.comp_graph_utils import trainer_tbptt, predictor_tbptt, eval_net_tbptt
 
 from libs.lasagne_libs.updates import adam

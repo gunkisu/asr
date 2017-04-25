@@ -103,13 +103,18 @@ def create_ivector_datastream(path, which_set, batch_size=1, delay=0):
         fs = DelayTransformer(fs, delay)
     return Padding(fs)
 
-def create_ivector_test_datastream(path, which_set, batch_size=1):
+def create_ivector_test_datastream(path, which_set, batch_size=1, delay=0):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     iterator_scheme = SequentialScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
 
     base_stream = DataStream(dataset=wsj_dataset,
                              iteration_scheme=iterator_scheme)
 
-    fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors'])
+    fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
+
+    if delay:
+        fs = DelayTransformer(fs, delay)
+
+    fs = FilterSources(data_stream=fs, sources=['features', 'ivectors'])
     return Padding(fs)
 
