@@ -353,13 +353,13 @@ def ff(network, input_data, input_mask, ivector_data=None):
 
     return predict_fn
 
-def ff_tbptt(input_data, input_mask, network, is_first_win, delay, context, ivector_data=None):
+def ff_tbptt(input_data, input_mask, network, is_first_win, delay, num_tbptt_steps, ivector_data=None):
     o = get_output(network, deterministic=False)
         
     if delay:
         o = ifelse(is_first_win, o[:,delay:,:], o)
-    elif context:
-        o = o[:,:context,:]
+    elif num_tbptt_steps:
+        o = o[:,:num_tbptt_steps,:]
 
     inputs = None
     if ivector_data:

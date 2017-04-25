@@ -72,8 +72,8 @@ if __name__ == '__main__':
         print('Must specfiy network to load', file=sys.stderr)
         sys.exit(1)
 
-    ff_fn = ff_tbptt(input_data, input_mask, network, is_first_win, args.delay, args.right_context, ivector_data)
-    test_ds = create_ivector_test_datastream(args.data_path, args.dataset, args.batch_size)
+    ff_fn = ff_tbptt(input_data, input_mask, network, is_first_win, args.delay, args.num_tbptt_steps, ivector_data)
+    test_ds = create_ivector_test_datastream(args.data_path, args.dataset, args.batch_size, args.delay)
     uttid_stream = get_uttid_stream(args.data_path, args.dataset, args.batch_size) 
 
     writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
