@@ -19,7 +19,6 @@ from mixer import reset_state
 from mixer import sharedX
 from model import HMLSTMModule
 from model import LinearCell
-from ptb_train import TrainModel
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 
@@ -58,14 +57,14 @@ def monitor(f_log_prob, FLAGS, valid_set, train_set=None, states=None):
   returns['val_bits'] = val_bits
   return returns
 
-
-def build_graph(FLAGS):
-  """Define training graph"""
+def build_graph_am(FLAGS):
+  """Define training graph for acousic modeling"""
   tparams = OrderedDict()
   trng = RandomStreams(
           np.random.RandomState(
               np.random.randint(1024)).randint(np.iinfo(np.int32).max))
   print("Building the computational graph")
+  
   # Define bunch of shared variables
   st_slope = sharedX(1., name='binary_sigmoid_gate')
   init_state = np.zeros((3, 2, FLAGS.batch_size, FLAGS.n_hidden),
@@ -73,40 +72,45 @@ def build_graph(FLAGS):
   init_bound = np.zeros((2, FLAGS.batch_size), dtype=np.float32)
   tstate = sharedX(init_state, name='rnn_state')
   tboundary = sharedX(init_bound, name='rnn_bound')
-  # Graph input
-  inp = tensor.matrix('inp', dtype='int64')
-  inp_mask = tensor.matrix('inp_mask', dtype='float32')
-  inp.tag.test_value = np.zeros((FLAGS.max_seq_len, FLAGS.batch_size),
-                                dtype='int64')
-  inp_mask.tag.test_value = np.ones((FLAGS.max_seq_len, FLAGS.batch_size),
-                                    dtype='float32')
-  x, y = inp[:-1], inp[1:]
-  y_mask = inp_mask[1:]
+
+  # Graph input: n_seq, n_batch, n_feat
+  x = tensor.ftensor3('inp')
+  x_mask = tensor.fmatrix('inp_mask')
+  y = tensor.imatrix('tar')
+  y_mask = tensor.fmatrix('tar_mask')
+
   # Define input embedding layer
-  _i_embed = LinearCell(FLAGS.n_class, FLAGS.n_input_embed, prefix='i_embed',
-                        bias=False, input_is_int=True)
+  _i_embed = LinearCell(FLAGS.n_input, FLAGS.n_input_embed, prefix='i_embed',
+                        bias=False)
   tparams = merge_dict(tparams, _i_embed._params)
+  
   # Call input embedding layer
   h_i_emb_3d = _i_embed(x)
+
   # Define HM-LSTM module
   _rnn = HMLSTMModule(FLAGS.n_input_embed, FLAGS.n_hidden, prefix='hm_lstm',
                       use_impl_type=FLAGS.use_impl_type)
   tparams = merge_dict(tparams, _rnn._params)
+
   # Call HM-LSTM module
   (h_rnn_1_3d, c_rnn_1_3d, h_rnn_2_3d, c_rnn_2_3d, h_rnn_3_3d, c_rnn_3_3d,
    z_1_3d, z_2_3d), last_state, last_boundary = \
           _rnn(h_i_emb_3d, tstate, tboundary)
+
   # Define output gating layer
   _o_gate = LinearCell([FLAGS.n_hidden] * 3, 3, prefix='o_gate',
                        activation=tensor.nnet.sigmoid)
   tparams = merge_dict(tparams, _o_gate._params)
+  
   # Call output gating layer
   h_o_gate = _o_gate([h_rnn_1_3d, h_rnn_2_3d, h_rnn_3_3d])
+  
   # Define output embedding layer
   _o_embed = LinearCell([FLAGS.n_hidden] * 3, FLAGS.n_output_embed,
                         prefix='o_embed',
                         activation=tensor.nnet.relu)
   tparams = merge_dict(tparams, _o_embed._params)
+  
   # Call output embedding layer
   h_o_embed = _o_embed([h_rnn_1_3d * h_o_gate[:, :, 0][:, :, None],
                         h_rnn_2_3d * h_o_gate[:, :, 1][:, :, None],
@@ -116,10 +120,12 @@ def build_graph(FLAGS):
   tparams = merge_dict(tparams, _output._params)
   # Call output layer
   h_logit = _output([h_o_embed])
+    
   logit_shape = h_logit.shape
   logit = h_logit.reshape([logit_shape[0]*logit_shape[1], logit_shape[2]])
   logit = logit - logit.max(axis=1).dimshuffle(0, 'x')
   probs = logit - tensor.log(tensor.exp(logit).sum(axis=1).dimshuffle(0, 'x'))
+ 
   # Compute the cost
   y_flat = y.flatten()
   y_flat_idx = tensor.arange(y_flat.shape[0]) * FLAGS.n_class + y_flat
@@ -127,15 +133,19 @@ def build_graph(FLAGS):
   cost = cost.reshape([y.shape[0], y.shape[1]])
   cost = (cost * y_mask).sum(0)
   cost_len = y_mask.sum(0)
+
   f_prop_updates = OrderedDict()
   f_prop_updates[tstate] = last_state
   f_prop_updates[tboundary] = last_boundary
   states = [tstate, tboundary]
+
   # Later use for visualization
-  inps = [inp, inp_mask]
+  inps = [x, y, y_mask]
+
   print("Building f_log_prob function")
   f_log_prob = theano.function(inps, [cost, cost_len], updates=f_prop_updates)
   cost = cost.mean()
+
   # If the flag is on, apply L2 regularization on weights
   if FLAGS.weight_decay > 0.:
     weights_norm = 0.
@@ -182,35 +192,4 @@ def build_graph(FLAGS):
   return f_prop, f_update, f_log_prob, f_debug, tparams, opt_tparams, states, \
       st_slope
 
-def main(FLAGS):
-  if not os.path.exists(FLAGS.log_dir):
-    os.makedirs(FLAGS.log_dir)
-  train = TrainModel(FLAGS, build_graph, monitor)
-  train()
 
-
-if __name__ == "__main__":
-  # When using IPython, command should be something like:
-  # $ipython ptb_hmlstm.py -- -log_dir=path
-  parser = argparse.ArgumentParser()
-  parser.add_argument('-learning_rate', type=float, default=0.002)
-  parser.add_argument('-weight_decay', type=float, default=0.0005)
-  parser.add_argument('-batch_size', type=int, default=64)
-  parser.add_argument('-n_epoch', type=int, default=500)
-  parser.add_argument('-display_freq', type=int, default=100)
-  parser.add_argument('-max_seq_len', type=int, default=100)
-  parser.add_argument('-n_hidden', type=int, default=512)
-  parser.add_argument('-n_class', type=int, default=50)
-  parser.add_argument('-n_input_embed', type=int, default=128)
-  parser.add_argument('-n_output_embed', type=int, default=512)
-  parser.add_argument('-base_seed', type=int, default=20170309)
-  parser.add_argument('-add_seed', type=int, default=0)
-  parser.add_argument('-start_from_ckpt', action="store_true", default=False)
-  parser.add_argument('-eval_train', action="store_true", default=False)
-  parser.add_argument('-use_slope_anneal', action='store_true', default=False)
-  parser.add_argument('-n_slope', type=int, default=5)
-  parser.add_argument('-n_anneal_epoch', type=int, default=100)
-  parser.add_argument('-use_impl_type', type=str, default='base')
-  parser.add_argument('-log_dir', type=str)
-  FLAGS = parser.parse_args()
-  main(FLAGS)
