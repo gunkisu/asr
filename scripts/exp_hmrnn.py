@@ -70,10 +70,11 @@ if __name__ == '__main__':
             target_data = numpy.transpose(target_data, (1, 0))
             target_mask = numpy.transpose(target_mask, (1, 0))
             
-            cost = f_prop(input_data, target_data, target_mask)
+            cost, = f_prop(input_data, target_data, target_mask)
+            tr_cost, tr_cost_len = f_log_prob(input_data, target_data, target_mask)
             f_update(args.learn_rate)
             
-            print(cost)
+            print(tr_cost.sum() / tr_cost_len.sum())
             
         print('End of Epoch {}'.format(e_idx))
         epoch_sw.print_elapsed()
