@@ -106,6 +106,13 @@ def show_status(save_path, ce_frame, network_grads_norm, batch_idx, batch_size, 
     print('Train CE {} (batch {}, {} examples so far): '.format(ce_frame, batch_idx, batch_idx*batch_size))
     print('Gradient Norm: {}'.format(network_grads_norm))
 
+def show_status2(save_path, ce_frame, batch_idx, batch_size, epoch_idx, avg_z_1_3d):
+    model = save_path.split('/')[-1]
+    print('--')
+    print('Model Name: {} (Epoch {})'.format(model, epoch_idx))
+    print('Train CE: {} (batch {}, {} examples so far): '.format(ce_frame, batch_idx, batch_idx*batch_size))
+    print('Average z_1_3d: {}'.format(avg_z_1_3d))
+
 
 def log_find(jobid, ext, log_dir='SMART_DISPATCH_LOGS'):
     '''Find the log file of a job launched by smart-dispatch 

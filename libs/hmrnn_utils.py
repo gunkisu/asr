@@ -21,6 +21,9 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--test-dataset', help='dataset for test', default='test_eval92')
     parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
+    parser.add_argument('--log-dir', help=' ', default='hmrnn_train_log')
+
+
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)

@@ -155,7 +155,7 @@ def build_graph_am(FLAGS):
     cost += weights_norm * FLAGS.weight_decay
   #print("Computing the gradients")
   grads = tensor.grad(cost, wrt=itemlist(tparams))
-  grads = gradient_clipping(grads, tparams, 1.)
+  grads = gradient_clipping(grads, tparams, 0.8)
   # Compile the optimizer, the actual computational graph
   learning_rate = tensor.scalar(name='learning_rate')
   gshared = [theano.shared(p.get_value() * 0., name='%s_grad' % k)
