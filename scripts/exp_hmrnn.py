@@ -85,7 +85,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     args.save_path = os.path.join(args.log_dir, get_save_path(args))
+    
     print(args)
+
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
 
     file_name = '{}.npz'.format(args.save_path)
     best_file_name = '{}.best.npz'.format(args.save_path)
