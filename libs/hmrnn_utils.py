@@ -4,7 +4,7 @@ import os
 def add_deep_lstm_params(parser):
     parser.add_argument('--batch-size', default=2, help='batch size', type=int)
     parser.add_argument('--n-hidden', default=512, help='number of hidden units', type=int)
-    parser.add_argument('--learn-rate', default=0.002, help='learning rate', type=float)
+    parser.add_argument('--learn-rate', default=0.0001, help='learning rate', type=float)
     parser.add_argument('--use-impl-type', type=str, default='base')
     parser.add_argument('--data-path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--n-input', help='input dimension', default=123, type=int)
@@ -39,6 +39,7 @@ def get_save_path(args):
     fn = '{}_gc{}'.format(fn, args.grad_clipping)
     fn = '{}_wd{}'.format(fn, args.weight_decay)
     fn = '{}_{}'.format(fn, os.path.splitext(os.path.basename(args.data_path))[0])
+    fn = '{}_{}'.format(fn, args.train_dataset)
 
     return fn
 
