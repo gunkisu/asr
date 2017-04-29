@@ -79,23 +79,15 @@ def build_graph_am(FLAGS):
   y = tensor.imatrix('tar')
   y_mask = tensor.fmatrix('tar_mask')
 
-  # Define input embedding layer
-  _i_embed = LinearCell(FLAGS.n_input, FLAGS.n_input_embed, prefix='i_embed',
-                        bias=False)
-  tparams = merge_dict(tparams, _i_embed._params)
-  
-  # Call input embedding layer
-  h_i_emb_3d = _i_embed(x)
-
   # Define HM-LSTM module
-  _rnn = HMLSTMModule(FLAGS.n_input_embed, FLAGS.n_hidden, prefix='hm_lstm',
+  _rnn = HMLSTMModule(FLAGS.n_input, FLAGS.n_hidden, prefix='hm_lstm',
                       use_impl_type=FLAGS.use_impl_type)
   tparams = merge_dict(tparams, _rnn._params)
 
   # Call HM-LSTM module
   (h_rnn_1_3d, c_rnn_1_3d, h_rnn_2_3d, c_rnn_2_3d, h_rnn_3_3d, c_rnn_3_3d,
    z_1_3d, z_2_3d), last_state, last_boundary = \
-          _rnn(h_i_emb_3d, tstate, tboundary)
+          _rnn(x, tstate, tboundary)
 
   # Define output gating layer
   _o_gate = LinearCell([FLAGS.n_hidden] * 3, 3, prefix='o_gate',

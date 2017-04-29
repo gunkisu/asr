@@ -8,9 +8,8 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--use-impl-type', type=str, default='base')
     parser.add_argument('--data-path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--n-input', help='input dimension', default=123, type=int)
-    parser.add_argument('--n-input-embed', help=' ', default=256, type=int)
     parser.add_argument('--n-class', help='output dimension', default=3436, type=int)
-    parser.add_argument('--n-output-embed', help=' ', default=256, type=int)
+    parser.add_argument('--n-output-embed', help=' ', default=512, type=int)
     parser.add_argument('--num-epochs', help='number of epochs', default=50, type=int)
     parser.add_argument('--weight-decay', type=float, default=0.0005)
     parser.add_argument('--start-from-ckpt', action="store_true")
@@ -24,13 +23,24 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--log-dir', help=' ', default='hmrnn_train_log')
     parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
 
-
-
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add_deep_lstm_params(parser)
     return parser
 
 def get_save_path(args):
-    return 'hmrnn_test'
+    fn = 'hmrnn'
+    fn = '{}_ni{}'.format(fn, args.n_input)
+    fn = '{}_nh{}'.format(fn, args.n_hidden)
+    fn = '{}_oe{}'.format(fn, args.n_output_embed)
+    fn = '{}_nc{}'.format(fn, args.n_class)
+    fn = '{}_b{}'.format(fn, args.batch_size)
+    fn = '{}_lr{}'.format(fn, args.learn_rate)
+    fn = '{}_gc{}'.format(fn, args.grad_clipping)
+    fn = '{}_wd{}'.format(fn, args.weight_decay)
+    fn = '{}_{}'.format(fn, os.path.splitext(os.path.basename(args.data_path))[0])
 
+    return fn
+
+    
+ 
