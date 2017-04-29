@@ -22,6 +22,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
     parser.add_argument('--log-dir', help=' ', default='hmrnn_train_log')
+    parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
 
 
 

@@ -32,6 +32,9 @@ def eval_model(ds, states, f_log_prob):
         reset_state(states)
        
         input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = batch
+        n_batch, n_seq, n_feat = input_data.shape
+        if n_batch < args.batch_size:
+            continue
 
         input_data = numpy.transpose(input_data, (1, 0, 2))
         target_data = numpy.transpose(target_data, (1, 0))
@@ -62,6 +65,9 @@ def avg_z_1_3d(ds, states, f_debug):
         reset_state(states)
        
         input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = batch
+        n_batch, n_seq, n_feat = input_data.shape
+        if n_batch < args.batch_size:
+            continue
 
         input_data = numpy.transpose(input_data, (1, 0, 2))
         target_data = numpy.transpose(target_data, (1, 0))
@@ -129,6 +135,9 @@ if __name__ == '__main__':
             reset_state(states)
            
             input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = batch
+            n_batch, n_seq, n_feat = input_data.shape
+            if n_batch < args.batch_size:
+                continue
 
             input_data = numpy.transpose(input_data, (1, 0, 2))
             target_data = numpy.transpose(target_data, (1, 0))
