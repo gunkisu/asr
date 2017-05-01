@@ -17,6 +17,7 @@ from mixer import merge_dict
 from mixer import nats2bits
 from mixer import reset_state
 from mixer import sharedX
+from mixer import zipp
 from model import HMLSTMModule
 from model import LinearCell
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
@@ -157,8 +158,8 @@ def build_graph_am(FLAGS):
   f_prop = theano.function(inps, [cost],
                            updates=merge_dict(gsup, f_prop_updates))
   opt_updates, opt_tparams = adam(learning_rate, tparams, gshared)
-  if FLAGS.start_from_ckpt and os.path.exists(opt_file_name):
-    opt_params = np.load(opt_file_name)
+  if FLAGS.start_from_ckpt and os.path.exists(FLAGS.opt_file_name):
+    opt_params = np.load(FLAGS.opt_file_name)
     zipp(opt_params, opt_tparams)
   if FLAGS.use_slope_anneal:
     for kk, pp in opt_updates.items():

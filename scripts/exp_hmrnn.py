@@ -22,7 +22,7 @@ from libs.deep_lstm_builder import build_deep_lstm
 from data.fuel_utils import create_ivector_datastream
 
 from hmrnn.hmlstm_builder import build_graph_am
-from hmrnn.mixer import reset_state, insert_item2dict, unzip, save_npz, save_npz2
+from hmrnn.mixer import reset_state, insert_item2dict, unzip, save_npz, save_npz2, init_tparams_with_restored_value
 
 def eval_model(ds, states, f_log_prob):
     total_ce_sum = 0.0
@@ -81,6 +81,8 @@ def avg_z_1_3d(ds, states, f_debug):
     return batch_mean(z_1_3d_list)
 
 if __name__ == '__main__':
+    print(' '.join(sys.argv))
+
     parser = get_arg_parser()
     args = parser.parse_args()
 
@@ -91,11 +93,11 @@ if __name__ == '__main__':
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
 
-    file_name = '{}.npz'.format(args.save_path)
-    best_file_name = '{}.best.npz'.format(args.save_path)
-    opt_file_name = '{}.grads.npz'.format(args.save_path)
-    best_opt_file_name = '{}.best.grads.npz'.format(args.save_path)
-    
+    args.file_name = '{}.npz'.format(args.save_path)
+    args.best_file_name = '{}.best.npz'.format(args.save_path)
+    args.opt_file_name = '{}.grads.npz'.format(args.save_path)
+    args.best_opt_file_name = '{}.best.grads.npz'.format(args.save_path)
+
     sw = StopWatch()
 
     print('Building and compiling the network')
@@ -106,6 +108,25 @@ if __name__ == '__main__':
     sw.print_elapsed()
     sw.reset()
 
+    summary = OrderedDict()
+    if args.start_from_ckpt and os.path.exists(args.file_name):
+        tparams = init_tparams_with_restored_value(tparams, args.file_name)
+        model = numpy.load(args.file_name)
+        for k, v in model.items():
+            if 'summary' in k:
+                summary[k] = list(v)
+            if 'time' in k:
+                summary[k] = list(v)
+        global_step = model['global_step']
+        epoch_step = model['epoch_step']
+        batch_step = model['batch_step']
+        print("Restore from the last checkpoint. "
+                "Restarting from %d step." % global_step)
+    else:
+        global_step = 0
+        epoch_step = 0
+        batch_step = 0
+
     print('Loading data streams from {}'.format(args.train_dataset))
     sync_data(args)
     datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
@@ -115,19 +136,24 @@ if __name__ == '__main__':
     print('Starting to train')
     epoch_sw = StopWatch()
     status_sw = StopWatch()
+    
+    # Sanity check
+    if args.start_from_ckpt:
+        val_nats = eval_model(valid_ds, states, f_log_prob)
+        if val_nats != summary['val_nats'][-1]:
+            raise ValueError("Sanity check failed, check values do not match.")
 
-    summary = OrderedDict()
     _best_score = numpy.iinfo(numpy.int32).max
-
-    global_step = 0
-    epoch_step = 0
-    batch_step = 0
-
     for e_idx in range(1, args.num_epochs+1):
+        if e_idx <= epoch_step+1:
+            print('Skip Epoch {}'.format(e_idx))
+            continue
+
         epoch_sw.reset()
         print('--')
         print('Epoch {} starts'.format(e_idx))
         print('--')
+ 
         
         total_ce_sum = 0.0
         total_frame_count = 0
@@ -184,17 +210,17 @@ if __name__ == '__main__':
             _best_score = val_nats
 
             best_params = unzip(tparams)
-            save_npz(best_file_name, global_step, epoch_step, batch_step,
+            save_npz(args.best_file_name, global_step, epoch_step, batch_step,
                  best_params, summary)
             best_opt_params = unzip(opt_tparams)
-            save_npz2(best_opt_file_name, best_opt_params)
-            print("Best checkpoint stored in: %s" % best_file_name)
+            save_npz2(args.best_opt_file_name, best_opt_params)
+            print("Best checkpoint stored in: %s" % args.best_file_name)
 
         params = unzip(tparams)
-        save_npz(file_name, global_step, epoch_step, batch_step, params, summary)
+        save_npz(args.file_name, global_step, epoch_step, batch_step, params, summary)
         opt_params = unzip(opt_tparams)
-        save_npz2(opt_file_name, opt_params)
-        print("Checkpointed in: %s" % file_name)
+        save_npz2(args.opt_file_name, opt_params)
+        print("Checkpointed in: %s" % args.file_name)
 
         epoch_step += 1
 
