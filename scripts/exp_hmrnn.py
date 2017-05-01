@@ -22,7 +22,7 @@ from libs.deep_lstm_builder import build_deep_lstm
 from data.fuel_utils import create_ivector_datastream
 
 from hmrnn.hmlstm_builder import build_graph_am
-from hmrnn.mixer import reset_state, insert_item2dict, unzip, save_npz
+from hmrnn.mixer import reset_state, insert_item2dict, unzip, save_npz, save_npz2
 
 def eval_model(ds, states, f_log_prob):
     total_ce_sum = 0.0
