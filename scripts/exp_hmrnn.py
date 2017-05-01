@@ -140,12 +140,13 @@ if __name__ == '__main__':
     # Sanity check
     if args.start_from_ckpt:
         val_nats = eval_model(valid_ds, states, f_log_prob)
+        import ipdb; ipdb.set_trace()
         if val_nats != summary['val_nats'][-1]:
             raise ValueError("Sanity check failed, check values do not match.")
 
     _best_score = numpy.iinfo(numpy.int32).max
     for e_idx in range(1, args.num_epochs+1):
-        if e_idx <= epoch_step+1:
+        if args.start_from_ckpt and e_idx <= epoch_step+1:
             print('Skip Epoch {}'.format(e_idx))
             continue
 
