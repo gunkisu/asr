@@ -19,7 +19,7 @@ from libs.lasagne_libs.updates import adam
 from lasagne.layers import count_params
 
 from libs.deep_lstm_builder import build_deep_lstm
-from data.fuel_utils import create_ivector_datastream
+from data.fuel_utils import create_ivector_datastream, create_ivector_test_datastream
 
 from hmrnn.hmlstm_builder import build_graph_am
 from hmrnn.mixer import reset_state, insert_item2dict, unzip, save_npz, save_npz2, init_tparams_with_restored_value
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     parser = get_arg_parser()
     parser.add_argument('model')
     parser.add_argument('dataset')
-    parser.add_argument('wxfilename')
+#    parser.add_argument('wxfilename')
     
     args = parser.parse_args()
     print(args)
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     print('Loading data streams from {}'.format(args.data_path))
     sync_data(args)
 
-    ds = create_ivector_test_datastream(args.data_path, args.dataset, args.batch_size, args.delay)
+    ds = create_ivector_test_datastream(args.data_path, args.dataset, args.batch_size)
 
     print('Starting to train')
     epoch_sw = StopWatch()
@@ -120,7 +120,7 @@ if __name__ == '__main__':
     for b_idx, batch in enumerate(ds.get_epoch_iterator(), start=1):
         reset_state(states)
        
-        input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = batch
+        input_data, input_mask, ivector_data, ivector_mask = batch
         n_batch, n_seq, n_feat = input_data.shape
         if n_batch < args.batch_size:
             continue
