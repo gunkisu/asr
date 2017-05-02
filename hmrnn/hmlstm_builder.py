@@ -177,7 +177,7 @@ def build_graph_am(FLAGS):
   f_update = theano.function([learning_rate], [], updates=opt_updates,
                              on_unused_input='ignore')
   #print("Building f_debug function")
-  f_debug = theano.function(inps,
+  f_debug = theano.function([x],
                             [h_rnn_1_3d, h_rnn_2_3d, h_rnn_3_3d,
                              z_1_3d, z_2_3d],
                             updates=f_prop_updates,

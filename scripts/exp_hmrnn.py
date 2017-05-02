@@ -70,11 +70,10 @@ def avg_z_1_3d(ds, states, f_debug):
             continue
 
         input_data = numpy.transpose(input_data, (1, 0, 2))
-        target_data = numpy.transpose(target_data, (1, 0))
-        target_mask = numpy.transpose(target_mask, (1, 0))
+#        target_data = numpy.transpose(target_data, (1, 0))
+#        target_mask = numpy.transpose(target_mask, (1, 0))
 
-        h_rnn_1_3d, h_rnn_2_3d, h_rnn_3_3d, z_1_3d, z_2_3d = \
-            f_debug(input_data, target_data, target_mask)
+        h_rnn_1_3d, h_rnn_2_3d, h_rnn_3_3d, z_1_3d, z_2_3d = f_debug(input_data)
 
         z_1_3d_list.append(z_1_3d)
         
