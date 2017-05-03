@@ -80,6 +80,20 @@ def avg_z_1_3d(ds, states, f_debug):
         
     return batch_mean(z_1_3d_list)
 
+
+def compress_batch(batch, z_1_3d):
+    z_1_3d_bmask = z_1_3d > 0
+    filtered = batch[z_1_3d_bmask]
+    seq_lens = z_1_3d.sum(axis=1)
+
+    compressed = []
+    sidx = 0
+    for sl in seq_lens:
+        compressed.append(filtered[sidx:sidx+sl])
+        sidx += sl
+    
+    return compressed
+
 if __name__ == '__main__':
     print(' '.join(sys.argv))
 
@@ -125,8 +139,12 @@ if __name__ == '__main__':
         if n_batch < args.batch_size:
             continue
 
-        input_data = numpy.transpose(input_data, (1, 0, 2))
-        _, _, _, z_1_3d, _ = f_debug(input_data)
+        input_data_trans = numpy.transpose(input_data, (1, 0, 2))
+        _, _, _, z_1_3d, _ = f_debug(input_data_trans)
+
+        z_1_3d_trans = numpy.transpose(z_1_3d, (1,0))
+        compressed_input_data = compress_batch(input_data, z_1_3d_trans)
+        compressed_input_mask = compress_batch(input_mask, z_1_3d_trans)
 
         import ipdb; ipdb.set_trace()
 
