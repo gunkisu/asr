@@ -59,7 +59,12 @@ def monitor(f_log_prob, FLAGS, valid_set, train_set=None, states=None):
   return returns
 
 def build_graph_am(FLAGS):
-  """Define training graph for acousic modeling"""
+  """Define training graph for acousic modeling. 
+  Parameters used: batch_size, n_hidden, n_input, use_impl_type, 
+    n_output_embed, n_class, weight_decay, grad_clipping, 
+    start_from_ckpt, opt_file_name, use_slope_annel
+  
+  """
   tparams = OrderedDict()
   trng = RandomStreams(
           np.random.RandomState(
@@ -68,9 +73,9 @@ def build_graph_am(FLAGS):
   
   # Define bunch of shared variables
   st_slope = sharedX(1., name='binary_sigmoid_gate')
-  init_state = np.zeros((3, 2, FLAGS.batch_size, FLAGS.n_hidden),
+  init_state = np.zeros((3, 2, FLAGS.n_batch, FLAGS.n_hidden),
                         dtype=np.float32)
-  init_bound = np.zeros((2, FLAGS.batch_size), dtype=np.float32)
+  init_bound = np.zeros((2, FLAGS.n_batch), dtype=np.float32)
   tstate = sharedX(init_state, name='rnn_state')
   tboundary = sharedX(init_bound, name='rnn_bound')
 
@@ -148,7 +153,7 @@ def build_graph_am(FLAGS):
     cost += weights_norm * FLAGS.weight_decay
   #print("Computing the gradients")
   grads = tensor.grad(cost, wrt=itemlist(tparams))
-  grads = gradient_clipping(grads, tparams, FLAGS.grad_clipping)
+  grads = gradient_clipping(grads, tparams, FLAGS.gclip)
   # Compile the optimizer, the actual computational graph
   learning_rate = tensor.scalar(name='learning_rate')
   gshared = [theano.shared(p.get_value() * 0., name='%s_grad' % k)

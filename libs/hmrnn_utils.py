@@ -2,7 +2,7 @@ import argparse
 import os
 
 def add_deep_lstm_params(parser):
-    parser.add_argument('--batch-size', default=2, help='batch size', type=int)
+    parser.add_argument('--n-batch', default=2, help='batch size', type=int)
     parser.add_argument('--n-hidden', default=512, help='number of hidden units', type=int)
     parser.add_argument('--learn-rate', default=0.0001, help='learning rate', type=float)
     parser.add_argument('--use-impl-type', type=str, default='base')
@@ -21,7 +21,7 @@ def add_deep_lstm_params(parser):
     parser.add_argument('--no-copy', help='do not copy data from NFS to local machine', action='store_true')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally', default='/Tmp/songinch/data/speech')
     parser.add_argument('--log-dir', help=' ', default='hmrnn_train_log')
-    parser.add_argument('--grad-clipping', default=1.0, help='gradient clipping', type=float)
+    parser.add_argument('--gclip', default=1.0, help='gradient clipping', type=float)
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -34,9 +34,9 @@ def get_save_path(args):
     fn = '{}_nh{}'.format(fn, args.n_hidden)
     fn = '{}_oe{}'.format(fn, args.n_output_embed)
     fn = '{}_nc{}'.format(fn, args.n_class)
-    fn = '{}_b{}'.format(fn, args.batch_size)
+    fn = '{}_b{}'.format(fn, args.n_batch)
     fn = '{}_lr{}'.format(fn, args.learn_rate)
-    fn = '{}_gc{}'.format(fn, args.grad_clipping)
+    fn = '{}_gc{}'.format(fn, args.gclip)
     fn = '{}_wd{}'.format(fn, args.weight_decay)
     fn = '{}_{}'.format(fn, os.path.splitext(os.path.basename(args.data_path))[0])
     fn = '{}_{}'.format(fn, args.train_dataset)
