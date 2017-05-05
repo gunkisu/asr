@@ -9,6 +9,12 @@ class UtilsTest(unittest.TestCase):
     def setUp(self):
         self.a_seq = np.array([ [[[i, i+1] for i in range(1,10,2)]]])
 
+        self.inp = np.arange(16).reshape((2,4,2))
+        self.inp_mask = np.array([[0, 0, 1, 1], [1, 0, 0, 1]])
+
+        self.inp_pad_mask = np.array([[1, 1, 1, 0], [1, 1, 1, 1]])
+
+
     def tearDown(self):
         pass
 
@@ -34,11 +40,15 @@ class UtilsTest(unittest.TestCase):
         self.assertTrue(np.allclose(expanded_seq[:orig_len,:], answer))
       
     def testCompressBatch(self):
-        inp = np.arange(16).reshape((2,4,2))
-        inp_mask = np.array([[0, 0, 1, 1], [1, 0, 0, 1]])
-        compressed = utils.compress_batch(inp, inp_mask)
+        compressed = utils.compress_batch(self.inp, self.inp_mask)
         answer = [np.array([[0,1], [4,5], [6,7]]), np.array([[8,9], [14,15]])]
         self.assertTrue(all([np.allclose(x, y) for x, y in zip(compressed, answer)]))
+
+    def testPadBatch(self):
+        compressed = utils.compress_batch(self.inp, self.inp_mask)
+        padded = utils.pad_batch(compressed)
+        answer = [np.array([[0,1], [4,5], [6,7]]), np.array([[8,9], [14,15], [0, 0]])]
+        self.assertTrue(all([np.allclose(x, y) for x, y in zip(padded, answer)]))
 
 
 

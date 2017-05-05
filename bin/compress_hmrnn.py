@@ -11,7 +11,7 @@ from lasagne.layers import get_all_params, count_params
 
 from libs.hmrnn_utils import get_arg_parser, get_save_path
 from libs.utils import StopWatch, Rsync, gen_win, save_network, save_eval_history, best_fer, show_status2, sync_data, \
-    find_reload_model, load_or_init_model, compress_batch
+    find_reload_model, load_or_init_model, compress_batch, pad_batch
 from libs.comp_graph_utils import trainer, predictor, eval_net
 
 from libs.lasagne_libs.utils import set_model_param_value
@@ -132,6 +132,9 @@ if __name__ == '__main__':
         z_1_3d_trans = numpy.transpose(z_1_3d, (1,0))
         compressed_input_data = compress_batch(input_data, z_1_3d_trans)
         compressed_input_mask = compress_batch(input_mask, z_1_3d_trans)
+
+        new_batch = pad_batch(compressed_input_data)
+        new_batch_mask = pad_batch(compressed_input_mask)
 
         
         
