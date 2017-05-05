@@ -234,6 +234,35 @@ def skip_frames(batch, every_n, random_choice=False):
         new_batch.append(new_src_data)
     return new_batch
 
+
+def split(row):
+    segs = []
+    for i, item in enumerate(row):
+        if i == 0:
+            seg = [item]
+            continue
+
+        if item > 0:
+            segs.append(seg)
+            seg = [item]
+        else:
+            seg.append(item)
+
+    segs.append(seg)
+    
+    return segs
+
+def seg_len(z_1_3d):
+    a_list = []
+    for row in z_1_3d:
+        a_list.append(split(row))
+    
+    lens = []
+    for row in a_list:
+        lens.append([len(seg) for seg in row])
+           
+    return lens
+
 def compress_batch(batch, z_1_3d):
     z_1_3d[:,0] = 1.0 # Always keep the first frame
     z_1_3d_bmask = z_1_3d > 0
@@ -246,7 +275,22 @@ def compress_batch(batch, z_1_3d):
         compressed.append(filtered[sidx:sidx+sl])
         sidx += sl
     
-    return compressed
+    return pad_batch(compressed)
 
 def pad_batch(batch):
-    return batch
+    shapes = [b.shape for b in batch]
+
+    seq_lens = [shape[0] for shape in shapes]
+    max_seq_len = max(seq_lens)
+    rest_shape = shapes[0][1:]
+    if not all([shape[1:] == rest_shape for shape in shapes]):
+                raise ValueError("All dimensions except length must be equal")
+
+    dtype = batch[0].dtype
+
+    padded_batch = np.zeros( (len(batch), max_seq_len) + rest_shape, dtype=dtype)
+
+    for i, b in enumerate(batch):
+        padded_batch[i,:len(b)] = b
+
+    return padded_batch
