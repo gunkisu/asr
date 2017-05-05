@@ -233,3 +233,20 @@ def skip_frames(batch, every_n, random_choice=False):
 
         new_batch.append(new_src_data)
     return new_batch
+
+def compress_batch(batch, z_1_3d):
+    z_1_3d[:,0] = 1.0 # Always keep the first frame
+    z_1_3d_bmask = z_1_3d > 0
+    filtered = batch[z_1_3d_bmask]
+    seq_lens = z_1_3d.sum(axis=1)
+
+    compressed = []
+    sidx = 0
+    for sl in seq_lens:
+        compressed.append(filtered[sidx:sidx+sl])
+        sidx += sl
+    
+    return compressed
+
+def pad_batch(batch):
+    return batch
