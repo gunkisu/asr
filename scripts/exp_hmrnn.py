@@ -139,7 +139,6 @@ if __name__ == '__main__':
     # Sanity check
     if args.start_from_ckpt:
         val_nats = eval_model(valid_ds, states, f_log_prob)
-        import ipdb; ipdb.set_trace()
         if val_nats != summary['val_nats'][-1]:
             raise ValueError("Sanity check failed, check values do not match.")
 

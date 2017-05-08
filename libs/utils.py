@@ -275,7 +275,7 @@ def compress_batch(batch, z_1_3d):
         compressed.append(filtered[sidx:sidx+sl])
         sidx += sl
     
-    return pad_batch(compressed)
+    return pad_batch(compressed), seg_len(z_1_3d)
 
 def pad_batch(batch):
     shapes = [b.shape for b in batch]

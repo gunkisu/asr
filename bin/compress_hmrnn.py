@@ -109,9 +109,8 @@ if __name__ == '__main__':
     print('Loading data streams from {}'.format(args.data_path))
     sync_data(args)
 
-    ds = create_ivector_test_datastream(args.data_path, args.dataset, args.batch_size)
+    ds = create_ivector_datastream(args.data_path, args.dataset, args.batch_size)
 
-    print('Starting to train')
     epoch_sw = StopWatch()
     status_sw = StopWatch()
     
@@ -121,7 +120,7 @@ if __name__ == '__main__':
     for b_idx, batch in enumerate(ds.get_epoch_iterator(), start=1):
         reset_state(states)
        
-        input_data, input_mask, ivector_data, ivector_mask = batch
+        input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = batch
         n_batch, n_seq, n_feat = input_data.shape
         if n_batch < args.batch_size:
             continue
@@ -132,9 +131,10 @@ if __name__ == '__main__':
         z_1_3d_trans = numpy.transpose(z_1_3d, (1,0))
         compressed_input_data = compress_batch(input_data, z_1_3d_trans)
         compressed_input_mask = compress_batch(input_mask, z_1_3d_trans)
+        compressed_target_data = compress_batch(target_data, z_1_3d_trans)
+        compressed_target_mask = compress_batch(target_mask, z_1_3d_trans)
+        
 
-        new_batch = pad_batch(compressed_input_data)
-        new_batch_mask = pad_batch(compressed_input_mask)
 
         
         

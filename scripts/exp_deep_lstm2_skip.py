@@ -123,26 +123,26 @@ if __name__ == '__main__':
         print('--')
         
         total_ce_sum = 0.0
-        total_frame_count = 0
+        total_ce_frame_count = 0
         status_sw = StopWatch()
 
         for b_idx, data in enumerate(train_ds.get_epoch_iterator(), start=1):
             input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = data
 
-            s_input_data, s_input_mask, s_ivector_data, s_ivector_mask, _, _ = \
+            s_input_data, s_input_mask, s_ivector_data, s_ivector_mask, s_target_data, s_target_mask = \
                 skip_frames(data, args.skip, args.skip_random)
 
             if args.use_ivector_input:
-                train_output = training_fn(s_input_data, s_input_mask, s_ivector_data, target_data, target_mask)
+                train_output = training_fn(s_input_data, s_input_mask, s_ivector_data, s_target_data, s_target_mask)
             else:
-                train_output = training_fn(s_input_data, s_input_mask, target_data, target_mask)
+                train_output = training_fn(s_input_data, s_input_mask, s_target_data, s_target_mask)
 
             ce_frame_sum, network_grads_norm = train_output
             total_ce_sum += ce_frame_sum
-            total_frame_count += target_mask.sum()
+            total_ce_frame_count += s_target_mask.sum()
 
             if b_idx%args.log_freq == 0: 
-                show_status(args.save_path, total_ce_sum / total_frame_count, network_grads_norm, b_idx, args.batch_size, e_idx)
+                show_status(args.save_path, total_ce_sum / total_ce_frame_count, network_grads_norm, b_idx, args.batch_size, e_idx)
                 status_sw.print_elapsed(); status_sw.reset()
             
         print('End of Epoch {}'.format(e_idx))
