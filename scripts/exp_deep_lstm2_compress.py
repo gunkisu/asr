@@ -12,8 +12,8 @@ from lasagne.layers import get_all_params, count_params
 
 from libs.deep_lstm_utils import get_arg_parser, get_save_path
 from libs.utils import StopWatch, Rsync, gen_win, save_network, save_eval_history, best_fer, show_status, sync_data, \
-    find_reload_model, load_or_init_model, skip_frames, compress_batch
-from libs.comp_graph_utils import trainer, predictor, eval_net_skip
+    find_reload_model, load_or_init_model, skip_frames, compress_batch, seg_len_info
+from libs.comp_graph_utils import trainer, predictor, eval_net_compress
 
 from libs.lasagne_libs.utils import set_model_param_value
 from libs.lasagne_libs.updates import adam
@@ -173,9 +173,8 @@ if __name__ == '__main__':
             _, _, _, z_1_3d, _ = f_debug(input_data_trans)
 
             z_1_3d_trans = numpy.transpose(z_1_3d, (1,0))
-            compressed = [compress_batch(src, z_1_3d_trans) for src in data]
-            compressed_batch = [batch for batch, len_info in compressed]
-            compressed_len_info = [len_info for batch, len_info in compressed]
+            compressed_batch = [compress_batch(src, z_1_3d_trans) for src in data]
+            len_info = seg_len_info(z_1_3d_trans)
             
             if args.use_ivector_input:
                 train_output = training_fn(*compressed_batch)
@@ -199,8 +198,8 @@ if __name__ == '__main__':
         print('Evaluating the network on the validation dataset')
         eval_sw = StopWatch()
         #train_ce_frame, train_fer = eval_net(predict_fn, train_ds)
-        valid_ce_frame, valid_fer = eval_net_skip(predict_fn, valid_ds, args.skip, args.skip_random, args.use_ivector_input)
-        test_ce_frame, test_fer = eval_net_skip(predict_fn, test_ds, args.skip, args.skip_random, args.use_ivector_input)
+        valid_ce_frame, valid_fer = eval_net_compress(predict_fn, valid_ds, f_debug, args.batch_size, args.use_ivector_input)
+        test_ce_frame, test_fer = eval_net_compress(predict_fn, test_ds, f_debug, args.batch_size, args.use_ivector_input)
         eval_sw.print_elapsed()
 
         avg_train_ce = total_ce_sum / total_frame_count

@@ -7,7 +7,7 @@ from theano import tensor as T
 from lasagne.layers import get_output, get_all_params
 from lasagne.objectives import categorical_crossentropy
 
-from libs.utils import gen_win, skip_frames
+from libs.utils import gen_win, skip_frames, compress_batch, seg_len_info, uncompress_batch
 
 import itertools
 
@@ -235,6 +235,47 @@ def eval_net_skip(predict_fn, data_stream, skip, skip_random, use_ivectors=False
 
     return avg_ce, avg_fer
 
+def eval_net_compress(predict_fn, data_stream, f_debug, batch_size, use_ivectors=False):
+    data_iterator = data_stream.get_epoch_iterator()
+
+    total_ce_sum = 0.
+    total_ce_frame_count = 0
+    total_accuracy_sum = 0
+    total_frame_count = 0
+  
+    for b_idx, data in enumerate(data_iterator, start=1):
+        input_data, input_mask, ivector_data, ivector_mask, target_data, target_mask = data
+        n_batch, _, _ = input_data.shape
+        if n_batch != batch_size:
+            continue
+
+        input_data_trans = numpy.transpose(input_data, (1, 0, 2))
+        _, _, _, z_1_3d, _ = f_debug(input_data_trans)
+
+        z_1_3d_trans = numpy.transpose(z_1_3d, (1,0))
+        compressed_batch = [compress_batch(src, z_1_3d_trans) for src in data]
+        len_info = seg_len_info(z_1_3d_trans)
+        
+        if use_ivectors:
+            predict_output = predict_fn(*compressed_batch)
+        else:
+            predict_output = predict_fn(compressed_batch[0], compressed_batch[1], compressed_batch[4], compressed_batch[5])
+
+        ce_frame_sum, pred_idx = predict_output
+        pred_idx = uncompress_batch(pred_idx, len_info)
+        
+        match_data = (target_data == pred_idx)*target_mask
+ 
+        total_ce_sum += ce_frame_sum
+        total_ce_frame_count += compressed_batch[-1].sum()
+
+        total_accuracy_sum += match_data.sum()
+        total_frame_count += target_mask.sum()
+
+    avg_ce = total_ce_sum / total_ce_frame_count
+    avg_fer = 1.0 - (total_accuracy_sum / total_frame_count)
+
+    return avg_ce, avg_fer
 
 def eval_net_tbptt(predict_fn, data_stream, tbptt_layers, num_tbptt_steps, batch_size, right_context, use_ivectors=False, delay=0):
     data_iterator = data_stream.get_epoch_iterator()
