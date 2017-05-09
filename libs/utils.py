@@ -278,10 +278,11 @@ def compress_batch(batch, z_1_3d):
     return pad_batch(compressed)
 
 def uncompress_batch(compressed, seg_len_info):
-    n_batch, n_seq, n_feat = compressed.shape
+    n_batch, n_seq = compressed.shape[0], compressed.shape[1]
+    rest_shape = compressed.shape[2:]
 
     max_seq_len = sum(seg_len_info[0])
-    uncompressed = np.zeros( (n_batch, max_seq_len, n_feat))
+    uncompressed = np.zeros( (n_batch,max_seq_len) + rest_shape)
     
     for i, len_info in enumerate(seg_len_info):
         row = compressed[i]
