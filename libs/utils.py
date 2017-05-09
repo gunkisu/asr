@@ -252,7 +252,7 @@ def split(row):
     
     return segs
 
-def seg_len(z_1_3d):
+def seg_len_info(z_1_3d):
     a_list = []
     for row in z_1_3d:
         a_list.append(split(row))
@@ -275,7 +275,22 @@ def compress_batch(batch, z_1_3d):
         compressed.append(filtered[sidx:sidx+sl])
         sidx += sl
     
-    return pad_batch(compressed), seg_len(z_1_3d)
+    return pad_batch(compressed)
+
+def uncompress_batch(compressed, seg_len_info):
+    n_batch, n_seq, n_feat = compressed.shape
+
+    max_seq_len = sum(seg_len_info[0])
+    uncompressed = np.zeros( (n_batch, max_seq_len, n_feat))
+    
+    for i, len_info in enumerate(seg_len_info):
+        row = compressed[i]
+        
+        sidx = 0
+        for j, l in enumerate(len_info):
+            uncompressed[i,sidx:sidx+l] = row[j]
+            sidx += l
+    return uncompressed
 
 def pad_batch(batch):
     shapes = [b.shape for b in batch]

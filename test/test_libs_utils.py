@@ -10,12 +10,12 @@ class UtilsTest(unittest.TestCase):
         self.a_seq = np.array([ [[[i, i+1] for i in range(1,10,2)]]])
 
         self.inp = np.arange(16).reshape((2,4,2))
+        
         self.inp_mask = np.array([[0, 0, 1, 1], 
                                     [1, 0, 0, 1]])
 
         self.inp_pad_mask = np.array([[1, 1, 1, 0], 
                                         [1, 1, 1, 1]])
-
 
     def tearDown(self):
         pass
@@ -52,11 +52,22 @@ class UtilsTest(unittest.TestCase):
         answer = [np.array([[0,1], [4,5], [6,7]]), np.array([[8,9], [14,15], [0, 0]])]
         self.assertTrue(all([np.allclose(x, y) for x, y in zip(compressed, answer)]))
 
-    def test_seg_len(self):
-        lens = utils.seg_len(self.inp_mask)
+    def test_seg_len_info(self):
+        lens = utils.seg_len_info(self.inp_mask)
         answer = [[2,1,1], [3,1]]
         self.assertEqual(lens, answer)
    
+
+    def test_uncompress_batch(self):
+        compressed = utils.compress_batch(self.inp, self.inp_mask)
+        lens = utils.seg_len_info(self.inp_mask)
+
+        answer = np.array([[[0, 1], [0,1], [4,5], [6,7]],
+            [[8,9],[8,9],[8,9],[14,15]]])
+        
+        self.assertTrue(np.allclose(utils.uncompress_batch(compressed, lens), answer))
+
+
 if __name__ == '__main__':
     unittest.main()
 
