@@ -10,7 +10,7 @@ import numpy
 
 from lasagne.layers import get_all_params, count_params
 
-from libs.deep_lstm_utils import get_arg_parser, get_save_path
+from libs.deep_lstm_utils import get_arg_parser 
 from libs.utils import StopWatch, Rsync, gen_win, save_network, save_eval_history, best_fer, show_status, sync_data, \
     find_reload_model, load_or_init_model, skip_frames, compress_batch, seg_len_info
 from libs.comp_graph_utils import trainer, predictor, eval_net_compress
@@ -21,28 +21,14 @@ from lasagne.layers import count_params
 
 from hmrnn.hmlstm_builder import build_graph_am
 from hmrnn.mixer import reset_state, insert_item2dict, unzip, save_npz, save_npz2, init_tparams_with_restored_value
+from libs.hmrnn_utils import add_hmrnn_graph_params
 
 from libs.deep_lstm_builder import build_deep_lstm
 from data.fuel_utils import create_ivector_datastream
 
-def add_hmrnn_opts(parser):
-    """Parameters used: n_batch, n_hidden, n_input, use_impl_type, 
-    n_output_embed, n_class, weight_decay, gclip, 
-    start_from_ckpt, opt_file_name, use_slope_annel"""
-    parser.add_argument('--n-batch', default=2, help='batch size', type=int)
-    parser.add_argument('--n-hidden', default=512, help='number of hidden units', type=int)
-    parser.add_argument('--use-impl-type', type=str, default='base')
-    parser.add_argument('--n-input', help='input dimension', default=123, type=int)
-    parser.add_argument('--n-class', help='output dimension', default=3436, type=int)
-    parser.add_argument('--n-output-embed', help=' ', default=512, type=int)
-    parser.add_argument('--weight-decay', type=float, default=0.0005)
-    parser.add_argument('--start-from-ckpt', action="store_true")
-    parser.add_argument('--use-slope-anneal', action='store_true')
-    parser.add_argument('--gclip', default=1.0, help='gradient clipping', type=float)
-
 if __name__ == '__main__':
     parser = get_arg_parser()
-    add_hmrnn_opts(parser)
+    add_hmrnn_graph_params(parser)
     parser.add_argument('model')
     args = parser.parse_args()
 
