@@ -177,10 +177,13 @@ if __name__ == '__main__':
             total_ce_sum += tr_cost.sum()
             total_frame_count += tr_cost_len.sum()
 
+            f_update(args.learn_rate)
+            
+            # debugging
+            reset_state(states)
             _, _, _, z_1_3d, _ = f_debug(input_data, target_data, target_mask)
             z_1_3d_list.append(z_1_3d)
             
-            f_update(args.learn_rate)
             
             if b_idx%args.log_freq == 0: 
 
