@@ -235,7 +235,7 @@ def eval_net_skip(predict_fn, data_stream, skip, skip_random, use_ivectors=False
 
     return avg_ce, avg_fer
 
-def eval_net_compress(predict_fn, data_stream, f_debug, batch_size, use_ivectors=False):
+def eval_net_compress(predict_fn, data_stream, hmrnn, batch_size, use_ivectors=False):
     data_iterator = data_stream.get_epoch_iterator()
 
     total_ce_sum = 0.
@@ -249,12 +249,10 @@ def eval_net_compress(predict_fn, data_stream, f_debug, batch_size, use_ivectors
         if n_batch != batch_size:
             continue
 
-        input_data_trans = numpy.transpose(input_data, (1, 0, 2))
-        _, _, _, z_1_3d, _ = f_debug(input_data_trans)
-
-        z_1_3d_trans = numpy.transpose(z_1_3d, (1,0))
-        compressed_batch = [compress_batch(src, z_1_3d_trans) for src in data]
-        len_info = seg_len_info(z_1_3d_trans)
+        hmrnn.reset()
+        z_1_3d = hmrnn.compute_z_1_3d(input_data)
+        compressed_batch = [compress_batch(src, z_1_3d) for src in data]
+        len_info = seg_len_info(z_1_3d)
         
         if use_ivectors:
             predict_output = predict_fn(*compressed_batch)
