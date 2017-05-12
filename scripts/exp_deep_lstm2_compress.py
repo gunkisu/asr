@@ -10,7 +10,7 @@ import numpy
 
 from lasagne.layers import get_all_params, count_params
 
-from libs.deep_lstm_utils import get_arg_parser 
+from libs.deep_lstm_utils import get_arg_parser, get_save_path
 from libs.utils import StopWatch, Rsync, gen_win, save_network, save_eval_history, best_fer, show_status, sync_data, \
     find_reload_model, load_or_init_model, skip_frames, compress_batch, seg_len_info
 from libs.comp_graph_utils import trainer, predictor, eval_net_compress
@@ -19,7 +19,7 @@ from libs.lasagne_libs.utils import set_model_param_value
 from libs.lasagne_libs.updates import adam
 from lasagne.layers import count_params
 
-from hmrnn.hmlstm_builder import build_graph_am
+from hmrnn.hmlstm_builder import build_graph_am, HMRNNModel
 from hmrnn.mixer import reset_state, insert_item2dict, unzip, save_npz, save_npz2, init_tparams_with_restored_value
 from libs.hmrnn_utils import add_hmrnn_graph_params
 
@@ -54,18 +54,17 @@ if __name__ == '__main__':
     sw = StopWatch()
     
     print('Loading a hmrnn model')
-    f_prop, f_update, f_log_prob, f_debug, tparams, opt_tparams, \
-        states, st_slope = build_graph_am(args)
-
-    sw.print_elapsed()
-    sw.reset()
+    hmrnn = HMRNNModel(args)
 
     if not os.path.exists(args.model):
         print('File not found: {}'.format(args.model))
         sys.exit(1)
 
-    tparams = init_tparams_with_restored_value(tparams, args.model)
-    
+    hmrnn.load(args.model)
+
+    sw.print_elapsed()
+    sw.reset()
+
     print('Build and compile network')
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
@@ -155,13 +154,11 @@ if __name__ == '__main__':
             if n_batch != args.batch_size:
                 continue
 
-            input_data_trans = numpy.transpose(input_data, (1, 0, 2))
-            _, _, _, z_1_3d, _ = f_debug(input_data_trans)
-
-            z_1_3d_trans = numpy.transpose(z_1_3d, (1,0))
-            compressed_batch = [compress_batch(src, z_1_3d_trans) for src in data]
-            len_info = seg_len_info(z_1_3d_trans)
-            
+            hmrnn.reset()
+            z_1_3d = hmrnn.compute_z_1_3d(input_data)
+            compressed_batch = [compress_batch(src, z_1_3d) for src in data]
+            len_info = seg_len_info(z_1_3d)
+                        
             if args.use_ivector_input:
                 train_output = training_fn(*compressed_batch)
             else:

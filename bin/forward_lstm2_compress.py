@@ -21,8 +21,8 @@ from data.wsj.fuel_utils import create_ivector_test_datastream, get_uttid_stream
 
 from libs.comp_graph_utils import ff
 
-from hmrnn.hmlstm_builder import build_graph_am
-from hmrnn.mixer import reset_state, init_tparams_with_restored_value
+from hmrnn.hmlstm_builder import HMRNNModel
+from hmrnn.mixer import reset_state
 
 from libs.hmrnn_utils import add_hmrnn_graph_params
 
@@ -55,10 +55,9 @@ if __name__ == '__main__':
         sys.exit(1)
 
     print('Loading an hmrnn model')
-    f_prop, f_update, f_log_prob, f_debug, tparams, opt_tparams, \
-        states, st_slope = build_graph_am(args)
-  
-    tparams = init_tparams_with_restored_value(tparams, args.hmrnn_model)
+
+    hmrnn = HMRNNModel(args)
+    hmrnn.load(args.hmrnn_model)
 
     input_data = T.ftensor3('input_data')
     input_mask = T.fmatrix('input_mask')
@@ -107,13 +106,11 @@ if __name__ == '__main__':
         feat_lens = input_mask.sum(axis=1)
 
         print('Feed-forwarding...', file=sys.stderr)
-
-        input_data_trans = numpy.transpose(input_data, (1, 0, 2))
-        _, _, _, z_1_3d, _ = f_debug(input_data_trans)
-
-        z_1_3d_trans = numpy.transpose(z_1_3d, (1,0))
-        compressed_batch = [compress_batch(src, z_1_3d_trans) for src in feat_batch]
-        len_info = seg_len_info(z_1_3d_trans)
+    
+        hmrnn.reset()
+        z_1_3d = hmrnn.compute_z_1_3d(input_data)
+        compressed_batch = [compress_batch(src, z_1_3d) for src in feat_batch]
+        len_info = seg_len_info(z_1_3d)
         
         if args.use_ivector_input:
             net_output, = ff_fn(*compressed_batch[:3])
