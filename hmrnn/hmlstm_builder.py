@@ -22,6 +22,30 @@ from model import HMLSTMModule
 from model import LinearCell
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
+from mixer import init_tparams_with_restored_value
+
+class HMRNNModel:
+    def __init__(self, FLAGS):
+        f_prop, f_update, f_log_prob, f_debug, tparams, opt_tparams, \
+            states, st_slope = build_graph_am(FLAGS)
+        
+        self.f_prop = f_prop
+        self.f_debug = f_debug
+        self.states = states
+        self.tparams = tparams
+
+    def load(self, hmrnn_model):
+        self.tparams = init_tparams_with_restored_value(self.tparams, hmrnn_model)
+
+    def reset(self):
+        reset_state(self.states)
+
+    def compute_z_1_3d(self, input_data):
+        input_data_trans = np.transpose(input_data, (1, 0, 2))
+        _, _, _, z_1_3d, _ = self.f_debug(input_data_trans)
+        return np.transpose(z_1_3d, (1,0))
+
+
 
 def monitor(f_log_prob, FLAGS, valid_set, train_set=None, states=None):
   print("Start monitoring phase")
