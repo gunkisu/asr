@@ -120,7 +120,6 @@ if __name__ == '__main__':
         else:
             net_output, = ff_fn(*compressed_batch[:2])
 
-        uncompress_batch(net_output, len_info)    
         net_output = uncompress_batch(net_output, len_info)
 
         print('Writing outputs...', file=sys.stderr)
