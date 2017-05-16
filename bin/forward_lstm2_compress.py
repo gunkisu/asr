@@ -29,6 +29,8 @@ from libs.hmrnn_utils import add_hmrnn_graph_params
 import kaldi_io
 
 if __name__ == '__main__':
+    print(' '.join(sys.argv), file=sys.stderr)
+
     parser = get_arg_parser()
     add_hmrnn_graph_params(parser)
 
@@ -94,6 +96,9 @@ if __name__ == '__main__':
 
     writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 
+    orig_len = 0
+    compressed_len = 0
+
     for batch_idx, (feat_batch, uttid_batch) in enumerate(
             zip(test_ds.get_epoch_iterator(), uttid_stream.get_epoch_iterator())):
         input_data, input_mask, ivector_data, ivector_mask = feat_batch 
@@ -112,6 +117,12 @@ if __name__ == '__main__':
         compressed_batch = [compress_batch(src, z_1_3d) for src in feat_batch]
         len_info = seg_len_info(z_1_3d)
         
+        comp_input_mask = compressed_batch[1]
+        comp_feat_lens = comp_input_mask.sum(axis=1)
+
+        orig_len += sum(feat_lens)
+        compressed_len += sum(comp_feat_lens)
+
         if args.use_ivector_input:
             net_output, = ff_fn(*compressed_batch[:3])
         else:
@@ -125,3 +136,6 @@ if __name__ == '__main__':
             writer.write(uttid.encode('ascii'), numpy.log(output[:valid_len]))
 
     writer.close()
+    
+    print('Compression ratio: {}'.format(float(compressed_len)/orig_len), file=sys.stderr)
+

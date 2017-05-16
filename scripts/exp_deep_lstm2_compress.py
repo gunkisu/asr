@@ -27,6 +27,8 @@ from libs.deep_lstm_builder import build_deep_lstm
 from data.fuel_utils import create_ivector_datastream
 
 if __name__ == '__main__':
+    print(' '.join(sys.argv))
+
     parser = get_arg_parser()
     add_hmrnn_graph_params(parser)
     parser.add_argument('model')
