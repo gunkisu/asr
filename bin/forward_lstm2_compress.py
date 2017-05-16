@@ -99,6 +99,8 @@ if __name__ == '__main__':
     orig_len = 0
     compressed_len = 0
 
+    n_examples = 0
+
     for batch_idx, (feat_batch, uttid_batch) in enumerate(
             zip(test_ds.get_epoch_iterator(), uttid_stream.get_epoch_iterator())):
         input_data, input_mask, ivector_data, ivector_mask = feat_batch 
@@ -110,8 +112,6 @@ if __name__ == '__main__':
         uttid_batch, = uttid_batch
         feat_lens = input_mask.sum(axis=1)
 
-        print('Feed-forwarding...', file=sys.stderr)
-    
         hmrnn.reset()
         z_1_3d = hmrnn.compute_z_1_3d(input_data)
         compressed_batch = [compress_batch(src, z_1_3d) for src in feat_batch]
@@ -130,10 +130,12 @@ if __name__ == '__main__':
 
         net_output = uncompress_batch(net_output, len_info)
 
-        print('Writing outputs...', file=sys.stderr)
         for out_idx, (output, uttid) in enumerate(zip(net_output, uttid_batch)):
             valid_len = feat_lens[out_idx]
             writer.write(uttid.encode('ascii'), numpy.log(output[:valid_len]))
+
+        n_examples += n_batch
+        print('{} examples processed'.format(n_examples), file=sys.stderr)
 
     writer.close()
     
