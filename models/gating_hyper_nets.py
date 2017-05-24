@@ -5,19 +5,19 @@ from lasagne.layers import InputLayer, DenseLayer, ConcatLayer, SliceLayer, Glob
 from libs.lasagne_libs.hyper_layers import ScalingHyperLSTMLayer, ProjectionHyperLSTMLayer
 from libs.lasagne_libs.recurrent_layers import (LSTMLayer,
                                                 ProjectLSTMLayer,
-                                                FixedLayerNormProjectLSTMLayer,
                                                 LayerNormProjectLSTMLayer,
                                                 LayerNormLSTMLayer,
                                                 CondLayerNormProjectLSTMLayer,
                                                 CondLayerNormLSTMLayer,
-                                                FixedCondLayerNormProjectLSTMLayer,
                                                 InputCondLayerNormProjectLSTMLayer,
                                                 InputCondLayerNormLSTMLayer,
-                                                FixedInputCondLayerNormProjectLSTMLayer,
                                                 MaxCondLayerNormProjectLSTMLayer,
-                                                FixedMaxCondLayerNormProjectLSTMLayer,
                                                 MaxInputCondLayerNormProjectLSTMLayer,
-                                                FixedMaxInputCondLayerNormProjectLSTMLayer)
+                                                ProjectLSTM_v0_1_Layer,
+                                                LayerNormProjectLSTM_v0_1_Layer,
+                                                LayerNormProjectLSTM_v0_2_Layer,
+                                                CondLayerNormProjectLSTM_v0_1_Layer,
+                                                CondLayerNormProjectLSTM_v0_2_Layer)
 
 def deep_scaling_hyper_model(input_var,
                              mask_var,
@@ -343,131 +343,6 @@ def deep_projection_cond_ln_model(input_var,
                                                            num_factors=num_factors,
                                                            grad_clipping=grad_clipping,
                                                            backwards=True)
-
-            cond_layer_list.append(fwd_feat_layer)
-            cond_layer_list.append(bwd_feat_layer)
-        else:
-            # forward
-            fwd_feat_layer = ProjectLSTMLayer(incoming=prev_input_layer,
-                                              mask_input=mask_layer,
-                                              num_units=num_units,
-                                              num_factors=num_factors,
-                                              grad_clipping=grad_clipping,
-                                              backwards=False)
-
-            # backward
-            bwd_feat_layer = ProjectLSTMLayer(incoming=prev_input_layer,
-                                              mask_input=mask_layer,
-                                              num_units=num_units,
-                                              num_factors=num_factors,
-                                              grad_clipping=grad_clipping,
-                                              backwards=True)
-
-        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
-                                       axis=-1)
-
-    ################
-    # output layer #
-    ################
-    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
-                                    p=dropout)
-    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
-                                      num_outputs=num_outputs,
-                                      nonlinearity=None)
-    return output_layer, cond_layer_list
-
-def deep_projection_ln_lstm_model_fix(input_var,
-                                      mask_var,
-                                      num_inputs,
-                                      num_outputs,
-                                      num_layers,
-                                      num_units,
-                                      grad_clipping=1,
-                                      dropout=0.2):
-    ###############
-    # input layer #
-    ###############
-    input_layer = InputLayer(shape=(None, None, num_inputs),
-                             input_var=input_var)
-    mask_layer = InputLayer(shape=(None, None),
-                            input_var=mask_var)
-
-    #####################
-    # stacked rnn layer #
-    #####################
-    prev_input_layer = input_layer
-    for l  in range(num_layers):
-        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
-                                        p=dropout)
-
-        fwd_feat_layer = FixedLayerNormProjectLSTMLayer(incoming=prev_input_layer,
-                                                        mask_input=mask_layer,
-                                                        num_units=num_units,
-                                                        grad_clipping=grad_clipping,
-                                                        backwards=False)
-
-        # backward
-        bwd_feat_layer = FixedLayerNormProjectLSTMLayer(incoming=prev_input_layer,
-                                                        mask_input=mask_layer,
-                                                        num_units=num_units,
-                                                        grad_clipping=grad_clipping,
-                                                        backwards=True)
-
-        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
-                                       axis=-1)
-
-    ################
-    # output layer #
-    ################
-    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
-                                    p=dropout)
-    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
-                                      num_outputs=num_outputs,
-                                      nonlinearity=None)
-    return output_layer
-
-def deep_projection_cond_ln_model_fix(input_var,
-                                      mask_var,
-                                      num_inputs,
-                                      num_outputs,
-                                      num_layers,
-                                      num_conds,
-                                      num_factors,
-                                      num_units,
-                                      grad_clipping=1,
-                                      dropout=0.2):
-    ###############
-    # input layer #
-    ###############
-    input_layer = InputLayer(shape=(None, None, num_inputs),
-                             input_var=input_var)
-    mask_layer = InputLayer(shape=(None, None),
-                            input_var=mask_var)
-
-    #####################
-    # stacked rnn layer #
-    #####################
-    cond_layer_list = []
-    prev_input_layer = input_layer
-    for l  in range(num_layers):
-        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
-                                        p=dropout)
-        if l<num_conds:
-            # forward
-            fwd_feat_layer = FixedCondLayerNormProjectLSTMLayer(incoming=prev_input_layer,
-                                                                mask_input=mask_layer,
-                                                                num_units=num_units,
-                                                                num_factors=num_factors,
-                                                                grad_clipping=grad_clipping,
-                                                                backwards=False)
-
-            # backward
-            bwd_feat_layer = FixedCondLayerNormProjectLSTMLayer(incoming=prev_input_layer,
-                                                                mask_input=mask_layer,
-                                                                num_units=num_units,
-                                                                num_factors=num_factors,
-                                                                grad_clipping=grad_clipping,
-                                                                backwards=True)
 
             cond_layer_list.append(fwd_feat_layer)
             cond_layer_list.append(bwd_feat_layer)
@@ -1226,4 +1101,329 @@ def deep_ivector_ln_model(input_var,
                                       nonlinearity=None)
     return output_layer, cond_layer_list
 
+
+################
+# fix versions #
+################
+def deep_prj_lstm_model_v1(input_var,
+                           mask_var,
+                           num_inputs,
+                           num_outputs,
+                           num_layers,
+                           num_units,
+                           num_prjs,
+                           grad_clipping=1,
+                           dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    prev_input_layer = input_layer
+    for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+
+        fwd_feat_layer = ProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                mask_input=mask_layer,
+                                                num_units=num_units,
+                                                num_prjs=num_prjs,
+                                                grad_clipping=grad_clipping,
+                                                backwards=False)
+
+        # backward
+        bwd_feat_layer = ProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                mask_input=mask_layer,
+                                                num_units=num_units,
+                                                num_prjs=num_prjs,
+                                                grad_clipping=grad_clipping,
+                                                backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer
+
+def deep_prj_lstm_ln_model_v1(input_var,
+                              mask_var,
+                              num_inputs,
+                              num_outputs,
+                              num_layers,
+                              num_units,
+                              num_prjs,
+                              grad_clipping=1,
+                              dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    prev_input_layer = input_layer
+    for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+
+        fwd_feat_layer = LayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                         mask_input=mask_layer,
+                                                         num_units=num_units,
+                                                         num_prjs=num_prjs,
+                                                         grad_clipping=grad_clipping,
+                                                         backwards=False)
+
+        # backward
+        bwd_feat_layer = LayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                         mask_input=mask_layer,
+                                                         num_units=num_units,
+                                                         num_prjs=num_prjs,
+                                                         grad_clipping=grad_clipping,
+                                                         backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer
+
+def deep_prj_lstm_ln_model_v2(input_var,
+                              mask_var,
+                              num_inputs,
+                              num_outputs,
+                              num_layers,
+                              num_units,
+                              num_prjs,
+                              grad_clipping=1,
+                              dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    prev_input_layer = input_layer
+    for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+
+        fwd_feat_layer = LayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                         mask_input=mask_layer,
+                                                         num_units=num_units,
+                                                         num_prjs=num_prjs,
+                                                         grad_clipping=grad_clipping,
+                                                         backwards=False)
+
+        # backward
+        bwd_feat_layer = LayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                         mask_input=mask_layer,
+                                                         num_units=num_units,
+                                                         num_prjs=num_prjs,
+                                                         grad_clipping=grad_clipping,
+                                                         backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer
+
+def deep_prj_lstm_dln_model_v1(input_var,
+                               mask_var,
+                               num_inputs,
+                               num_outputs,
+                               num_units,
+                               num_prjs,
+                               num_factors,
+                               num_layers,
+                               num_conds=-1,
+                               grad_clipping=0.0,
+                               dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    if num_conds==-1:
+        num_conds = num_layers
+
+    cond_layer_list = []
+    prev_input_layer = input_layer
+    for l in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+        if l<num_conds:
+            # forward
+            fwd_feat_layer = CondLayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                                 mask_input=mask_layer,
+                                                                 num_units=num_units,
+                                                                 num_prjs=num_prjs,
+                                                                 num_factors=num_factors,
+                                                                 grad_clipping=grad_clipping,
+                                                                 backwards=False)
+
+            # backward
+            bwd_feat_layer = CondLayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                                 mask_input=mask_layer,
+                                                                 num_units=num_units,
+                                                                 num_prjs=num_prjs,
+                                                                 num_factors=num_factors,
+                                                                 grad_clipping=grad_clipping,
+                                                                 backwards=True)
+
+            cond_layer_list.append(fwd_feat_layer)
+            cond_layer_list.append(bwd_feat_layer)
+        else:
+            # forward
+            fwd_feat_layer = LayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                             mask_input=mask_layer,
+                                                             num_units=num_units,
+                                                             num_prjs=num_prjs,
+                                                             grad_clipping=grad_clipping,
+                                                             backwards=False)
+
+            # backward
+            bwd_feat_layer = LayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                             mask_input=mask_layer,
+                                                             num_units=num_units,
+                                                             num_prjs=num_prjs,
+                                                             grad_clipping=grad_clipping,
+                                                             backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer, cond_layer_list
+
+
+def deep_prj_lstm_dln_model_v2(input_var,
+                               mask_var,
+                               num_inputs,
+                               num_outputs,
+                               num_units,
+                               num_prjs,
+                               num_factors,
+                               num_layers,
+                               num_conds=-1,
+                               grad_clipping=0.0,
+                               dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    if num_conds==-1:
+        num_conds = num_layers
+
+    cond_layer_list = []
+    prev_input_layer = input_layer
+    for l in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+        if l<num_conds:
+            # forward
+            fwd_feat_layer = CondLayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                                 mask_input=mask_layer,
+                                                                 num_units=num_units,
+                                                                 num_prjs=num_prjs,
+                                                                 num_factors=num_factors,
+                                                                 grad_clipping=grad_clipping,
+                                                                 backwards=False)
+
+            # backward
+            bwd_feat_layer = CondLayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                                 mask_input=mask_layer,
+                                                                 num_units=num_units,
+                                                                 num_prjs=num_prjs,
+                                                                 num_factors=num_factors,
+                                                                 grad_clipping=grad_clipping,
+                                                                 backwards=True)
+
+            cond_layer_list.append(fwd_feat_layer)
+            cond_layer_list.append(bwd_feat_layer)
+        else:
+            # forward
+            fwd_feat_layer = LayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                             mask_input=mask_layer,
+                                                             num_units=num_units,
+                                                             num_prjs=num_prjs,
+                                                             grad_clipping=grad_clipping,
+                                                             backwards=False)
+
+            # backward
+            bwd_feat_layer = LayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                             mask_input=mask_layer,
+                                                             num_units=num_units,
+                                                             num_prjs=num_prjs,
+                                                             grad_clipping=grad_clipping,
+                                                             backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer, cond_layer_list
 
