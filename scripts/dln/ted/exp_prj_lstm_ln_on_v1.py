@@ -61,7 +61,7 @@ def get_arg_parser():
 
 def get_save_path(args):
     path = args.save_path
-    path += '/ted_prj_lstm_ln_on_v1'
+    path += 'ted_prj_lstm_ln_on_v1'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
     path += '_gn{}'.format(args.grad_norm)
