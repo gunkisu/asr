@@ -13,7 +13,7 @@ import sys
 
 import pickle
 
-from libs.lasagne_libs.utils import get_model_param_values, get_update_params_values, set_model_param_value
+from libs.param_utils import get_model_param_values, get_update_params_values, set_model_param_value
 
 def run_and_wait_for_output_on_stderr(cmd, expected_str):
     proc = subprocess.Popen(cmd, shell=True, 
