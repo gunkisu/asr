@@ -250,7 +250,7 @@ if __name__ == '__main__':
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-    network_output = deep_prj_lstm_ln_model_v1(input_var=input_data,
+    network_output = deep_prj_lstm_ln_model_v2(input_var=input_data,
                                                mask_var=input_mask,
                                                num_inputs=input_dim,
                                                num_outputs=output_dim,
