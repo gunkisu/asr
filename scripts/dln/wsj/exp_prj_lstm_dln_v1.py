@@ -45,9 +45,9 @@ def add_params(parser):
 
     parser.add_argument('--feat_reg', default=0.0, help='feat_reg', type=float)
 
-    parser.add_argument('--train_dataset', help='dataset for training', default='train')
-    parser.add_argument('--valid_dataset', help='dataset for validation', default='dev')
-    parser.add_argument('--test_dataset', help='dataset for test', default='test')
+    parser.add_argument('--train_dataset', help='dataset for training', default='train_si284')
+    parser.add_argument('--valid_dataset', help='dataset for validation', default='test_dev93')
+    parser.add_argument('--test_dataset', help='dataset for test', default='test_eval92')
 
     parser.add_argument('--reload_model', help='model path to load')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally',
