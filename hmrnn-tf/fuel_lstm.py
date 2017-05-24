@@ -70,8 +70,8 @@ def build_graph(FLAGS):
   return Graph(cost, x, x_mask, state, last_state, y)
 
 
-def initial_states(FLAGS):
-  init_state = np.zeros([2, FLAGS.batch_size, FLAGS.n_hidden], dtype=np.float32)
+def initial_states(batch_size, n_hidden):
+  init_state = np.zeros([2, batch_size, n_hidden], dtype=np.float32)
   return init_state
 
 
@@ -95,11 +95,14 @@ def monitor(G, sess, train_set, valid_set, FLAGS,
     _cost = 0
     _len = 0
     for batch in train_set:
-      _state = initial_states(FLAGS)
       x, x_mask, _, _, y, _ = batch
       x = np.transpose(x, (1, 0, 2))
       x_mask = np.transpose(x_mask, (1, 0))
       y = np.transpose(y, (1, 0))
+
+      _, n_batch, _ = x.shape
+
+      _state = initial_states(n_batch, FLAGS.n_hidden)
 
       _tr_cost, _state = sess.run([G[0], G[4]],
                     feed_dict={G[1]: x, G[2]: x_mask, G[3]: _state, G.y: y})
@@ -112,12 +115,14 @@ def monitor(G, sess, train_set, valid_set, FLAGS,
   _cost = 0
   _len = 0
   for batch in valid_set:
-    _state = initial_states(FLAGS)
     x, x_mask, _, _, y, _ = batch
     x = np.transpose(x, (1, 0, 2))
     x_mask = np.transpose(x_mask, (1, 0))
     y = np.transpose(y, (1, 0))
 
+    _, n_batch, _ = x.shape
+
+    _state = initial_states(n_batch, FLAGS.n_hidden)
     _val_cost, _state = sess.run([G[0], G[4]],
                   feed_dict={G[1]: x, G[2]: x_mask, G[3]: _state, G.y: y})
     _cost += _val_cost.sum()

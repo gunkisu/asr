@@ -131,12 +131,14 @@ class TrainModel(object):
         _time = time.time()
         __time = time.time()
         for batch in train_set.get_epoch_iterator():
-          _feed_states = self._initial_states(self.FLAGS)
 
           x, x_mask, _, _, y, _ = batch
           x = np.transpose(x, (1, 0, 2))
           x_mask = np.transpose(x_mask, (1, 0))
           y = np.transpose(y, (1, 0))
+
+          _, n_batch, _ = x.shape
+          _feed_states = self._initial_states(n_batch, self.FLAGS.n_hidden)
 
           _n_exp += self.FLAGS.batch_size
           # Run optimization op (backprop)
