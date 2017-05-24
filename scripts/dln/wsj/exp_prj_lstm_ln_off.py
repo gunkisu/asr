@@ -33,6 +33,7 @@ def add_params(parser):
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
     parser.add_argument('--num_layers', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_units', default=512, help='number of hidden units', type=int)
+    parser.add_argument('--num_prjs', default=256, help='number of projected units', type=int)
     parser.add_argument('--learn_rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad_clipping', default=0.0, help='gradient clipping', type=float)
     parser.add_argument('--grad_norm', default=10.0, help='gradient normalization', type=float)
@@ -69,7 +70,9 @@ def get_save_path(args):
     path += '_do{}'.format(args.dropout)
     path += '_nl{}'.format(args.num_layers)
     path += '_nu{}'.format(args.num_units)
+    path += '_np{}'.format(args.num_prjs)
     path += '_nb{}'.format(args.batch_size)
+    path += '_{}'.format(args.updater)
 
     return path
 
@@ -260,6 +263,7 @@ if __name__ == '__main__':
                                             num_outputs=output_dim,
                                             num_layers=args.num_layers,
                                             num_units=args.num_units,
+                                            num_prjs=args.num_prjs,
                                             grad_clipping=args.grad_clipping,
                                             dropout=args.dropout)
 

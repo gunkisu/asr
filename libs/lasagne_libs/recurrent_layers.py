@@ -1870,7 +1870,7 @@ class ProjectLSTM_v0_1_Layer(MergeLayer):
                  incoming,
                  mask_input,
                  num_units,
-                 num_factors=None,
+                 num_prjs,
                  backwards=False,
                  learn_init=False,
                  peepholes=False,
@@ -1897,9 +1897,7 @@ class ProjectLSTM_v0_1_Layer(MergeLayer):
         self.only_return_final = only_return_final
         self.only_return_hidden = only_return_hidden
 
-        self.num_factors = num_units/2
-        if num_factors:
-            self.num_factors = num_factors
+        self.num_prjs = num_prjs
 
         input_shape = self.input_shapes[0]
         num_inputs = numpy.prod(input_shape[2:])
@@ -1909,7 +1907,7 @@ class ProjectLSTM_v0_1_Layer(MergeLayer):
                                    shape=(num_inputs, num_units),
                                    name="W_in_to_{}".format(gate_name)),
                     self.add_param(spec=init.Orthogonal(),
-                                   shape=(self.num_factors, num_units),
+                                   shape=(self.num_prjs, num_units),
                                    name="W_hid_to_{}".format(gate_name)),
                     self.add_param(spec=init.Constant(const_bias),
                                    shape=(num_units,),
@@ -1951,7 +1949,7 @@ class ProjectLSTM_v0_1_Layer(MergeLayer):
 
         #### hidden projection ####
         self.W_hid_prj = self.add_param(spec=init.Orthogonal(),
-                                        shape=(num_units, self.num_factors),
+                                        shape=(num_units, self.num_prjs),
                                         name="W_hid_prj")
 
         # Setup initial values for the cell and the hidden units
@@ -1961,7 +1959,7 @@ class ProjectLSTM_v0_1_Layer(MergeLayer):
                                         trainable=learn_init,
                                         regularizable=False)
         self.hid_init = self.add_param(spec=hid_init,
-                                       shape=(1, self.num_factors),
+                                       shape=(1, self.num_prjs),
                                        name="hid_init",
                                        trainable=learn_init,
                                        regularizable=False)
@@ -1970,9 +1968,9 @@ class ProjectLSTM_v0_1_Layer(MergeLayer):
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
         if self.only_return_hidden:
-            num_outputs = self.num_factors
+            num_outputs = self.num_prjs
         else:
-            num_outputs = self.num_factors*2
+            num_outputs = self.num_prjs + self.num_units
 
         if self.only_return_final:
             return input_shape[0], num_outputs
@@ -2129,7 +2127,7 @@ class LayerNormProjectLSTM_v0_1_Layer(MergeLayer):
                  incoming,
                  mask_input,
                  num_units,
-                 num_factors=None,
+                 num_prjs,
                  backwards=False,
                  learn_init=False,
                  gradient_steps=-1,
@@ -2154,9 +2152,7 @@ class LayerNormProjectLSTM_v0_1_Layer(MergeLayer):
         self.only_return_final = only_return_final
         self.only_return_hidden = only_return_hidden
 
-        self.num_factors = num_units/2
-        if num_factors:
-            self.num_factors = num_factors
+        self.num_prjs = num_prjs
 
         input_shape = self.input_shapes[0]
         num_inputs = numpy.prod(input_shape[2:])
@@ -2166,7 +2162,7 @@ class LayerNormProjectLSTM_v0_1_Layer(MergeLayer):
                                    shape=(num_inputs, num_units),
                                    name="W_in_to_{}".format(gate_name)),
                     self.add_param(spec=init.Orthogonal(),
-                                   shape=(self.num_factors, num_units),
+                                   shape=(self.num_prjs, num_units),
                                    name="W_hid_to_{}".format(gate_name)),
                     self.add_param(spec=init.Constant(const_bias),
                                    shape=(num_units,),
@@ -2212,7 +2208,7 @@ class LayerNormProjectLSTM_v0_1_Layer(MergeLayer):
 
         #### hidden projection ####
         self.W_hid_prj = self.add_param(spec=init.Orthogonal(),
-                                        shape=(num_units, self.num_factors),
+                                        shape=(num_units, self.num_prjs),
                                         name="W_hid_prj")
 
         # Setup initial values for the cell and the hidden units
@@ -2222,7 +2218,7 @@ class LayerNormProjectLSTM_v0_1_Layer(MergeLayer):
                                         trainable=learn_init,
                                         regularizable=False)
         self.hid_init = self.add_param(spec=hid_init,
-                                       shape=(1, self.num_factors),
+                                       shape=(1, self.num_prjs),
                                        name="hid_init",
                                        trainable=learn_init,
                                        regularizable=False)
@@ -2231,9 +2227,9 @@ class LayerNormProjectLSTM_v0_1_Layer(MergeLayer):
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
         if self.only_return_hidden:
-            num_outputs = self.num_factors
+            num_outputs = self.num_prjs
         else:
-            num_outputs = self.num_units + self.num_factors
+            num_outputs = self.num_prjs + self.num_units
 
         if self.only_return_final:
             return input_shape[0], num_outputs
@@ -2386,7 +2382,7 @@ class LayerNormProjectLSTM_v0_2_Layer(MergeLayer):
                  incoming,
                  mask_input,
                  num_units,
-                 num_factors=None,
+                 num_prjs,
                  backwards=False,
                  learn_init=False,
                  gradient_steps=-1,
@@ -2411,9 +2407,7 @@ class LayerNormProjectLSTM_v0_2_Layer(MergeLayer):
         self.only_return_final = only_return_final
         self.only_return_hidden = only_return_hidden
 
-        self.num_factors = num_units/2
-        if num_factors:
-            self.num_factors = num_factors
+        self.num_prjs = num_prjs
 
         input_shape = self.input_shapes[0]
         num_inputs = numpy.prod(input_shape[2:])
@@ -2423,7 +2417,7 @@ class LayerNormProjectLSTM_v0_2_Layer(MergeLayer):
                                    shape=(num_inputs, num_units),
                                    name="W_in_to_{}".format(gate_name)),
                     self.add_param(spec=init.Orthogonal(),
-                                   shape=(self.num_factors, num_units),
+                                   shape=(self.num_prjs, num_units),
                                    name="W_hid_to_{}".format(gate_name)),
                     self.add_param(spec=init.Constant(const_bias),
                                    shape=(num_units,),
@@ -2469,7 +2463,7 @@ class LayerNormProjectLSTM_v0_2_Layer(MergeLayer):
 
         #### hidden projection ####
         self.W_hid_prj = self.add_param(spec=init.Orthogonal(),
-                                        shape=(num_units, self.num_factors),
+                                        shape=(num_units, self.num_prjs),
                                         name="W_hid_prj")
 
         # Setup initial values for the cell and the hidden units
@@ -2479,7 +2473,7 @@ class LayerNormProjectLSTM_v0_2_Layer(MergeLayer):
                                         trainable=learn_init,
                                         regularizable=False)
         self.hid_init = self.add_param(spec=hid_init,
-                                       shape=(1, self.num_factors),
+                                       shape=(1, self.num_prjs),
                                        name="hid_init",
                                        trainable=learn_init,
                                        regularizable=False)
@@ -2488,9 +2482,9 @@ class LayerNormProjectLSTM_v0_2_Layer(MergeLayer):
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
         if self.only_return_hidden:
-            num_outputs = self.num_factors
+            num_outputs = self.num_prjs
         else:
-            num_outputs = self.num_units + self.num_factors
+            num_outputs = self.num_prjs + self.num_units
 
         if self.only_return_final:
             return input_shape[0], num_outputs
@@ -2643,6 +2637,7 @@ class CondLayerNormProjectLSTM_v0_1_Layer(MergeLayer):
                  incoming,
                  mask_input,
                  num_units,
+                 num_prjs,
                  num_factors=None,
                  backwards=False,
                  gradient_steps=-1,
@@ -2668,6 +2663,8 @@ class CondLayerNormProjectLSTM_v0_1_Layer(MergeLayer):
         self.only_return_final = only_return_final
         self.only_return_hidden = only_return_hidden
 
+        self.num_prjs = num_prjs
+
         if num_factors:
             self.num_factors = num_factors
         else:
@@ -2681,7 +2678,7 @@ class CondLayerNormProjectLSTM_v0_1_Layer(MergeLayer):
                                    shape=(num_inputs, num_units),
                                    name="W_in_to_{}".format(gate_name)),
                     self.add_param(spec=init.Orthogonal(),
-                                   shape=(num_units/2, num_units),
+                                   shape=(self.num_prjs, num_units),
                                    name="W_hid_to_{}".format(gate_name)),
                     self.add_param(spec=init.Constant(const_bias),
                                    shape=(num_units,),
@@ -2710,7 +2707,7 @@ class CondLayerNormProjectLSTM_v0_1_Layer(MergeLayer):
 
         #### hidden projection ####
         self.W_hid_prj = self.add_param(spec=init.Orthogonal(),
-                                        shape=(num_units, num_units/2),
+                                        shape=(num_units, self.num_prjs),
                                         name="W_hid_prj")
 
         # Setup initial values for the cell and the hidden units
@@ -2720,7 +2717,7 @@ class CondLayerNormProjectLSTM_v0_1_Layer(MergeLayer):
                                         trainable=False,
                                         regularizable=False)
         self.hid_init = self.add_param(spec=hid_init,
-                                       shape=(1, num_units/2),
+                                       shape=(1, self.num_prjs),
                                        name="hid_init",
                                        trainable=False,
                                        regularizable=False)
@@ -2768,9 +2765,9 @@ class CondLayerNormProjectLSTM_v0_1_Layer(MergeLayer):
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
         if self.only_return_hidden:
-            num_outputs = self.num_units/2
+            num_outputs = self.num_prjs
         else:
-            num_outputs = self.num_units + self.num_units/2
+            num_outputs = self.num_prjs + self.num_units
 
         if self.only_return_final:
             return input_shape[0], num_outputs
@@ -2931,6 +2928,7 @@ class CondLayerNormProjectLSTM_v0_2_Layer(MergeLayer):
                  incoming,
                  mask_input,
                  num_units,
+                 num_prjs,
                  num_factors=None,
                  backwards=False,
                  gradient_steps=-1,
@@ -2956,6 +2954,8 @@ class CondLayerNormProjectLSTM_v0_2_Layer(MergeLayer):
         self.only_return_final = only_return_final
         self.only_return_hidden = only_return_hidden
 
+        self.num_prjs = num_prjs
+
         if num_factors:
             self.num_factors = num_factors
         else:
@@ -2969,7 +2969,7 @@ class CondLayerNormProjectLSTM_v0_2_Layer(MergeLayer):
                                    shape=(num_inputs, num_units),
                                    name="W_in_to_{}".format(gate_name)),
                     self.add_param(spec=init.Orthogonal(),
-                                   shape=(num_units / 2, num_units),
+                                   shape=(self.num_prjs, num_units),
                                    name="W_hid_to_{}".format(gate_name)),
                     self.add_param(spec=init.Constant(const_bias),
                                    shape=(num_units,),
@@ -2998,7 +2998,7 @@ class CondLayerNormProjectLSTM_v0_2_Layer(MergeLayer):
 
         #### hidden projection ####
         self.W_hid_prj = self.add_param(spec=init.Orthogonal(),
-                                        shape=(num_units, num_units / 2),
+                                        shape=(num_units, self.num_prjs),
                                         name="W_hid_prj")
 
         # Setup initial values for the cell and the hidden units
@@ -3008,7 +3008,7 @@ class CondLayerNormProjectLSTM_v0_2_Layer(MergeLayer):
                                         trainable=False,
                                         regularizable=False)
         self.hid_init = self.add_param(spec=hid_init,
-                                       shape=(1, num_units / 2),
+                                       shape=(1, self.num_prjs),
                                        name="hid_init",
                                        trainable=False,
                                        regularizable=False)
@@ -3056,9 +3056,9 @@ class CondLayerNormProjectLSTM_v0_2_Layer(MergeLayer):
     def get_output_shape_for(self, input_shapes):
         input_shape = input_shapes[0]
         if self.only_return_hidden:
-            num_outputs = self.num_units / 2
+            num_outputs = self.num_prjs
         else:
-            num_outputs = self.num_units + self.num_units / 2
+            num_outputs = self.num_prjs + self.num_units
 
         if self.only_return_final:
             return input_shape[0], num_outputs

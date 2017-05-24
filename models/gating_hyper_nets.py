@@ -1111,6 +1111,7 @@ def deep_prj_lstm_model_v1(input_var,
                            num_outputs,
                            num_layers,
                            num_units,
+                           num_prjs,
                            grad_clipping=1,
                            dropout=0.2):
     ###############
@@ -1132,6 +1133,7 @@ def deep_prj_lstm_model_v1(input_var,
         fwd_feat_layer = ProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
                                                 mask_input=mask_layer,
                                                 num_units=num_units,
+                                                num_prjs=num_prjs,
                                                 grad_clipping=grad_clipping,
                                                 backwards=False)
 
@@ -1139,6 +1141,7 @@ def deep_prj_lstm_model_v1(input_var,
         bwd_feat_layer = ProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
                                                 mask_input=mask_layer,
                                                 num_units=num_units,
+                                                num_prjs=num_prjs,
                                                 grad_clipping=grad_clipping,
                                                 backwards=True)
 
@@ -1161,6 +1164,7 @@ def deep_prj_lstm_ln_model_v1(input_var,
                               num_outputs,
                               num_layers,
                               num_units,
+                              num_prjs,
                               grad_clipping=1,
                               dropout=0.2):
     ###############
@@ -1182,6 +1186,7 @@ def deep_prj_lstm_ln_model_v1(input_var,
         fwd_feat_layer = LayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
                                                          mask_input=mask_layer,
                                                          num_units=num_units,
+                                                         num_prjs=num_prjs,
                                                          grad_clipping=grad_clipping,
                                                          backwards=False)
 
@@ -1189,6 +1194,7 @@ def deep_prj_lstm_ln_model_v1(input_var,
         bwd_feat_layer = LayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
                                                          mask_input=mask_layer,
                                                          num_units=num_units,
+                                                         num_prjs=num_prjs,
                                                          grad_clipping=grad_clipping,
                                                          backwards=True)
 
@@ -1211,6 +1217,7 @@ def deep_prj_lstm_ln_model_v2(input_var,
                               num_outputs,
                               num_layers,
                               num_units,
+                              num_prjs,
                               grad_clipping=1,
                               dropout=0.2):
     ###############
@@ -1232,6 +1239,7 @@ def deep_prj_lstm_ln_model_v2(input_var,
         fwd_feat_layer = LayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
                                                          mask_input=mask_layer,
                                                          num_units=num_units,
+                                                         num_prjs=num_prjs,
                                                          grad_clipping=grad_clipping,
                                                          backwards=False)
 
@@ -1239,6 +1247,7 @@ def deep_prj_lstm_ln_model_v2(input_var,
         bwd_feat_layer = LayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
                                                          mask_input=mask_layer,
                                                          num_units=num_units,
+                                                         num_prjs=num_prjs,
                                                          grad_clipping=grad_clipping,
                                                          backwards=True)
 
@@ -1260,6 +1269,7 @@ def deep_prj_lstm_dln_model_v1(input_var,
                                num_inputs,
                                num_outputs,
                                num_units,
+                               num_prjs,
                                num_factors,
                                num_layers,
                                num_conds=-1,
@@ -1289,6 +1299,7 @@ def deep_prj_lstm_dln_model_v1(input_var,
             fwd_feat_layer = CondLayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
                                                                  mask_input=mask_layer,
                                                                  num_units=num_units,
+                                                                 num_prjs=num_prjs,
                                                                  num_factors=num_factors,
                                                                  grad_clipping=grad_clipping,
                                                                  backwards=False)
@@ -1297,6 +1308,7 @@ def deep_prj_lstm_dln_model_v1(input_var,
             bwd_feat_layer = CondLayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
                                                                  mask_input=mask_layer,
                                                                  num_units=num_units,
+                                                                 num_prjs=num_prjs,
                                                                  num_factors=num_factors,
                                                                  grad_clipping=grad_clipping,
                                                                  backwards=True)
@@ -1308,6 +1320,7 @@ def deep_prj_lstm_dln_model_v1(input_var,
             fwd_feat_layer = LayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
                                                              mask_input=mask_layer,
                                                              num_units=num_units,
+                                                             num_prjs=num_prjs,
                                                              grad_clipping=grad_clipping,
                                                              backwards=False)
 
@@ -1315,6 +1328,7 @@ def deep_prj_lstm_dln_model_v1(input_var,
             bwd_feat_layer = LayerNormProjectLSTM_v0_1_Layer(incoming=prev_input_layer,
                                                              mask_input=mask_layer,
                                                              num_units=num_units,
+                                                             num_prjs=num_prjs,
                                                              grad_clipping=grad_clipping,
                                                              backwards=True)
 
@@ -1337,6 +1351,7 @@ def deep_prj_lstm_dln_model_v2(input_var,
                                num_inputs,
                                num_outputs,
                                num_units,
+                               num_prjs,
                                num_factors,
                                num_layers,
                                num_conds=-1,
@@ -1366,6 +1381,7 @@ def deep_prj_lstm_dln_model_v2(input_var,
             fwd_feat_layer = CondLayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
                                                                  mask_input=mask_layer,
                                                                  num_units=num_units,
+                                                                 num_prjs=num_prjs,
                                                                  num_factors=num_factors,
                                                                  grad_clipping=grad_clipping,
                                                                  backwards=False)
@@ -1374,6 +1390,7 @@ def deep_prj_lstm_dln_model_v2(input_var,
             bwd_feat_layer = CondLayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
                                                                  mask_input=mask_layer,
                                                                  num_units=num_units,
+                                                                 num_prjs=num_prjs,
                                                                  num_factors=num_factors,
                                                                  grad_clipping=grad_clipping,
                                                                  backwards=True)
@@ -1385,6 +1402,7 @@ def deep_prj_lstm_dln_model_v2(input_var,
             fwd_feat_layer = LayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
                                                              mask_input=mask_layer,
                                                              num_units=num_units,
+                                                             num_prjs=num_prjs,
                                                              grad_clipping=grad_clipping,
                                                              backwards=False)
 
@@ -1392,6 +1410,7 @@ def deep_prj_lstm_dln_model_v2(input_var,
             bwd_feat_layer = LayerNormProjectLSTM_v0_2_Layer(incoming=prev_input_layer,
                                                              mask_input=mask_layer,
                                                              num_units=num_units,
+                                                             num_prjs=num_prjs,
                                                              grad_clipping=grad_clipping,
                                                              backwards=True)
 
