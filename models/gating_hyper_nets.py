@@ -17,7 +17,12 @@ from libs.lasagne_libs.recurrent_layers import (LSTMLayer,
                                                 LayerNormProjectLSTM_v0_1_Layer,
                                                 LayerNormProjectLSTM_v0_2_Layer,
                                                 CondLayerNormProjectLSTM_v0_1_Layer,
-                                                CondLayerNormProjectLSTM_v0_2_Layer)
+                                                CondLayerNormProjectLSTM_v0_2_Layer,
+                                                RegularLSTM_v0_1_Layer,
+                                                LayerNormRegularLSTM_v0_1_Layer,
+                                                LayerNormRegularLSTM_v0_2_Layer,
+                                                CondLayerNormRegularLSTM_v0_1_Layer,
+                                                CondLayerNormRegularLSTM_v0_2_Layer)
 
 def deep_scaling_hyper_model(input_var,
                              mask_var,
@@ -1411,6 +1416,312 @@ def deep_prj_lstm_dln_model_v2(input_var,
                                                              mask_input=mask_layer,
                                                              num_units=num_units,
                                                              num_prjs=num_prjs,
+                                                             grad_clipping=grad_clipping,
+                                                             backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer, cond_layer_list
+
+################
+# reg versions #
+################
+def deep_reg_lstm_model_v1(input_var,
+                           mask_var,
+                           num_inputs,
+                           num_outputs,
+                           num_layers,
+                           num_units,
+                           grad_clipping=1,
+                           dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    prev_input_layer = input_layer
+    for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+
+        fwd_feat_layer = RegularLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                mask_input=mask_layer,
+                                                num_units=num_units,
+                                                grad_clipping=grad_clipping,
+                                                backwards=False)
+
+        # backward
+        bwd_feat_layer = RegularLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                mask_input=mask_layer,
+                                                num_units=num_units,
+                                                grad_clipping=grad_clipping,
+                                                backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer
+
+def deep_reg_lstm_ln_model_v1(input_var,
+                              mask_var,
+                              num_inputs,
+                              num_outputs,
+                              num_layers,
+                              num_units,
+                              grad_clipping=1,
+                              dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    prev_input_layer = input_layer
+    for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+
+        fwd_feat_layer = LayerNormRegularLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                         mask_input=mask_layer,
+                                                         num_units=num_units,
+                                                         grad_clipping=grad_clipping,
+                                                         backwards=False)
+
+        # backward
+        bwd_feat_layer = LayerNormRegularLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                         mask_input=mask_layer,
+                                                         num_units=num_units,
+                                                         grad_clipping=grad_clipping,
+                                                         backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer
+
+def deep_reg_lstm_ln_model_v2(input_var,
+                              mask_var,
+                              num_inputs,
+                              num_outputs,
+                              num_layers,
+                              num_units,
+                              grad_clipping=1,
+                              dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    prev_input_layer = input_layer
+    for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+
+        fwd_feat_layer = LayerNormRegularLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                         mask_input=mask_layer,
+                                                         num_units=num_units,
+                                                         grad_clipping=grad_clipping,
+                                                         backwards=False)
+
+        # backward
+        bwd_feat_layer = LayerNormRegularLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                         mask_input=mask_layer,
+                                                         num_units=num_units,
+                                                         grad_clipping=grad_clipping,
+                                                         backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer
+
+def deep_reg_lstm_dln_model_v1(input_var,
+                               mask_var,
+                               num_inputs,
+                               num_outputs,
+                               num_units,
+                               num_factors,
+                               num_layers,
+                               num_conds=-1,
+                               grad_clipping=0.0,
+                               dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    if num_conds==-1:
+        num_conds = num_layers
+
+    cond_layer_list = []
+    prev_input_layer = input_layer
+    for l in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+        if l<num_conds:
+            # forward
+            fwd_feat_layer = CondLayerNormRegularLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                                 mask_input=mask_layer,
+                                                                 num_units=num_units,
+                                                                 num_factors=num_factors,
+                                                                 grad_clipping=grad_clipping,
+                                                                 backwards=False)
+
+            # backward
+            bwd_feat_layer = CondLayerNormRegularLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                                 mask_input=mask_layer,
+                                                                 num_units=num_units,
+                                                                 num_factors=num_factors,
+                                                                 grad_clipping=grad_clipping,
+                                                                 backwards=True)
+
+            cond_layer_list.append(fwd_feat_layer)
+            cond_layer_list.append(bwd_feat_layer)
+        else:
+            # forward
+            fwd_feat_layer = LayerNormRegularLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                             mask_input=mask_layer,
+                                                             num_units=num_units,
+                                                             grad_clipping=grad_clipping,
+                                                             backwards=False)
+
+            # backward
+            bwd_feat_layer = LayerNormRegularLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                             mask_input=mask_layer,
+                                                             num_units=num_units,
+                                                             grad_clipping=grad_clipping,
+                                                             backwards=True)
+
+        prev_input_layer = ConcatLayer(incomings=[fwd_feat_layer, bwd_feat_layer],
+                                       axis=-1)
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer, cond_layer_list
+
+
+def deep_reg_lstm_dln_model_v2(input_var,
+                               mask_var,
+                               num_inputs,
+                               num_outputs,
+                               num_units,
+                               num_factors,
+                               num_layers,
+                               num_conds=-1,
+                               grad_clipping=0.0,
+                               dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    if num_conds==-1:
+        num_conds = num_layers
+
+    cond_layer_list = []
+    prev_input_layer = input_layer
+    for l in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+        if l<num_conds:
+            # forward
+            fwd_feat_layer = CondLayerNormRegularLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                                 mask_input=mask_layer,
+                                                                 num_units=num_units,
+                                                                 num_factors=num_factors,
+                                                                 grad_clipping=grad_clipping,
+                                                                 backwards=False)
+
+            # backward
+            bwd_feat_layer = CondLayerNormRegularLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                                 mask_input=mask_layer,
+                                                                 num_units=num_units,
+                                                                 num_factors=num_factors,
+                                                                 grad_clipping=grad_clipping,
+                                                                 backwards=True)
+
+            cond_layer_list.append(fwd_feat_layer)
+            cond_layer_list.append(bwd_feat_layer)
+        else:
+            # forward
+            fwd_feat_layer = LayerNormRegularLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                             mask_input=mask_layer,
+                                                             num_units=num_units,
+                                                             grad_clipping=grad_clipping,
+                                                             backwards=False)
+
+            # backward
+            bwd_feat_layer = LayerNormRegularLSTM_v0_2_Layer(incoming=prev_input_layer,
+                                                             mask_input=mask_layer,
+                                                             num_units=num_units,
                                                              grad_clipping=grad_clipping,
                                                              backwards=True)
 

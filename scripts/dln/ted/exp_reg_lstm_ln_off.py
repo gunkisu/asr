@@ -17,7 +17,7 @@ from lasagne.regularization import apply_penalty, l2
 from lasagne.updates import total_norm_constraint
 from libs.utils import save_network, save_eval_history, best_fer, show_status, symlink_force
 from libs.utils import StopWatch, Rsync
-from models.gating_hyper_nets import deep_prj_lstm_ln_model_v1
+from models.gating_hyper_nets import deep_reg_lstm_model_v1
 from data.wsj.fuel_utils import get_datastream
 from libs.lasagne_libs.updates import momentum, adam
 from lasagne.random import set_rng
@@ -28,11 +28,11 @@ eps = numpy.finfo(floatX).eps
 input_dim = 123
 output_dim = 4174
 
+
 def add_params(parser):
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
     parser.add_argument('--num_layers', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_units', default=512, help='number of hidden units', type=int)
-    parser.add_argument('--num_prjs', default=256, help='number of projected units', type=int)
     parser.add_argument('--learn_rate', default=0.001, help='learning rate', type=float)
     parser.add_argument('--grad_clipping', default=0.0, help='gradient clipping', type=float)
     parser.add_argument('--grad_norm', default=10.0, help='gradient normalization', type=float)
@@ -62,18 +62,18 @@ def get_arg_parser():
 
 def get_save_path(args):
     path = args.save_path
-    path += 'ted_prj_lstm_ln_on_v1'
+    path += 'ted_reg_lstm_ln_off'
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
     path += '_gn{}'.format(args.grad_norm)
     path += '_do{}'.format(args.dropout)
     path += '_nl{}'.format(args.num_layers)
     path += '_nu{}'.format(args.num_units)
-    path += '_np{}'.format(args.num_prjs)
     path += '_nb{}'.format(args.batch_size)
     path += '_{}'.format(args.updater)
 
     return path
+
 
 def build_trainer(input_data,
                   input_mask,
@@ -133,6 +133,7 @@ def build_trainer(input_data,
                                   updates=train_updates)
     return training_fn, train_lr, updater_params
 
+
 def build_predictor(input_data,
                     input_mask,
                     target_data,
@@ -161,6 +162,7 @@ def build_predictor(input_data,
                                    target_mask],
                            outputs=[frame_prd_idx,
                                     frame_loss])
+
 
 def eval_network(predict_fn,
                  data_stream):
@@ -194,6 +196,7 @@ def eval_network(predict_fn,
     total_fer /= batch_cnt
 
     return total_nll, total_fer
+
 
 if __name__ == '__main__':
     ###############
@@ -252,15 +255,14 @@ if __name__ == '__main__':
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-    network_output = deep_prj_lstm_ln_model_v1(input_var=input_data,
-                                               mask_var=input_mask,
-                                               num_inputs=input_dim,
-                                               num_outputs=output_dim,
-                                               num_layers=args.num_layers,
-                                               num_units=args.num_units,
-                                               num_prjs=args.num_prjs,
-                                               grad_clipping=args.grad_clipping,
-                                               dropout=args.dropout)
+    network_output = deep_reg_lstm_model_v1(input_var=input_data,
+                                            mask_var=input_mask,
+                                            num_inputs=input_dim,
+                                            num_outputs=output_dim,
+                                            num_layers=args.num_layers,
+                                            num_units=args.num_units,
+                                            grad_clipping=args.grad_clipping,
+                                            dropout=args.dropout)
 
     network = network_output
     network_params = get_all_params(network, trainable=True)

@@ -17,7 +17,7 @@ from lasagne.regularization import apply_penalty, l2
 from lasagne.updates import total_norm_constraint
 from libs.utils import save_network, save_eval_history, best_fer, show_status, symlink_force
 from libs.utils import StopWatch, Rsync
-from models.gating_hyper_nets import deep_prj_lstm_dln_model_v2
+from models.gating_hyper_nets import deep_prj_lstm_dln_model_v1, deep_prj_lstm_dln_model_v2
 from data.wsj.fuel_utils import get_datastream
 from libs.lasagne_libs.updates import momentum, adam
 from lasagne.random import set_rng
@@ -26,10 +26,11 @@ floatX = theano.config.floatX
 eps = numpy.finfo(floatX).eps
 
 input_dim = 123
-output_dim = 4174
+output_dim = 3436
 
 
 def add_params(parser):
+    parser.add_argument('--version', default=1, help='version', type=int)
     parser.add_argument('--batch_size', default=16, help='batch size', type=int)
     parser.add_argument('--num_layers', default=3, help='number of hidden units', type=int)
     parser.add_argument('--num_units', default=512, help='number of hidden units', type=int)
@@ -39,7 +40,8 @@ def add_params(parser):
     parser.add_argument('--grad_clipping', default=0.0, help='gradient clipping', type=float)
     parser.add_argument('--grad_norm', default=10.0, help='gradient normalization', type=float)
     parser.add_argument('--dropout', default=0.0, help='dropout', type=float)
-    parser.add_argument('--data_path', help='data path', default='/data/lisatmp3/speech/tedlium_fbank123_out4174.h5')
+    parser.add_argument('--weight_decay', default=0, help='weight_decay', type=int)
+    parser.add_argument('--data_path', help='data path', default='/u/songinch/song/data/speech/wsj_fbank123.h5')
     parser.add_argument('--save_path', help='save path', default='./')
     parser.add_argument('--num_epochs', help='number of epochs', default=50, type=int)
     parser.add_argument('--updater', help='sgd or momentum', default='momentum')
@@ -47,9 +49,9 @@ def add_params(parser):
 
     parser.add_argument('--feat_reg', default=0.0, help='feat_reg', type=float)
 
-    parser.add_argument('--train_dataset', help='dataset for training', default='train')
-    parser.add_argument('--valid_dataset', help='dataset for validation', default='dev')
-    parser.add_argument('--test_dataset', help='dataset for test', default='test')
+    parser.add_argument('--train_dataset', help='dataset for training', default='train_si284')
+    parser.add_argument('--valid_dataset', help='dataset for validation', default='test_dev93')
+    parser.add_argument('--test_dataset', help='dataset for test', default='test_eval92')
 
     parser.add_argument('--reload_model', help='model path to load')
     parser.add_argument('--tmpdir', help='directory name in the /Tmp directory to save data locally',
@@ -66,7 +68,8 @@ def get_arg_parser():
 
 def get_save_path(args):
     path = args.save_path
-    path += 'ted_prj_lstm_dln_on_v2'
+    path += 'wsj_prj_lstm_dln_on'
+    path += '_v{}'.format(args.version)
     path += '_lr{}'.format(args.learn_rate)
     path += '_gc{}'.format(args.grad_clipping)
     path += '_gn{}'.format(args.grad_norm)
@@ -76,6 +79,7 @@ def get_save_path(args):
     path += '_np{}'.format(args.num_prjs)
     path += '_nf{}'.format(args.num_factors)
     path += '_nb{}'.format(args.batch_size)
+    path += '_wd{}'.format(args.weight_decay)
     path += '_fr{}'.format(args.feat_reg)
     path += '_{}'.format(args.updater)
 
@@ -91,6 +95,7 @@ def build_trainer(input_data,
                   output_layer,
                   cond_layer_list,
                   feat_reg,
+                  weight_decay,
                   updater,
                   learning_rate,
                   max_grad_norm=0.0,
@@ -123,7 +128,9 @@ def build_trainer(input_data,
         train_feat_loss += sample_feat_cost
     train_feat_loss /= len(cond_layer_list)
 
-    train_total_loss = train_loss + apply_penalty(network_reg_params, l2)*1e-5 + train_feat_loss*feat_reg
+    train_total_loss = train_loss + train_feat_loss*feat_reg
+    if weight_decay > 0:
+        train_total_loss += apply_penalty(network_reg_params, l2)*10**(-weight_decay)
 
     network_grads = theano.grad(cost=train_total_loss, wrt=network_params)
 
@@ -214,7 +221,6 @@ def eval_network(predict_fn,
     return total_nll, total_fer
 
 if __name__ == '__main__':
-
     ###############
     # load config #
     ###############
@@ -271,16 +277,23 @@ if __name__ == '__main__':
     input_mask = T.fmatrix('input_mask')
     target_data = T.imatrix('target_data')
     target_mask = T.fmatrix('target_mask')
-    network_output, cond_layer_list = deep_prj_lstm_dln_model_v2(input_var=input_data,
-                                                                 mask_var=input_mask,
-                                                                 num_inputs=input_dim,
-                                                                 num_outputs=output_dim,
-                                                                 num_layers=args.num_layers,
-                                                                 num_units=args.num_units,
-                                                                 num_prjs=args.num_prjs,
-                                                                 num_factors=args.num_factors,
-                                                                 grad_clipping=args.grad_clipping,
-                                                                 dropout=args.dropout)
+
+    model_fn = None
+    if args.version==1:
+        model_fn = deep_prj_lstm_dln_model_v1
+    else:
+        model_fn = deep_prj_lstm_dln_model_v2
+
+    network_output, cond_layer_list = model_fn(input_var=input_data,
+                                               mask_var=input_mask,
+                                               num_inputs=input_dim,
+                                               num_outputs=output_dim,
+                                               num_layers=args.num_layers,
+                                               num_units=args.num_units,
+                                               num_prjs=args.num_prjs,
+                                               num_factors=args.num_factors,
+                                               grad_clipping=args.grad_clipping,
+                                               dropout=args.dropout)
 
     network = network_output
     network_params = get_all_params(network, trainable=True)
@@ -333,6 +346,7 @@ if __name__ == '__main__':
                                      output_layer=network,
                                      cond_layer_list=cond_layer_list,
                                      feat_reg=args.feat_reg,
+                                     weight_decay=args.weight_decay,
                                      updater=eval(args.updater),
                                      learning_rate=args.learn_rate,
                                      load_updater_params=pretrain_update_params_val)
