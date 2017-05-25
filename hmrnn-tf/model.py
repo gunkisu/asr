@@ -17,6 +17,70 @@ from mixer import glorot_init
 from mixer import orthogonal_init
 
 
+class LSTMCell(RNNCell):
+  """LSTM recurrent network cell.
+  """
+  def __init__(self, num_units, forget_bias=0.0, activation=tanh):
+    """Initialize the LSTM cell.
+    Args:
+      num_units: int, the number of units in the LSTM cell.
+      forget_bias: float, The bias added to forget gates (see above).
+      activation: Activation function of the inner states.
+    """
+    self._num_units = num_units
+    self._forget_bias = forget_bias
+    self._activation = activation
+
+  @property
+  def state_size(self):
+    return LSTMStateTuple(self._num_units, self._num_units)
+
+  @property
+  def output_size(self):
+    return self._num_units
+
+  def __call__(self, inputs, state, scope='lstm'):
+    """Long Short-Term Memory (LSTM) cell.
+    """
+    # Parameters of gates are concatenated into one multiply for efficiency.
+    c, h = state
+    logits = _affine([inputs, h], 4 * self._num_units, scope=scope)
+    i, f, o, j = _lstm_gates(logits, forget_bias=self._forget_bias)
+    # Update the states
+    new_c = c * f + i * j
+    new_h = o * self._activation(new_c)
+    # Update the returns
+    new_state = LSTMStateTuple(new_c, new_h)
+    return new_h, new_state
+
+
+class LSTMModule(object):
+  """Implementation of LSTM module"""
+  def __init__(self, num_units):
+    self._num_units = num_units
+
+  def __call__(self, inputs, init_state, one_step=False):
+    # Define an LSTM cell with Tensorflow
+    rnn_cell = LSTMCell(self._num_units)
+
+    if one_step:
+      prv_states = init_state
+      outputs, states = rnn_cell(inputs=inputs,
+                                 state=prv_states)
+      return states[0], states[2]
+
+    else:
+      init_tuple_state = tf.contrib.rnn.LSTMStateTuple(init_state[0],
+                                                       init_state[1])
+      outputs, states = tf.nn.dynamic_rnn(cell=rnn_cell,
+                                          inputs=inputs,
+                                          initial_state=init_tuple_state,
+                                          time_major=True)
+      states = tf.stack([states[0], states[1]], axis=0)
+
+      return outputs, states
+
+
 def _affine(args, output_size, bias=True, scope=None, init_W=None):
   # Calculate the total size of arguments on dimension 1
   total_arg_size = 0
@@ -109,25 +173,6 @@ def _lstm_gates(logits, num_splits=4, axis=1, activation=tanh, forget_bias=0.0):
     _output = sigmoid(_output)
     _cell = activation(_cell)
     return _input, _forget, _output, _cell
-
-
-class LSTMModule(object):
-  """Implementation of LSTM module"""
-  def __init__(self, num_units):
-    self._num_units = num_units
-
-  def __call__(self, inputs, init_state):
-    rnn_tuple_state = tf.contrib.rnn.LSTMStateTuple(init_state[0],
-                                                    init_state[1])
-    # Define an LSTM cell with Tensorflow
-    rnn_cell = LSTMCell(self._num_units)
-    outputs, states = tf.nn.dynamic_rnn(rnn_cell, inputs,
-			                                initial_state=rnn_tuple_state,
-				                            time_major=True)
-    # Stack last states of matrices to a 3-D tensor
-    last_state = tf.stack([states[0], states[1]], axis=0)
-    return outputs, last_state
-
 
 class HMLSTMModule(object):
   """Implementation of Hierarchical Multiscale LSTM module"""
