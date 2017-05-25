@@ -5,6 +5,7 @@ import tensorflow as tf
 
 from mixer import gen_mask
 from mixer import nats2bits
+from mixer import insert_item2dict
 from model import LinearCell
 from model import LSTMModule
 from fuel_train import TrainModel
@@ -65,8 +66,8 @@ def build_graph(FLAGS):
   cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=y_1hot,
                                                           logits=h_logits)
   # Reshape into [seq_len, batch_size]
-  cross_entropy = tf.reshape(cross_entropy, [-1, FLAGS.batch_size])
-  cost = tf.reduce_sum((cross_entropy * x_mask), reduction_indices=0)
+#  cross_entropy = tf.reshape(cross_entropy, [-1, FLAGS.batch_size])
+  cost = tf.reduce_sum((cross_entropy * tf.reshape(x_mask, [-1])), reduction_indices=0)
   return Graph(cost, x, x_mask, state, last_state, y)
 
 
