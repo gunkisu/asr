@@ -101,7 +101,7 @@ def monitor(G, sess, train_set, valid_set, FLAGS,
     for batch in train_set:
       orig_x, orig_x_mask, _, _, orig_y, _ = batch
       
-      for x, x_mask, y in skip_frames_fixed([orig_x, orig_x_mask, orig_y], FLAGS.skip, return_first=True):
+      for x, x_mask, y in skip_frames_fixed([orig_x, orig_x_mask, orig_y], FLAGS.skip+1, return_first=True):
         x = np.transpose(x, (1, 0, 2))
         x_mask = np.transpose(x_mask, (1, 0))
         y = np.transpose(y, (1, 0))
@@ -124,7 +124,7 @@ def monitor(G, sess, train_set, valid_set, FLAGS,
   for batch in valid_set:
     orig_x, orig_x_mask, _, _, orig_y, _ = batch
   
-    for x, x_mask, y in skip_frames_fixed([orig_x, orig_x_mask, orig_y], FLAGS.skip, return_first=True):
+    for x, x_mask, y in skip_frames_fixed([orig_x, orig_x_mask, orig_y], FLAGS.skip+1, return_first=True):
       x = np.transpose(x, (1, 0, 2))
       x_mask = np.transpose(x_mask, (1, 0))
       y = np.transpose(y, (1, 0))

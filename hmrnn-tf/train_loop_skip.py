@@ -128,7 +128,7 @@ class TrainModel(object):
         for batch in train_set.get_epoch_iterator():
           orig_x, orig_x_mask, _, _, orig_y, _ = batch
           
-          for x, x_mask, y in skip_frames_fixed([orig_x, orig_x_mask, orig_y], self.FLAGS.skip):
+          for x, x_mask, y in skip_frames_fixed([orig_x, orig_x_mask, orig_y], self.FLAGS.skip+1):
               x = np.transpose(x, (1, 0, 2))
               x_mask = np.transpose(x_mask, (1, 0))
               y = np.transpose(y, (1, 0))
