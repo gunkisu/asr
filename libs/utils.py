@@ -232,21 +232,23 @@ def skip_frames(batch, every_n, random_choice=False):
         new_batch.append(new_src_data)
     return new_batch
 
-
 def skip_frames_fixed(batch, every_n):
-    new_batch = []
+    for start_idx in range(every_n):
+        new_batch = []
 
-    for src_data in batch:
-        new_src_data = []
-        for ex in src_data:
-            n_seq = ex.shape[0]
-            if len(ex.shape) == 1: 
-                new_src_data.append(ex[::every_n])
-            else:
-                new_src_data.append(ex[::every_n,:])    
+        for src_data in batch:
+            new_src_data = []
+            for ex in src_data:
+                assert not ex.shape[0] < every_n
+                
+                if len(ex.shape) == 1: 
+                    new_src_data.append(ex[start_idx::every_n])
 
-        new_batch.append(new_src_data)
-    return new_batch
+                else:
+                    new_src_data.append(ex[start_idx::every_n,:])    
+
+            new_batch.append(new_src_data)
+        yield new_batch
 
 def skip_frames_random(batch, every_n):
     new_batch = []
