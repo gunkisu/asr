@@ -6,7 +6,8 @@ import tensorflow as tf
 from mixer import gen_mask
 from mixer import nats2bits
 from mixer import insert_item2dict
-from model import LSTMModule, SkimLSTMModule
+from model import LinearCell, SkimLSTMModule
+from model import LSTMModule
 from fuel_train import TrainModel
 
 from collections import namedtuple
@@ -22,7 +23,6 @@ flags.DEFINE_integer('max_seq_len', 100, 'Maximum length of sequences')
 flags.DEFINE_integer('n_input', 123, 'Number of RNN hidden units')
 flags.DEFINE_integer('n_hidden', 1024, 'Number of RNN hidden units')
 flags.DEFINE_integer('n_class', 3436, 'Number of target symbols')
-flags.DEFINE_integer('n_layer', 3436, 'Number of layers')
 flags.DEFINE_integer('base_seed', 20170309, 'Base random seed')
 flags.DEFINE_integer('add_seed', 0, 'Add this amount to the base random seed')
 flags.DEFINE_boolean('start_from_ckpt', False, 'If true, start from a ckpt')
@@ -41,51 +41,100 @@ flags.DEFINE_string('test_dataset', 'test_eval92', '')
 Graph = namedtuple('Graph', 'cost x x_mask state last_state y')
 
 def build_graph(FLAGS):
-  """Define training graph.
-  """
-  with tf.device(FLAGS.device):
-    # Graph input
-    x_data = tf.placeholder(dtype=tf.float32,
-                            shape=(None, None, FLAGS.n_input),
-                            name='x_data')
-    x_mask = tf.placeholder(dtype=tf.float32,
-                            shape=(None, None))
-    state = tf.placeholder(tf.float32, shape=(2, None, FLAGS.n_hidden))
-    y = tf.placeholder(tf.int32, shape=(None, None)) # (seq_len, batch_size)
+    """Define training graph.
+    """
 
-  # Define stacked lstm
-  prev_h_data = x_data
-  for l in range(FLAGS.n_layer):
-    # Define single lstm
-    _rnn = SkimLSTMModule(num_units=,
-                          max_skims=,
-                          min_reads=,
-                          forget_bias=,
-                          scope=)
-    outputs = _rnn(inputs=prev_h_data,
-                   state=, #(cell, hidden, skim_counter, read_counter)
-                   scope='lstm')
+    # Define input data
+    with tf.device(FLAGS.device):
+        x_data = tf.placeholder(dtype=tf.float32,
+                                shape=(None, None, FLAGS.n_input),
+                                name='x_data')
+        x_mask = tf.placeholder(dtype=tf.float32,
+                                shape=(None, None, 1),
+                                name='x_mask')
+        y_idx = tf.placeholder(dtype=tf.int32,
+                               shape=(None, None),
+                               name='y_idx')
+        init_state = tf.placeholder(dtype=tf.float32,
+                                    shape=(None, FLAGS.n_hidden),
+                                    name='init_state')
+        init_cntr = tf.placeholder(dtype=tf.float32,
+                                   shape=(None, 1),
+                                   name='init_cntr')
+
+    # Define model
+    fwd_act_lgp_list = []
+    bwd_act_lgp_list = []
+    prev_hid_data = x_data
+    prev_hid_mask = x_mask
+    for l in range(FLAGS.n_layer):
+        # Set input data
+        prev_input = tf.concat(values=[prev_hid_data, prev_hid_mask],
+                               axis=-1,
+                               name='input_{}'.format(l))
+
+        # Set skim lstm
+        with tf.variable_scope('lstm_{}'.format(l)):
+            skim_lstm = SkimLSTMModule(num_units=FLAGS.n_hidden,
+                                       max_skims=FLAGS.n_action,
+                                       min_reads=FLAGS.n_read,
+                                       forget_bias=FLAGS.forget_bias)
+
+        # Run bidir skim lstm
+        outputs = skim_lstm(inputs=prev_input,
+                            init_state=[init_state, init_cntr],
+                            use_bidir=True)
+
+        # Get output
+        curr_hid_data, curr_hid_mask, curr_fwd_act_lgp, curr_bwd_act_lgp = outputs
+
+        # Set next input
+        prev_hid_data = curr_hid_data
+        prev_hid_mask = curr_hid_mask
+
+        # save action log prob
+        fwd_act_lgp_list.append(curr_fwd_act_lgp)
+        bwd_act_lgp_list.append(curr_bwd_act_lgp)
+
+    # Set output layer
+    with tf.variable_scope('output'):
+        output_linear = LinearCell(FLAGS.n_class)
+
+    # Get output logit
+    output_logit = output_linear(tf.reshape(prev_hid_data, [-1, 2*FLAGS.n_hidden]))
+
+    # Get one-hot label
+    y_1hot = tf.one_hot(tf.reshape(y_idx, [-1]), depth=FLAGS.n_class)
+
+    # Define cross entropy
+    ml_frame_loss = tf.nn.softmax_cross_entropy_with_logits(labels=y_1hot,
+                                                            logits=output_logit)
+
+    ml_sample_loss = tf.reduce_sum(ml_frame_loss * tf.reshape(x_mask, [-1]), axis=0)
+
+    ml_sum_loss = tf.reduce_sum(ml_frame_loss * tf.reshape(x_mask, [-1]))
+    ml_mean_loss = ml_sum_loss/tf.reduce_sum(x_mask)
 
 
-  # Define LSTM module
-  _rnn = LSTMModule(FLAGS.n_hidden)
-  # Call LSTM module
-  h_rnn_3d, last_state = _rnn(x, state)
-  # Reshape into [seq_len*batch_size, num_units]
-  h_rnn_2d = tf.reshape(h_rnn_3d, [-1, FLAGS.n_hidden])
-  # Define output layer
-  _output = LinearCell(FLAGS.n_class)
-  # Call output layer [seq_len*batch_size, n_class]
-  h_logits = _output(h_rnn_2d, 'output')
-  # Transform labels into one-hot vectors [seq_len*batch_size, n_class]
-  y_1hot = tf.one_hot(tf.reshape(y, [-1]), depth=FLAGS.n_class)
-  # Define loss and optimizer [seq_len*batch_size]
-  cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=y_1hot,
-                                                          logits=h_logits)
-  # Reshape into [seq_len, batch_size]
-#  cross_entropy = tf.reshape(cross_entropy, [-1, FLAGS.batch_size])
-  cost = tf.reduce_sum((cross_entropy * tf.reshape(x_mask, [-1])), reduction_indices=0)
-  return Graph(cost, x, x_mask, state, last_state, y)
+    total_lgp_list = []
+    for fwd_lgp, bwd_lgp in zip(fwd_act_lgp_list, bwd_act_lgp_list):
+        fwd_sum = tf.reduce_sum(fwd_lgp, axis=[0, 2])
+        bwd_sum = tf.reduce_sum(bwd_lgp, axis=[0, 2])
+        fwd_cnt = tf.reduce_sum(tf.to_float(tf.not_equal(fwd_lgp, 0.0)), axis=[0, 2])
+        bwd_cnt = tf.reduce_sum(tf.to_float(tf.not_equal(bwd_lgp, 0.0)), axis=[0, 2])
+
+
+
+
+    return (x_data,
+            x_mask,
+            y_idx,
+            init_state,
+            init_cntr,
+            sum_loss,
+            mean_loss,
+            fwd_log_act_list,
+            bwd_log_act_list)
 
 
 def initial_states(batch_size, n_hidden):
