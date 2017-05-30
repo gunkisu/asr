@@ -7,9 +7,6 @@ from mixer import gen_mask
 from mixer import nats2bits
 from mixer import insert_item2dict
 from model import LinearCell, SkimLSTMModule
-from model import LSTMModule
-from fuel_train import TrainModel
-
 from collections import namedtuple
 
 flags = tf.app.flags
@@ -63,13 +60,17 @@ def build_graph(FLAGS):
                                    name='init_cntr')
 
     # Define model
+    fwd_hid_list = []
     fwd_act_lgp_list = []
+    fwd_act_mask_list = []
+
+    bwd_hid_list = []
     bwd_act_lgp_list = []
+    bwd_act_mask_list = []
     prev_hid_data = x_data
-    prev_hid_mask = x_mask
     for l in range(FLAGS.n_layer):
         # Set input data
-        prev_input = tf.concat(values=[prev_hid_data, prev_hid_mask],
+        prev_input = tf.concat(values=[prev_hid_data, x_mask],
                                axis=-1,
                                name='input_{}'.format(l))
 
@@ -86,55 +87,134 @@ def build_graph(FLAGS):
                             use_bidir=True)
 
         # Get output
-        curr_hid_data, curr_hid_mask, curr_fwd_act_lgp, curr_bwd_act_lgp = outputs
+        cur_hid_data, cur_read_mask, cur_act_mask, curr_act_lgp = outputs
 
         # Set next input
-        prev_hid_data = curr_hid_data
-        prev_hid_mask = curr_hid_mask
+        prev_hid_data = cur_hid_data
+
+        # save hidden
+        cur_fwd_hid, cur_bwd_hid = tf.split(cur_hid_data, num_or_size_splits=2, axis=-1)
+        fwd_hid_list.append(cur_fwd_hid)
+        bwd_hid_list.append(cur_bwd_hid)
+
+        # save action mask
+        cur_fwd_act_mask, cur_bwd_act_mask = tf.split(cur_act_mask, num_or_size_splits=2, axis=-1)
+        fwd_act_mask_list.append(cur_fwd_act_mask)
+        bwd_act_mask_list.append(cur_bwd_act_mask)
 
         # save action log prob
-        fwd_act_lgp_list.append(curr_fwd_act_lgp)
-        bwd_act_lgp_list.append(curr_bwd_act_lgp)
+        cur_fwd_act_lgp, cur_bwd_act_lgp = tf.split(curr_act_lgp, num_or_size_splits=2, axis=-1)
+        fwd_act_lgp_list.append(cur_fwd_act_lgp)
+        bwd_act_lgp_list.append(cur_bwd_act_lgp)
 
     # Set output layer
     with tf.variable_scope('output'):
         output_linear = LinearCell(FLAGS.n_class)
 
+    # Get sequence length and batch size
+    seq_len = tf.shape(prev_hid_data)[0]
+    num_samples = tf.shape(prev_hid_data)[1]
+    output_feat_size = tf.shape(prev_hid_data)[2]
+
     # Get output logit
-    output_logit = output_linear(tf.reshape(prev_hid_data, [-1, 2*FLAGS.n_hidden]))
+    output_logit = output_linear(tf.reshape(prev_hid_data, [-1, output_feat_size]))
+    output_logit = tf.reshape(output_logit, (seq_len, num_samples, FLAGS.n_class))
 
     # Get one-hot label
-    y_1hot = tf.one_hot(tf.reshape(y_idx, [-1]), depth=FLAGS.n_class)
+    y_1hot = tf.one_hot(y_idx, depth=FLAGS.n_class)
 
     # Define cross entropy
-    ml_frame_loss = tf.nn.softmax_cross_entropy_with_logits(labels=y_1hot,
-                                                            logits=output_logit)
+    ml_frame_loss = tf.nn.softmax_cross_entropy_with_logits(labels=tf.reshape(y_1hot, [-1, FLAGS.n_class]),
+                                                            logits=tf.reshape(output_logit, [-1, FLAGS.n_class]))
 
-    ml_sample_loss = tf.reduce_sum(ml_frame_loss * tf.reshape(x_mask, [-1]), axis=0)
+    ml_sample_loss = tf.reshape(ml_frame_loss, (seq_len, num_samples))
+    ml_sample_loss = tf.reduce_sum(ml_sample_loss*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 1])
+    ml_mean_loss = tf.reduce_sum(ml_sample_loss)/num_samples
 
-    ml_sum_loss = tf.reduce_sum(ml_frame_loss * tf.reshape(x_mask, [-1]))
-    ml_mean_loss = ml_sum_loss/tf.reduce_sum(x_mask)
+    # Define frame-wise accuracy
+    sample_frame_accr = tf.to_float(tf.equal(tf.argmax(output_logit, axis=-1), tf.argmax(y_1hot, axis=-1)))
+    sample_frame_accr = tf.reduce_sum(sample_frame_accr*tf.squeeze(x_mask, axis=-1))/tf.reduce_sum(x_mask, axis=[0, 1])
+    mean_frame_accr = tf.reduce_sum(sample_frame_accr)/num_samples
 
+    # Get parameters
+    model_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+    rl_params = [var for var in model_params if 'action' in var.name]
+    ml_params = [var for var in model_params if 'action' not in var.name]
 
-    total_lgp_list = []
-    for fwd_lgp, bwd_lgp in zip(fwd_act_lgp_list, bwd_act_lgp_list):
-        fwd_sum = tf.reduce_sum(fwd_lgp, axis=[0, 2])
-        bwd_sum = tf.reduce_sum(bwd_lgp, axis=[0, 2])
-        fwd_cnt = tf.reduce_sum(tf.to_float(tf.not_equal(fwd_lgp, 0.0)), axis=[0, 2])
-        bwd_cnt = tf.reduce_sum(tf.to_float(tf.not_equal(bwd_lgp, 0.0)), axis=[0, 2])
+    # Define RL cost
+    sample_reward = sample_frame_accr
+    total_policy_cost = []
+    total_baseline_cost = []
+    for i, act_data_list in enumerate(zip(fwd_hid_list,
+                                          fwd_act_lgp_list,
+                                          fwd_act_mask_list,
+                                          bwd_hid_list,
+                                          bwd_act_lgp_list,
+                                          bwd_act_mask_list)):
 
+        fwd_hid, fwd_lgp, fwd_mask, bwd_hid, bwd_lgp, bwd_mask = act_data_list
+        # Forward pass
+        # Get action mask and corresponding hidden state
+        with tf.variable_scope('fwd_baseline') as vs:
+            fwd_W = tf.get_variable('W', [FLAGS.n_hidden, 1], dtype=fwd_hid.dtype)
+            fwd_b = tf.get_variable('b', [FLAGS.n_hidden, 1], dtype=fwd_hid.dtype)
+            tf.add_to_collection('weights', fwd_W)
+            tf.add_to_collection('vars', fwd_W)
+            tf.add_to_collection('vars', fwd_b)
 
+        # set baseline
+        fwd_basline = tf.matmul(tf.reshape(fwd_hid, [-1, FLAGS.n_hidden]), fwd_W) + fwd_b
+        fwd_basline = tf.reshape(fwd_basline, [seq_len, num_samples])
 
+        # set sample-wise reward
+        fwd_sample_reward = (sample_reward - fwd_basline)*tf.squeeze(fwd_mask)
+
+        # set baseline cost
+        rl_fwd_baseline_cost = tf.reduce_sum(tf.square(fwd_sample_reward))
+        total_baseline_cost.append([rl_fwd_baseline_cost, [fwd_W, fwd_b]])
+
+        # set policy cost
+        rl_fwd_policy_cost = fwd_sample_reward*tf.reduce_sum(fwd_lgp, axis=-1)*tf.squeeze(fwd_mask)
+        rl_fwd_policy_cost = tf.reduce_sum(rl_fwd_policy_cost)/tf.reduce_sum(fwd_mask)
+        total_policy_cost.append([rl_fwd_policy_cost, [var for var in rl_params if str(i) in var and 'fwd' in var]])
+
+        # Backward pass
+        # Get action mask and corresponding hidden state
+        with tf.variable_scope('bwd_baseline') as vs:
+            bwd_W = tf.get_variable('W', [FLAGS.n_hidden, 1], dtype=bwd_hid.dtype)
+            bwd_b = tf.get_variable('b', [FLAGS.n_hidden, 1], dtype=bwd_hid.dtype)
+            tf.add_to_collection('weights', bwd_W)
+            tf.add_to_collection('vars', bwd_W)
+            tf.add_to_collection('vars', bwd_b)
+
+        # set baseline
+        bwd_basline = tf.matmul(tf.reshape(bwd_hid, [-1, FLAGS.n_hidden]), bwd_W) + bwd_b
+        bwd_basline = tf.reshape(bwd_basline, [seq_len, num_samples])
+
+        # set sample-wise reward
+        bwd_sample_reward = (sample_reward - bwd_basline)*tf.squeeze(bwd_mask)
+
+        # set baseline cost
+        rl_bwd_baseline_cost = tf.reduce_sum(tf.square(bwd_sample_reward))
+        total_baseline_cost.append([rl_bwd_baseline_cost, [bwd_W, bwd_b]])
+
+        # set policy cost
+        rl_bwd_policy_cost = bwd_sample_reward*tf.reduce_sum(bwd_lgp, axis=-1)*tf.squeeze(bwd_mask)
+        rl_bwd_policy_cost = tf.reduce_sum(rl_bwd_policy_cost)/tf.reduce_sum(bwd_mask)
+        total_policy_cost.append([rl_bwd_policy_cost, [var for var in rl_params if str(i) in var and 'bwd' in var]])
+
+    ml_cost = [ml_mean_loss, ml_params]
 
     return (x_data,
             x_mask,
             y_idx,
             init_state,
             init_cntr,
-            sum_loss,
-            mean_loss,
-            fwd_log_act_list,
-            bwd_log_act_list)
+            ml_mean_loss,
+            mean_frame_accr,
+            ml_cost,
+            total_policy_cost,
+            total_baseline_cost)
 
 
 def initial_states(batch_size, n_hidden):

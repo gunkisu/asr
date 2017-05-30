@@ -232,18 +232,21 @@ class SkimLSTMModule(object):
             bwd_hid_data, bwd_act_lgp_seq, bwd_act_sample_seq, bwd_read_mask, bwd_act_mask = bwd_outputs
 
             hid_data = tf.concat([fwd_hid_data, tf.reverse(bwd_hid_data, axis=[0])], axis=-1)
-            seq_mask = fwd_read_mask * tf.reverse(bwd_read_mask, axis=[0])
+            read_mask = tf.concat([fwd_read_mask, tf.reverse(bwd_read_mask, axis=[0])], axis=-1)
+            act_mask = tf.concat([fwd_act_mask, tf.reverse(bwd_act_mask, axis=[0])], axis=-1)
 
             bwd_act_lgp = tf.reverse(bwd_act_lgp_seq, axis=[0])*tf.one_hot(indices=tf.to_int32(tf.squeeze(tf.reverse(bwd_act_sample_seq, axis=[0]))), depth=self._max_skims)*tf.reverse(bwd_act_mask, axis=[0])
+            act_lgp = tf.concat([fwd_act_lgp, bwd_act_lgp], axis=-1)
 
-            outputs = hid_data, seq_mask, fwd_act_lgp, bwd_act_lgp
         else:
             hid_data = fwd_hid_data
-            seq_mask = fwd_read_mask
+            read_mask = fwd_read_mask
+            act_mask = fwd_act_mask
             act_lgp = fwd_act_lgp
 
-            outputs = hid_data, seq_mask, act_lgp
+        outputs = hid_data, read_mask, act_mask, act_lgp,
         return outputs
+
 
 class LinearCell(object):
     """Implementation of Linear layer"""
