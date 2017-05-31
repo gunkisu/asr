@@ -509,9 +509,14 @@ def train_model():
                         print("Best checkpoint stored in: %s" % best_ckpt)
         print("Optimization Finished.")
 
-if __name__ == '__main__':
-    tf.app.run()
+
+def main(_):
     if not FLAGS.start_from_ckpt:
         tf.gfile.DeleteRecursively(FLAGS.log_dir)
     tf.gfile.MakeDirs(FLAGS.log_dir)
     train_model()
+
+if __name__ == '__main__':
+    tf.app.run()
+    main(_)
+
