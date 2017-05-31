@@ -133,7 +133,7 @@ class SkimLSTMCell(RNNCell):
             new_skim_cntr = tf.maximum(x=skim_cntr - skim_mask, y=0.0, name='new_skim_cntr')
 
             # compute gate based on read_mask and update states
-            with vs.variable_scope("gate"):
+            with vs.variable_scope("gate") as vs:
                 gate_logits = _affine([input_data, prev_h], 4 * self._num_units)
             i, f, o, j = _lstm_gates(gate_logits, forget_bias=self._forget_bias)
             new_c = prev_c * f + i * j
@@ -142,7 +142,7 @@ class SkimLSTMCell(RNNCell):
             new_h = new_h * read_mask + prev_h * (1. - read_mask)
 
             # compute skim action on action_mask and update counter
-            with vs.variable_scope("action"):
+            with vs.variable_scope("action") as vs:
                 action_input = tf.stop_gradient(new_h)
                 action_logit = _affine([action_input, ], self._max_skims)
             action_logprob = action_logit - tf.log(tf.reduce_sum(input_tensor=tf.exp(action_logit),

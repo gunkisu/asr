@@ -110,7 +110,7 @@ def build_graph(FLAGS):
                                axis=-1)
 
         # Set skim lstm
-        with tf.variable_scope('lstm_{}'.format(l)):
+        with tf.variable_scope('lstm_{}'.format(l)) as vs:
             skim_lstm = SkimLSTMModule(num_units=FLAGS.n_hidden,
                                        max_skims=FLAGS.n_action,
                                        min_reads=FLAGS.n_read,
@@ -149,7 +149,7 @@ def build_graph(FLAGS):
         prev_hid_data = cur_hid_data
 
     # Set output layer
-    with tf.variable_scope('output'):
+    with tf.variable_scope('output') as vs:
         output_linear = LinearCell(FLAGS.n_class)
 
     # Get sequence length and batch size
