@@ -13,6 +13,7 @@ flags.DEFINE_integer('n_input', 123, 'Number of inputs')
 flags.DEFINE_integer('n_hidden', 128, 'Number of LSTM hidden units')
 flags.DEFINE_integer('n_class', 3436, 'Number of target symbols')
 flags.DEFINE_integer('n_layer', 3, 'Number of layers')
+flags.DEFINE_float('forget_bias', 1.0, 'forget bias')
 
 # Action size
 flags.DEFINE_integer('n_read', 1, 'Number of minimum read')

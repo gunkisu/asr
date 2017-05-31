@@ -116,22 +116,23 @@ class SkimLSTMCell(RNNCell):
             # update mask based on mask and read_counter
             # if read counter is larger than 0, need to update
             read_mask = tf.to_float((read_cntr * input_mask) > 0, name='read_mask')
+            read_mask = tf.stop_gradient(read_mask)
 
             # action mask based on mask and read_counter
             # if read counter is 1 that now requires action
-            action_mask = tf.to_float((tf.to_float(tf.equal(read_cntr,1.0)) * input_mask) > 0, name='action_mask')
+            action_mask = tf.to_float((tf.to_float(tf.equal(read_cntr, 1.0)) * input_mask) > 0, name='action_mask')
+            action_mask = tf.stop_gradient(action_mask)
 
-            # init read mask based on mask and skim_counter
-            # if skim counter is 1 that next should be read
-            init_mask = tf.to_float((tf.to_float(tf.equal(skim_cntr, 1.0)) * input_mask) > 0, name='init_mask')
+            # skim mask based on mask and skim_counter
+            # if skim counter is larger than 0, need to update
             skim_mask = tf.to_float((skim_cntr * input_mask) > 0, name='skim_mask')
+            skim_mask = tf.stop_gradient(skim_mask)
 
             # reduce read counter
             new_read_cntr = tf.maximum(x=read_cntr - read_mask, y=0.0, name='new_read_cntr')
             new_skim_cntr = tf.maximum(x=skim_cntr - skim_mask, y=0.0, name='new_skim_cntr')
 
-            # first update states
-            # compute gate
+            # compute gate based on read_mask and update states
             with vs.variable_scope("gate"):
                 gate_logits = _affine([input_data, prev_h], 4 * self._num_units)
             i, f, o, j = _lstm_gates(gate_logits, forget_bias=self._forget_bias)
@@ -140,7 +141,7 @@ class SkimLSTMCell(RNNCell):
             new_c = new_c * read_mask + prev_c * (1. - read_mask)
             new_h = new_h * read_mask + prev_h * (1. - read_mask)
 
-            # compute skim action
+            # compute skim action on action_mask and update counter
             with vs.variable_scope("action"):
                 action_input = tf.stop_gradient(new_h)
                 action_logit = _affine([action_input, ], self._max_skims)
@@ -149,8 +150,12 @@ class SkimLSTMCell(RNNCell):
                                                                  keep_dims=True))
             action_sample = tf.to_float(tf.multinomial(logits=action_logit, num_samples=1))
 
-            # update skim counter
-            new_skim_cntr += (action_sample + 1.0) * action_mask
+            new_skim_cntr += action_sample * action_mask
+
+            # init read mask based on read_counter and skim_counter
+            init_mask = tf.to_float((tf.to_float(tf.equal(new_read_cntr, 0.0)) *
+                                     tf.to_float(tf.equal(new_skim_cntr, 0.0)) *
+                                     input_mask) > 0, name='init_mask')
 
             # update skim counter
             new_read_cntr += self._min_reads * init_mask
