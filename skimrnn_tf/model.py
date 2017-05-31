@@ -217,9 +217,9 @@ class SkimLSTMModule(object):
         if use_bidir:
             # init state
             bwd_init_state = SkimLSTMStateTuple(init_state[0],
-                                                init_state[1],
-                                                tf.zeros_like(init_state[2]),
-                                                tf.ones_like(init_state[2])*self._min_reads)
+                                                init_state[0],
+                                                tf.zeros_like(init_state[1]),
+                                                tf.ones_like(init_state[1])*self._min_reads)
 
             # init cell
             bwd_rnn_cell = SkimLSTMCell(num_units=self._num_units,
