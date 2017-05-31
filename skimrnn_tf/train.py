@@ -217,8 +217,6 @@ def build_graph(FLAGS):
                                           bwd_act_mask_list)):
         fwd_hid, fwd_lgp, fwd_mask, bwd_hid, bwd_lgp, bwd_mask = act_data_list
 
-
-
         # Forward pass
         # Get action mask and corresponding hidden state
         with tf.variable_scope('fwd_baseline_{}'.format(i)) as vs:
@@ -235,7 +233,7 @@ def build_graph(FLAGS):
         fwd_basline = tf.reshape(fwd_basline, [seq_len, num_samples])
 
         # set sample-wise reward
-        fwd_sample_reward = (sample_reward - fwd_basline)*tf.squeeze(fwd_mask)
+        fwd_sample_reward = (tf.expand_dims(sample_reward, axis=0) - fwd_basline)*tf.squeeze(fwd_mask)
 
         # set baseline cost
         rl_fwd_baseline_cost = tf.reduce_sum(tf.square(fwd_sample_reward)) # /tf.reduce_sum(fwd_mask)
@@ -262,7 +260,7 @@ def build_graph(FLAGS):
         bwd_basline = tf.reshape(bwd_basline, [seq_len, num_samples])
 
         # set sample-wise reward
-        bwd_sample_reward = (sample_reward - bwd_basline)*tf.squeeze(bwd_mask)
+        bwd_sample_reward = (tf.expand_dims(sample_reward, axis=0) - bwd_basline)*tf.squeeze(bwd_mask)
 
         # set baseline cost
         rl_bwd_baseline_cost = tf.reduce_sum(tf.square(bwd_sample_reward)) # /tf.reduce_sum(bwd_mask)
@@ -300,9 +298,10 @@ def build_graph(FLAGS):
 
 
 def updater(model_graph,
-            ml_updater,
-            rl_updater,
-            bl_updater,
+            model_updater,
+            # ml_updater,
+            # rl_updater,
+            # bl_updater,
             x_data,
             x_mask,
             y_data,
@@ -312,16 +311,16 @@ def updater(model_graph,
                            model_graph.mean_rl_cost,
                            model_graph.mean_bl_cost,
                            model_graph.read_ratio_list,
-                           ml_updater,
-                           rl_updater,
-                           bl_updater],
+                           model_updater],
+                           # rl_updater,
+                           # bl_updater],
                           feed_dict={model_graph.x_data: x_data,
                                      model_graph.x_mask: x_mask,
                                      model_graph.y_data: y_data,
                                      model_graph.init_state: np.zeros(shape=(x_data.shape[1], FLAGS.n_hidden), dtype=x_data.dtype),
                                      model_graph.init_cntr: np.zeros(shape=(x_data.shape[1], 1), dtype=x_data.dtype)})
 
-    mean_accr, ml_cost, rl_cost, bl_cost, read_ratio,  _, _, _ = outputs
+    mean_accr, ml_cost, rl_cost, bl_cost, read_ratio,  _ = outputs
     return mean_accr, ml_cost, rl_cost, bl_cost, read_ratio
 
 
@@ -406,37 +405,40 @@ def train_model():
     # Define global training step
     global_step = tf.contrib.framework.get_or_create_global_step()
 
+
+
     # Set ml optimizer (Adam optimizer, in the original paper, we use 0.99 for beta2
-    ml_opt = tf.train.AdamOptimizer(learning_rate=FLAGS.ml_learning_rate,
-                                    name='ml_optimizer')
+    model_opt = tf.train.AdamOptimizer(learning_rate=FLAGS.ml_learning_rate,
+                                       name='model_optimizer')
     ml_grad = tf.gradients(ys=model_ml_cost, xs=ml_param, aggregation_method=2)
 
     # Set rl optimizer (SGD optimizer)
-    rl_opt = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.rl_learning_rate,
-                                               name='rl_optimizer')
+    # rl_opt = tf.train.AdamOptimizer(learning_rate=FLAGS.ml_learning_rate,
+    #                                 name='rl_optimizer')
     rl_grad = tf.gradients(ys=model_rl_cost, xs=rl_param, aggregation_method=2)
 
     # Set bl optimizer (SGD optimizer)
-    bl_opt = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.rl_learning_rate,
-                                               name='bl_optimizer')
+    # bl_opt = tf.train.AdamOptimizer(learning_rate=FLAGS.ml_learning_rate,
+    #                                 name='bl_optimizer')
     bl_grad = tf.gradients(ys=model_bl_cost, xs=bl_param, aggregation_method=2)
 
     # Set gradient clipping
     if FLAGS.ml_grad_clip > 0.0:
         ml_grad, _ = tf.clip_by_global_norm(t_list=ml_grad,
                                             clip_norm=FLAGS.ml_grad_clip)
-    if FLAGS.ml_grad_clip > 0.0:
-        rl_grad, _ = tf.clip_by_global_norm(t_list=rl_grad,
-                                            clip_norm=FLAGS.rl_grad_clip)
+    # if FLAGS.ml_grad_clip > 0.0:
+        # rl_grad, _ = tf.clip_by_global_norm(t_list=rl_grad,
+        #                                     clip_norm=FLAGS.rl_grad_clip)
 
-    ml_update = ml_opt.apply_gradients(grads_and_vars=zip(ml_grad, ml_param),
-                                       global_step=global_step)
+    model_update = model_opt.apply_gradients(grads_and_vars=zip(ml_grad+rl_grad+bl_grad,
+                                                                ml_param+rl_param+bl_param),
+                                             global_step=global_step)
 
-    rl_update = rl_opt.apply_gradients(grads_and_vars=zip(rl_grad, rl_param),
-                                       global_step=global_step)
+    # rl_update = rl_opt.apply_gradients(grads_and_vars=zip(rl_grad, rl_param),
+    #                                    global_step=global_step)
 
-    bl_update = bl_opt.apply_gradients(grads_and_vars=zip(bl_grad, bl_param),
-                                       global_step=global_step)
+    # bl_update = bl_opt.apply_gradients(grads_and_vars=zip(bl_grad, bl_param),
+    #                                    global_step=global_step)
 
     # Set dataset (sync_data(FLAGS))
     datasets = [FLAGS.train_dataset,
@@ -496,9 +498,10 @@ def train_model():
 
                 # Update model
                 mean_accr, ml_cost, rl_cost, bl_cost, read_ratio = updater(model_graph=model_graph,
-                                                                           ml_updater=ml_update,
-                                                                           rl_updater=rl_update,
-                                                                           bl_updater=bl_update,
+                                                                           model_updater=model_update,
+                                                                           # ml_updater=ml_update,
+                                                                           # rl_updater=rl_update,
+                                                                           # bl_updater=bl_update,
                                                                            x_data=x_data,
                                                                            x_mask=x_mask,
                                                                            y_data=y_data,

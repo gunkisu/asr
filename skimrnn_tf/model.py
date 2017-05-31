@@ -146,7 +146,7 @@ class SkimLSTMCell(RNNCell):
                 action_logit = _affine([tf.stop_gradient(new_h), ], self._max_skims)
             action_logprob = action_logit - tf.log(tf.reduce_sum(input_tensor=tf.exp(action_logit),
                                                                  axis=1,
-                                                                 keep_dims=True))
+                                                                 keep_dims=True) + 1e-5)
             action_sample = tf.to_float(tf.multinomial(logits=action_logit, num_samples=1))
 
             new_skim_cntr += action_sample * action_mask
