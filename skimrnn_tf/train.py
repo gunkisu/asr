@@ -230,7 +230,7 @@ def build_graph(FLAGS):
         # set policy cost
         rl_fwd_policy_cost = fwd_sample_reward*tf.reduce_sum(fwd_lgp, axis=-1)*tf.squeeze(fwd_mask)
         rl_fwd_policy_cost = tf.reduce_sum(rl_fwd_policy_cost)/tf.reduce_sum(fwd_mask)
-        total_policy_cost.append([rl_fwd_policy_cost, [var for var in rl_params if str(i) in var and 'fwd' in var]])
+        total_policy_cost.append([rl_fwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'fwd' in var.name]])
 
         # Backward pass
         # Get action mask and corresponding hidden state
@@ -255,7 +255,7 @@ def build_graph(FLAGS):
         # set policy cost
         rl_bwd_policy_cost = bwd_sample_reward*tf.reduce_sum(bwd_lgp, axis=-1)*tf.squeeze(bwd_mask)
         rl_bwd_policy_cost = tf.reduce_sum(rl_bwd_policy_cost)/tf.reduce_sum(bwd_mask)
-        total_policy_cost.append([rl_bwd_policy_cost, [var for var in rl_params if str(i) in var and 'bwd' in var]])
+        total_policy_cost.append([rl_bwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'bwd' in var.name]])
 
     ml_cost = [ml_mean_loss, ml_params]
 
