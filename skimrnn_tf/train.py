@@ -350,7 +350,7 @@ def train_model():
     rl_param = []
     for c, v in model_graph.rl_cost_param_list + model_graph.bl_cost_param_list:
         tf.add_to_collection('rl_cost', c)
-        rl_param.append(v)
+        rl_param.extend(v)
 
     # Set weight decay
     if FLAGS.weight_decay > 0.0:
@@ -372,15 +372,11 @@ def train_model():
                                     beta1=0.9,
                                     beta2=0.99,
                                     name='ml_optimizer')
-    print(model_ml_cost)
-    print(ml_param)
     ml_grad = tf.gradients(ys=model_ml_cost, xs=ml_param, aggregation_method=2)
 
     # Set rl optimizer (SGD optimizer)
     rl_opt = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.rl_learning_rate,
                                                name='rl_optimizer')
-    print(model_rl_cost)
-    print(rl_param)
     rl_grad = tf.gradients(ys=model_rl_cost, xs=rl_param, aggregation_method=2)
 
     # Set gradient clipping
