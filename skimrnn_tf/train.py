@@ -180,7 +180,7 @@ def build_graph(FLAGS):
 
     # Sample level
     ml_sample_loss = tf.reshape(ml_frame_loss, [seq_len, num_samples])
-    ml_sample_loss = tf.reduce_sum(ml_frame_loss*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 2])
+    ml_sample_loss = tf.reduce_sum(ml_sample_loss*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 2])
 
     # Mean level
     ml_mean_loss = tf.reduce_sum(ml_sample_loss)/tf.to_float(num_samples)
