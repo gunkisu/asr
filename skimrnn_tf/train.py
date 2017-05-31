@@ -5,6 +5,8 @@ from data.fuel_utils import create_ivector_datastream
 from model import LinearCell, SkimLSTMModule
 from collections import namedtuple
 
+tf.logging.set_verbosity(tf.logging.ERROR)
+
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
