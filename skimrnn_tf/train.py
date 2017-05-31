@@ -127,21 +127,21 @@ def build_graph(FLAGS):
         # Save hidden
         cur_fwd_hid, cur_bwd_hid = tf.split(value=cur_hid_data,
                                             num_or_size_splits=2,
-                                            axis=-1)
+                                            axis=2)
         fwd_hid_list.append(cur_fwd_hid)
         bwd_hid_list.append(cur_bwd_hid)
 
         # save action mask
         cur_fwd_act_mask, cur_bwd_act_mask = tf.split(value=cur_act_mask,
                                                       num_or_size_splits=2,
-                                                      axis=-1)
+                                                      axis=2)
         fwd_act_mask_list.append(cur_fwd_act_mask)
         bwd_act_mask_list.append(cur_bwd_act_mask)
 
         # save action log prob
         cur_fwd_act_lgp, cur_bwd_act_lgp = tf.split(value=curr_act_lgp,
                                                     num_or_size_splits=2,
-                                                    axis=-1)
+                                                    axis=2)
         fwd_act_lgp_list.append(cur_fwd_act_lgp)
         bwd_act_lgp_list.append(cur_bwd_act_lgp)
 
