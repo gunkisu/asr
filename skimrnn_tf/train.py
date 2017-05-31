@@ -477,7 +477,7 @@ def train_model():
                     print("====================================================")
                     print("Epoch " + str(e_idx) + ", Total Iter " + str(global_step.eval()))
                     print("----------------------------------------------------")
-                    print("Average FER: {:.2f}%".format(mean_accr * 100))
+                    print("Average FER: {:.2f}%".format((1.0-mean_accr) * 100))
                     print("Average  ML: {:.6f}".format(mean_ml_cost * 100))
                     # print("Average  RL: {:.6f}".format(mean_rl_cost * 100))
                     print("Average  BL: {:.6f}".format(mean_bl_cost * 100))
