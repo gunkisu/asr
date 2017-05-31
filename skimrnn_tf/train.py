@@ -148,18 +148,17 @@ def build_graph(FLAGS):
         # Set next input
         prev_hid_data = cur_hid_data
 
+    # Get sequence length and batch size
+    seq_len = tf.shape(prev_hid_data)[0]
+    num_samples = tf.shape(prev_hid_data)[1]
+
     # Set output layer
     with tf.variable_scope('output') as vs:
         output_linear = LinearCell(FLAGS.n_class)
 
-    # Get sequence length and batch size
-    seq_len = tf.shape(prev_hid_data)[0]
-    num_samples = tf.shape(prev_hid_data)[1]
-    output_feat_size = tf.shape(prev_hid_data)[2]
-
-    # Get output logit (linear projection)
-    output_logit = output_linear(tf.reshape(prev_hid_data, [-1, FLAGS.n_hidden]))
-    output_logit = tf.reshape(output_logit, (seq_len, num_samples, FLAGS.n_class))
+        # Get output logit (linear projection)
+        output_logit = output_linear(tf.reshape(prev_hid_data, [-1, FLAGS.n_hidden]))
+        output_logit = tf.reshape(output_logit, (seq_len, num_samples, -1))
 
     # Get one-hot label
     y_1hot = tf.one_hot(y_data, depth=FLAGS.n_class)
