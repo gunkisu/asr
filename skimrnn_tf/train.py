@@ -19,7 +19,7 @@ flags.DEFINE_float('forget_bias', 1.0, 'forget bias')
 
 # Action size
 flags.DEFINE_integer('n_read', 1, 'Number of minimum read')
-flags.DEFINE_integer('n_action', 5, 'Number of maximum skim')
+flags.DEFINE_integer('n_action', 2, 'Number of maximum skim')
 
 # Random Seet
 flags.DEFINE_integer('base_seed', 2222, 'Base random seed')
