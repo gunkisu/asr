@@ -241,7 +241,7 @@ def build_graph(FLAGS):
         # set policy cost
         rl_fwd_policy_cost = tf.stop_gradient(fwd_sample_reward)*tf.reduce_sum(fwd_lgp, axis=-1)*tf.squeeze(fwd_mask)
         rl_fwd_policy_cost = tf.reduce_sum(rl_fwd_policy_cost)/tf.reduce_sum(fwd_mask)
-        total_policy_cost.append([-rl_fwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'fwd' in var.name]])
+        total_policy_cost.append([rl_fwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'fwd' in var.name]])
 
         # Backward pass
         # Get action mask and corresponding hidden state
@@ -268,7 +268,7 @@ def build_graph(FLAGS):
         # set policy cost
         rl_bwd_policy_cost = tf.stop_gradient(bwd_sample_reward)*tf.reduce_sum(bwd_lgp, axis=-1)*tf.squeeze(bwd_mask)
         rl_bwd_policy_cost = tf.reduce_sum(rl_bwd_policy_cost)/tf.reduce_sum(bwd_mask)
-        total_policy_cost.append([-rl_bwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'bwd' in var.name]])
+        total_policy_cost.append([rl_bwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'bwd' in var.name]])
 
     ml_cost = [ml_mean_loss, ml_params]
 
@@ -280,7 +280,6 @@ def build_graph(FLAGS):
 
     read_ratio_list = tf.concat(read_ratio_list, axis=1)
     read_ratio_list = tf.reduce_mean(read_ratio_list, axis=1)
-
 
     return Graph(x_data=x_data,
                  x_mask=x_mask,
@@ -300,6 +299,7 @@ def build_graph(FLAGS):
 def updater(model_graph,
             ml_updater,
             rl_updater,
+            bl_updater,
             x_data,
             x_mask,
             y_data,
@@ -310,7 +310,8 @@ def updater(model_graph,
                            model_graph.mean_bl_cost,
                            model_graph.read_ratio_list,
                            ml_updater,
-                           rl_updater],
+                           rl_updater,
+                           bl_updater],
                           feed_dict={model_graph.x_data: x_data,
                                      model_graph.x_mask: x_mask,
                                      model_graph.y_data: y_data,
@@ -374,9 +375,15 @@ def train_model():
 
     # Get model train policy cost
     rl_param = []
-    for c, v in model_graph.rl_cost_param_list + model_graph.bl_cost_param_list:
+    for c, v in model_graph.rl_cost_param_list:
         tf.add_to_collection('rl_cost', c)
         rl_param.extend(v)
+
+    # Get model train baseline
+    bl_param = []
+    for c, v in model_graph.bl_cost_param_list:
+        tf.add_to_collection('bl_cost', c)
+        bl_param.extend(v)
 
     # Set weight decay
     if FLAGS.weight_decay > 0.0:
@@ -390,6 +397,9 @@ def train_model():
     # Set model reinforce cost
     model_rl_cost = tf.add_n(tf.get_collection('rl_cost'), name='rl_cost')
 
+    # Set model reinforce cost
+    model_bl_cost = tf.add_n(tf.get_collection('bl_cost'), name='bl_cost')
+
     # Define global training step
     global_step = tf.contrib.framework.get_or_create_global_step()
 
@@ -401,7 +411,12 @@ def train_model():
     # Set rl optimizer (SGD optimizer)
     rl_opt = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.rl_learning_rate,
                                                name='rl_optimizer')
-    rl_grad = tf.gradients(ys=model_rl_cost, xs=rl_param, aggregation_method=2)
+    rl_grad = tf.gradients(ys=-model_rl_cost, xs=rl_param, aggregation_method=2)
+
+    # Set bl optimizer (SGD optimizer)
+    bl_opt = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.rl_learning_rate,
+                                               name='bl_optimizer')
+    bl_grad = tf.gradients(ys=model_bl_cost, xs=bl_param, aggregation_method=2)
 
     # Set gradient clipping
     if FLAGS.ml_grad_clip > 0.0:
@@ -415,6 +430,9 @@ def train_model():
                                        global_step=global_step)
 
     rl_update = rl_opt.apply_gradients(grads_and_vars=zip(rl_grad, rl_param),
+                                       global_step=global_step)
+
+    bl_update = bl_opt.apply_gradients(grads_and_vars=zip(bl_grad, bl_param),
                                        global_step=global_step)
 
     # Set dataset (sync_data(FLAGS))
@@ -477,6 +495,7 @@ def train_model():
                 mean_accr, ml_cost, rl_cost, bl_cost, read_ratio = updater(model_graph=model_graph,
                                                                            ml_updater=ml_update,
                                                                            rl_updater=rl_update,
+                                                                           bl_updater=bl_update,
                                                                            x_data=x_data,
                                                                            x_mask=x_mask,
                                                                            y_data=y_data,
