@@ -512,8 +512,9 @@ def train_model():
 
 def main(_):
     if not FLAGS.start_from_ckpt:
-        tf.gfile.DeleteRecursively(FLAGS.log_dir)
-    tf.gfile.MakeDirs(FLAGS.log_dir)
+        if tf.gfile.Exists(FLAGS.log_dir):
+            tf.gfile.DeleteRecursively(FLAGS.log_dir)
+        tf.gfile.MakeDirs(FLAGS.log_dir)
     train_model()
 
 if __name__ == '__main__':
