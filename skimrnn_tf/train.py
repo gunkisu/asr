@@ -116,10 +116,10 @@ def build_graph(FLAGS):
                                        min_reads=FLAGS.n_read,
                                        forget_bias=FLAGS.forget_bias)
 
-        # Run bidir skim lstm
-        outputs = skim_lstm(inputs=prev_input,
-                            init_state=[init_state, init_cntr],
-                            use_bidir=True)
+            # Run bidir skim lstm
+            outputs = skim_lstm(inputs=prev_input,
+                                init_state=[init_state, init_cntr],
+                                use_bidir=True)
 
         # Get output
         cur_hid_data, cur_read_mask, cur_act_mask, curr_act_lgp = outputs
