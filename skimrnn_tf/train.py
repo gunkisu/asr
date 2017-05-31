@@ -179,8 +179,7 @@ def build_graph(FLAGS):
                                                             logits=tf.reshape(output_logit, [-1, FLAGS.n_class]))
 
     # Sample level
-    ml_sample_loss = tf.reshape(ml_frame_loss, (seq_len, num_samples))
-    ml_sample_loss = tf.reduce_sum(ml_sample_loss*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 2])
+    ml_sample_loss = tf.reduce_sum(ml_frame_loss*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 2])
 
     # Mean level
     ml_mean_loss = tf.reduce_sum(ml_sample_loss)/tf.to_float(num_samples)
@@ -188,7 +187,7 @@ def build_graph(FLAGS):
     # Define frame-wise accuracy
     # Sample level
     sample_frame_accr = tf.to_float(tf.equal(tf.argmax(output_logit, axis=-1), tf.argmax(y_1hot, axis=-1)))
-    sample_frame_accr = tf.reduce_sum(sample_frame_accr*tf.squeeze(x_mask, axis=-1))/tf.reduce_sum(x_mask, axis=[0, 2])
+    sample_frame_accr = tf.reduce_sum(sample_frame_accr*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 2])
 
     # Mean level
     mean_frame_accr = tf.reduce_sum(sample_frame_accr)/tf.to_float(num_samples)
@@ -225,7 +224,7 @@ def build_graph(FLAGS):
         fwd_sample_reward = (sample_reward - fwd_basline)*tf.squeeze(fwd_mask)
 
         # set baseline cost
-        rl_fwd_baseline_cost = tf.reduce_sum(tf.square(fwd_sample_reward))
+        rl_fwd_baseline_cost = tf.reduce_sum(tf.square(fwd_sample_reward))/tf.reduce_sum(fwd_mask)
         total_baseline_cost.append([rl_fwd_baseline_cost, [fwd_W, fwd_b]])
 
         # set policy cost
@@ -252,7 +251,7 @@ def build_graph(FLAGS):
         bwd_sample_reward = (sample_reward - bwd_basline)*tf.squeeze(bwd_mask)
 
         # set baseline cost
-        rl_bwd_baseline_cost = tf.reduce_sum(tf.square(bwd_sample_reward))
+        rl_bwd_baseline_cost = tf.reduce_sum(tf.square(bwd_sample_reward))/tf.reduce_sum(bwd_mask)
         total_baseline_cost.append([rl_bwd_baseline_cost, [bwd_W, bwd_b]])
 
         # set policy cost
