@@ -477,9 +477,9 @@ def train_model():
                     print("----------------------------------------------------")
                     print("Average FER: {:.2f}%".format((1.0-mean_accr) * 100))
                     print("Average  ML: {:.6f}".format(mean_ml_cost))
-                    print("Average  RL: {:.6f}".format(mean_rl_cost * 100))
+                    print("Average  RL: {:.6f}".format(mean_rl_cost))
                     print("Average  BL: {:.6f}".format(mean_bl_cost))
-                    print("Average SUM: {:.6f}".format(mean_sum_cost * 100))
+                    print("Average SUM: {:.6f}".format(mean_sum_cost))
                     last_ckpt = last_save_op.save(sess,
                                                   os.path.join(FLAGS.log_dir, "last_model.ckpt"),
                                                   global_step=global_step)
