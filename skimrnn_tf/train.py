@@ -184,7 +184,7 @@ def build_graph(FLAGS):
     ml_sample_loss = tf.reduce_sum(ml_sample_loss*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 1])
 
     # Mean level
-    ml_mean_loss = tf.reduce_sum(ml_sample_loss)/num_samples
+    ml_mean_loss = tf.reduce_sum(ml_sample_loss)/tf.to_float(num_samples)
 
     # Define frame-wise accuracy
     # Sample level
@@ -192,7 +192,7 @@ def build_graph(FLAGS):
     sample_frame_accr = tf.reduce_sum(sample_frame_accr*tf.squeeze(x_mask, axis=-1))/tf.reduce_sum(x_mask, axis=[0, 1])
 
     # Mean level
-    mean_frame_accr = tf.reduce_sum(sample_frame_accr)/num_samples
+    mean_frame_accr = tf.reduce_sum(sample_frame_accr)/tf.to_float(num_samples)
 
     # Define RL cost
     sample_reward = 1.0 - sample_frame_accr
