@@ -189,7 +189,7 @@ def build_graph(FLAGS):
     # Frame level
     ml_frame_loss = tf.nn.softmax_cross_entropy_with_logits(labels=tf.reshape(y_1hot, [-1, FLAGS.n_class]),
                                                             logits=tf.reshape(output_logit, [-1, FLAGS.n_class]))
-    ml_frame_loss *= tf.reshape(x_mask, [-1, 1])
+    ml_frame_loss *= tf.reshape(x_mask, [-1,])
 
     # Mean level
     ml_mean_loss = tf.reduce_sum(ml_frame_loss) / tf.to_float(num_samples)
