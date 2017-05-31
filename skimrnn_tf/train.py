@@ -309,7 +309,8 @@ def evaluation(model_graph,
 
         # Roll axis
         x_data = x_data.transpose((1, 0, 2))
-        x_mask = x_mask.transpose((1, 0)).expand_dims(-1)
+        x_mask = x_mask.transpose((1, 0))
+        x_mask = np.expand_dims(x_mask, -1)
         y_data = y_data.transpose((1, 0))
 
         # Run model
@@ -442,7 +443,8 @@ def train_model():
 
                 # Roll axis
                 x_data = x_data.transpose((1, 0, 2))
-                x_mask = x_mask.transpose((1, 0)).expand_dims(-1)
+                x_mask = x_mask.transpose((1, 0))
+                x_mask = np.expand_dims(x_mask, -1)
                 y_data = y_data.transpose((1, 0))
 
                 # Get input size
