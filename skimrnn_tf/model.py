@@ -143,8 +143,7 @@ class SkimLSTMCell(RNNCell):
 
             # compute skim action on action_mask and update counter
             with vs.variable_scope("action") as scope:
-                action_input = tf.stop_gradient(new_h)
-                action_logit = _affine([action_input, ], self._max_skims)
+                action_logit = _affine([tf.stop_gradient(new_h), ], self._max_skims)
             action_logprob = action_logit - tf.log(tf.reduce_sum(input_tensor=tf.exp(action_logit),
                                                                  axis=1,
                                                                  keep_dims=True))
@@ -156,6 +155,7 @@ class SkimLSTMCell(RNNCell):
             init_mask = tf.to_float((tf.to_float(tf.equal(new_read_cntr, 0.0)) *
                                      tf.to_float(tf.equal(new_skim_cntr, 0.0)) *
                                      input_mask) > 0, name='init_mask')
+            init_mask = tf.stop_gradient(init_mask)
 
             # update skim counter
             new_read_cntr += self._min_reads * init_mask

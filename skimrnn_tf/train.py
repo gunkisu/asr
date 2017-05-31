@@ -180,7 +180,7 @@ def build_graph(FLAGS):
 
     # Sample level
     ml_sample_loss = tf.reshape(ml_frame_loss, (seq_len, num_samples))
-    ml_sample_loss = tf.reduce_sum(ml_sample_loss*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 1])
+    ml_sample_loss = tf.reduce_sum(ml_sample_loss*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 2])
 
     # Mean level
     ml_mean_loss = tf.reduce_sum(ml_sample_loss)/tf.to_float(num_samples)
@@ -188,7 +188,7 @@ def build_graph(FLAGS):
     # Define frame-wise accuracy
     # Sample level
     sample_frame_accr = tf.to_float(tf.equal(tf.argmax(output_logit, axis=-1), tf.argmax(y_1hot, axis=-1)))
-    sample_frame_accr = tf.reduce_sum(sample_frame_accr*tf.squeeze(x_mask, axis=-1))/tf.reduce_sum(x_mask, axis=[0, 1])
+    sample_frame_accr = tf.reduce_sum(sample_frame_accr*tf.squeeze(x_mask, axis=-1))/tf.reduce_sum(x_mask, axis=[0, 2])
 
     # Mean level
     mean_frame_accr = tf.reduce_sum(sample_frame_accr)/tf.to_float(num_samples)
@@ -209,14 +209,16 @@ def build_graph(FLAGS):
         # Forward pass
         # Get action mask and corresponding hidden state
         with tf.variable_scope('fwd_baseline_{}'.format(i)) as vs:
-            fwd_W = tf.get_variable('W', [FLAGS.n_hidden, 1], dtype=fwd_hid.dtype)
-            fwd_b = tf.get_variable('b', [1, ], dtype=fwd_hid.dtype)
+            fwd_W = tf.get_variable('W', [FLAGS.n_hidden, 1], dtype=fwd_hid.dtype,
+                                    initializer=tf.truncated_normal_initializer(stddev=0.01))
+            fwd_b = tf.get_variable('b', [1, ], dtype=fwd_hid.dtype,
+                                    initializer=tf.constant_initializer(0.0))
             tf.add_to_collection('weights', fwd_W)
             tf.add_to_collection('vars', fwd_W)
             tf.add_to_collection('vars', fwd_b)
 
         # set baseline based on the hidden (state)
-        fwd_basline = tf.matmul(tf.reshape(fwd_hid, [-1, FLAGS.n_hidden]), fwd_W) + fwd_b
+        fwd_basline = tf.matmul(tf.reshape(tf.stop_gradient(fwd_hid), [-1, FLAGS.n_hidden]), fwd_W) + fwd_b
         fwd_basline = tf.reshape(fwd_basline, [seq_len, num_samples])
 
         # set sample-wise reward
@@ -227,21 +229,23 @@ def build_graph(FLAGS):
         total_baseline_cost.append([rl_fwd_baseline_cost, [fwd_W, fwd_b]])
 
         # set policy cost
-        rl_fwd_policy_cost = fwd_sample_reward*tf.reduce_sum(fwd_lgp, axis=-1)*tf.squeeze(fwd_mask)
+        rl_fwd_policy_cost = tf.stop_gradient(fwd_sample_reward)*tf.reduce_sum(fwd_lgp, axis=-1)*tf.squeeze(fwd_mask)
         rl_fwd_policy_cost = tf.reduce_sum(rl_fwd_policy_cost)/tf.reduce_sum(fwd_mask)
         total_policy_cost.append([rl_fwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'fwd' in var.name]])
 
         # Backward pass
         # Get action mask and corresponding hidden state
         with tf.variable_scope('bwd_baseline_{}'.format(i)) as vs:
-            bwd_W = tf.get_variable('W', [FLAGS.n_hidden, 1], dtype=bwd_hid.dtype)
-            bwd_b = tf.get_variable('b', [1, ], dtype=bwd_hid.dtype)
+            bwd_W = tf.get_variable('W', [FLAGS.n_hidden, 1], dtype=bwd_hid.dtype,
+                                    initializer=tf.truncated_normal_initializer(stddev=0.01))
+            bwd_b = tf.get_variable('b', [1, ], dtype=bwd_hid.dtype,
+                                    initializer=tf.constant_initializer(0.0))
             tf.add_to_collection('weights', bwd_W)
             tf.add_to_collection('vars', bwd_W)
             tf.add_to_collection('vars', bwd_b)
 
         # set baseline
-        bwd_basline = tf.matmul(tf.reshape(bwd_hid, [-1, FLAGS.n_hidden]), bwd_W) + bwd_b
+        bwd_basline = tf.matmul(tf.reshape(tf.stop_gradient(bwd_hid), [-1, FLAGS.n_hidden]), bwd_W) + bwd_b
         bwd_basline = tf.reshape(bwd_basline, [seq_len, num_samples])
 
         # set sample-wise reward
@@ -252,7 +256,7 @@ def build_graph(FLAGS):
         total_baseline_cost.append([rl_bwd_baseline_cost, [bwd_W, bwd_b]])
 
         # set policy cost
-        rl_bwd_policy_cost = bwd_sample_reward*tf.reduce_sum(bwd_lgp, axis=-1)*tf.squeeze(bwd_mask)
+        rl_bwd_policy_cost = tf.stop_gradient(bwd_sample_reward)*tf.reduce_sum(bwd_lgp, axis=-1)*tf.squeeze(bwd_mask)
         rl_bwd_policy_cost = tf.reduce_sum(rl_bwd_policy_cost)/tf.reduce_sum(bwd_mask)
         total_policy_cost.append([rl_bwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'bwd' in var.name]])
 
@@ -475,9 +479,9 @@ def train_model():
                     print("----------------------------------------------------")
                     print("Average FER: {:.2f}%".format(mean_accr * 100))
                     print("Average  ML: {:.6f}".format(mean_ml_cost * 100))
-                    print("Average  RL: {:.6f}".format(mean_rl_cost * 100))
+                    # print("Average  RL: {:.6f}".format(mean_rl_cost * 100))
                     print("Average  BL: {:.6f}".format(mean_bl_cost * 100))
-                    print("Average SUM: {:.6f}".format(mean_sum_cost * 100))
+                    # print("Average SUM: {:.6f}".format(mean_sum_cost * 100))
                     last_ckpt = last_save_op.save(sess,
                                                   os.path.join(FLAGS.log_dir, "last_model.ckpt"),
                                                   global_step=global_step)
