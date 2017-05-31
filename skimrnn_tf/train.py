@@ -63,7 +63,7 @@ graph_attr_list = ['x_data',
                    'ml_cost_param',
                    'rl_cost_param_list',
                    'bl_cost_param_list',
-                   'read_mask_list']
+                   'read_ratio_list']
 
 Graph = namedtuple('Graph', ' '.join(graph_attr_list))
 
