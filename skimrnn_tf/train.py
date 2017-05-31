@@ -179,6 +179,7 @@ def build_graph(FLAGS):
                                                             logits=tf.reshape(output_logit, [-1, FLAGS.n_class]))
 
     # Sample level
+    ml_sample_loss = tf.reshape(ml_frame_loss, [seq_len, num_samples])
     ml_sample_loss = tf.reduce_sum(ml_frame_loss*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 2])
 
     # Mean level
