@@ -177,8 +177,11 @@ def build_graph(FLAGS):
     # Frame level
     ml_frame_loss = tf.nn.softmax_cross_entropy_with_logits(labels=tf.reshape(y_1hot, [-1, FLAGS.n_class]),
                                                             logits=tf.reshape(output_logit, [-1, FLAGS.n_class]))
+    ml_frame_loss *= tf.reshape(x_mask, [-1, 1])
+
     # Mean level
-    ml_mean_loss = tf.reduce_sum(ml_frame_loss*tf.reshape(x_mask, [-1, 1]))/tf.reduce_sum(x_mask)
+    ml_mean_loss = tf.reduce_sum(ml_frame_loss)/tf.to_float(num_samples)
+    ml_frame_loss = tf.reduce_sum(ml_frame_loss) / tf.reduce_sum(x_mask)
 
     # Define frame-wise accuracy
     # Sample level
@@ -263,7 +266,7 @@ def build_graph(FLAGS):
                  init_state=init_state,
                  init_cntr=init_cntr,
                  mean_accr=mean_frame_accr,
-                 mean_ml_cost=ml_mean_loss,
+                 mean_ml_cost=ml_frame_loss,
                  mean_rl_cost=tf.add_n([cost for cost, _ in total_policy_cost]),
                  mean_bl_cost=tf.add_n([cost for cost, _ in total_baseline_cost]),
                  ml_cost_param=ml_cost,
@@ -473,9 +476,9 @@ def train_model():
                     print("Epoch " + str(e_idx) + ", Total Iter " + str(global_step.eval()))
                     print("----------------------------------------------------")
                     print("Average FER: {:.2f}%".format((1.0-mean_accr) * 100))
-                    print("Average  ML: {:.6f}".format(mean_ml_cost * 100))
+                    print("Average  ML: {:.6f}".format(mean_ml_cost))
                     # print("Average  RL: {:.6f}".format(mean_rl_cost * 100))
-                    print("Average  BL: {:.6f}".format(mean_bl_cost * 100))
+                    print("Average  BL: {:.6f}".format(mean_bl_cost))
                     # print("Average SUM: {:.6f}".format(mean_sum_cost * 100))
                     last_ckpt = last_save_op.save(sess,
                                                   os.path.join(FLAGS.log_dir, "last_model.ckpt"),
