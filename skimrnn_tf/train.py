@@ -217,6 +217,8 @@ def build_graph(FLAGS):
                                           bwd_act_mask_list)):
         fwd_hid, fwd_lgp, fwd_mask, bwd_hid, bwd_lgp, bwd_mask = act_data_list
 
+
+
         # Forward pass
         # Get action mask and corresponding hidden state
         with tf.variable_scope('fwd_baseline_{}'.format(i)) as vs:
@@ -242,7 +244,7 @@ def build_graph(FLAGS):
         # set policy cost
         rl_fwd_policy_cost = tf.stop_gradient(fwd_sample_reward)*tf.reduce_sum(fwd_lgp, axis=-1)*tf.squeeze(fwd_mask)
         rl_fwd_policy_cost = tf.reduce_sum(rl_fwd_policy_cost)/tf.to_float(num_samples) # /tf.reduce_sum(fwd_mask)
-        total_policy_cost.append([rl_fwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'fwd' in var.name]])
+        total_policy_cost.append([-rl_fwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'fwd' in var.name]])
 
         # Backward pass
         # Get action mask and corresponding hidden state
@@ -269,7 +271,7 @@ def build_graph(FLAGS):
         # set policy cost
         rl_bwd_policy_cost = tf.stop_gradient(bwd_sample_reward)*tf.reduce_sum(bwd_lgp, axis=-1)*tf.squeeze(bwd_mask)
         rl_bwd_policy_cost = tf.reduce_sum(rl_bwd_policy_cost)/tf.to_float(num_samples) # /tf.reduce_sum(bwd_mask)
-        total_policy_cost.append([rl_bwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'bwd' in var.name]])
+        total_policy_cost.append([-rl_bwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'bwd' in var.name]])
 
     ml_cost = [ml_mean_loss, ml_params]
 
@@ -412,7 +414,7 @@ def train_model():
     # Set rl optimizer (SGD optimizer)
     rl_opt = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.rl_learning_rate,
                                                name='rl_optimizer')
-    rl_grad = tf.gradients(ys=-model_rl_cost, xs=rl_param, aggregation_method=2)
+    rl_grad = tf.gradients(ys=model_rl_cost, xs=rl_param, aggregation_method=2)
 
     # Set bl optimizer (SGD optimizer)
     bl_opt = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.rl_learning_rate,
