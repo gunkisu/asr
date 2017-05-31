@@ -158,7 +158,7 @@ def build_graph(FLAGS):
     output_feat_size = tf.shape(prev_hid_data)[2]
 
     # Get output logit (linear projection)
-    output_logit = output_linear(tf.reshape(prev_hid_data, [-1, output_feat_size]))
+    output_logit = output_linear(tf.reshape(prev_hid_data, [-1, FLAGS.n_hidden]))
     output_logit = tf.reshape(output_logit, (seq_len, num_samples, FLAGS.n_class))
 
     # Get one-hot label
