@@ -318,7 +318,7 @@ def updater(model_graph,
                                      model_graph.init_state: np.zeros(shape=(x_data.shape[1], FLAGS.n_hidden), dtype=x_data.dtype),
                                      model_graph.init_cntr: np.zeros(shape=(x_data.shape[1], 1), dtype=x_data.dtype)})
 
-    mean_accr, ml_cost, rl_cost, bl_cost, read_ratio,  _, _ = outputs
+    mean_accr, ml_cost, rl_cost, bl_cost, read_ratio,  _, _, _ = outputs
     return mean_accr, ml_cost, rl_cost, bl_cost, read_ratio
 
 
