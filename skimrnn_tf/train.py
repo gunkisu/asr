@@ -209,7 +209,7 @@ def build_graph(FLAGS):
 
         # Forward pass
         # Get action mask and corresponding hidden state
-        with tf.variable_scope('fwd_baseline') as vs:
+        with tf.variable_scope('fwd_baseline_{}'.format(i)) as vs:
             fwd_W = tf.get_variable('W', [FLAGS.n_hidden, 1], dtype=fwd_hid.dtype)
             fwd_b = tf.get_variable('b', [FLAGS.n_hidden, 1], dtype=fwd_hid.dtype)
             tf.add_to_collection('weights', fwd_W)
@@ -234,7 +234,7 @@ def build_graph(FLAGS):
 
         # Backward pass
         # Get action mask and corresponding hidden state
-        with tf.variable_scope('bwd_baseline') as vs:
+        with tf.variable_scope('bwd_baseline_{}'.format(i)) as vs:
             bwd_W = tf.get_variable('W', [FLAGS.n_hidden, 1], dtype=bwd_hid.dtype)
             bwd_b = tf.get_variable('b', [FLAGS.n_hidden, 1], dtype=bwd_hid.dtype)
             tf.add_to_collection('weights', bwd_W)
