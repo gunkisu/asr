@@ -19,7 +19,7 @@ flags.DEFINE_float('forget_bias', 1.0, 'forget bias')
 
 # Action size
 flags.DEFINE_integer('n_read', 1, 'Number of minimum read')
-flags.DEFINE_integer('n_action', 2, 'Number of maximum skim')
+flags.DEFINE_integer('n_action', 4, 'Number of maximum skim')
 
 # Random Seet
 flags.DEFINE_integer('base_seed', 2222, 'Base random seed')
@@ -62,7 +62,8 @@ graph_attr_list = ['x_data',
                    'mean_bl_cost',
                    'ml_cost_param',
                    'rl_cost_param_list',
-                   'bl_cost_param_list']
+                   'bl_cost_param_list',
+                   'read_mask_list']
 
 Graph = namedtuple('Graph', ' '.join(graph_attr_list))
 
@@ -97,10 +98,12 @@ def build_graph(FLAGS):
 
     # Define model (get outputs from each layer and each direction)
     fwd_hid_list = []
+    fwd_read_mask_list = []
     fwd_act_lgp_list = []
     fwd_act_mask_list = []
 
     bwd_hid_list = []
+    bwd_read_mask_list = []
     bwd_act_lgp_list = []
     bwd_act_mask_list = []
 
@@ -132,6 +135,13 @@ def build_graph(FLAGS):
                                             axis=2)
         fwd_hid_list.append(cur_fwd_hid)
         bwd_hid_list.append(cur_bwd_hid)
+
+        # Save read mask
+        cur_fwd_read_mask, cur_bwd_read_mask = tf.split(value=cur_read_mask,
+                                                        num_or_size_splits=2,
+                                                        axis=2)
+        fwd_read_mask_list.append(cur_fwd_read_mask)
+        bwd_read_mask_list.append(cur_bwd_read_mask)
 
         # save action mask
         cur_fwd_act_mask, cur_bwd_act_mask = tf.split(value=cur_act_mask,
@@ -262,6 +272,16 @@ def build_graph(FLAGS):
 
     ml_cost = [ml_mean_loss, ml_params]
 
+    # Compute read ratio
+    sample_seq_len = tf.reduce_sum(x_mask, axis=0)
+    read_ratio_list = []
+    for mask in fwd_read_mask_list + bwd_read_mask_list:
+        read_ratio_list.append(tf.reduce_sum(mask, axis=0)/sample_seq_len)
+
+    read_ratio_list = tf.concat(read_ratio_list, axis=1)
+    read_ratio_list = tf.reduce_mean(read_ratio_list, axis=1)
+
+
     return Graph(x_data=x_data,
                  x_mask=x_mask,
                  y_data=y_data,
@@ -273,7 +293,8 @@ def build_graph(FLAGS):
                  mean_bl_cost=tf.add_n([cost for cost, _ in total_baseline_cost]),
                  ml_cost_param=ml_cost,
                  rl_cost_param_list=total_policy_cost,
-                 bl_cost_param_list=total_baseline_cost)
+                 bl_cost_param_list=total_baseline_cost,
+                 read_ratio_list=read_ratio_list)
 
 
 def updater(model_graph,
@@ -287,6 +308,7 @@ def updater(model_graph,
                            model_graph.mean_ml_cost,
                            model_graph.mean_rl_cost,
                            model_graph.mean_bl_cost,
+                           model_graph.read_ratio_list,
                            ml_updater,
                            rl_updater],
                           feed_dict={model_graph.x_data: x_data,
@@ -295,8 +317,8 @@ def updater(model_graph,
                                      model_graph.init_state: np.zeros(shape=(x_data.shape[1], FLAGS.n_hidden), dtype=x_data.dtype),
                                      model_graph.init_cntr: np.zeros(shape=(x_data.shape[1], 1), dtype=x_data.dtype)})
 
-    mean_accr, ml_cost, rl_cost, bl_cost, _, _ = outputs
-    return mean_accr, ml_cost, rl_cost, bl_cost
+    mean_accr, ml_cost, rl_cost, bl_cost, read_ratio,  _, _ = outputs
+    return mean_accr, ml_cost, rl_cost, bl_cost, read_ratio
 
 
 def evaluation(model_graph,
@@ -373,8 +395,6 @@ def train_model():
 
     # Set ml optimizer (Adam optimizer, in the original paper, we use 0.99 for beta2
     ml_opt = tf.train.AdamOptimizer(learning_rate=FLAGS.ml_learning_rate,
-                                    beta1=0.9,
-                                    beta2=0.99,
                                     name='ml_optimizer')
     ml_grad = tf.gradients(ys=model_ml_cost, xs=ml_param, aggregation_method=2)
 
@@ -454,13 +474,13 @@ def train_model():
                 seq_len, n_sample, _ = x_data.shape
 
                 # Update model
-                mean_accr, ml_cost, rl_cost, bl_cost = updater(model_graph=model_graph,
-                                                               ml_updater=ml_update,
-                                                               rl_updater=rl_update,
-                                                               x_data=x_data,
-                                                               x_mask=x_mask,
-                                                               y_data=y_data,
-                                                               session=sess)
+                mean_accr, ml_cost, rl_cost, bl_cost, read_ratio = updater(model_graph=model_graph,
+                                                                           ml_updater=ml_update,
+                                                                           rl_updater=rl_update,
+                                                                           x_data=x_data,
+                                                                           x_mask=x_mask,
+                                                                           y_data=y_data,
+                                                                           session=sess)
                 accr_history.append(mean_accr)
                 ml_cost_history.append(ml_cost)
                 rl_cost_history.append(rl_cost)
@@ -482,6 +502,7 @@ def train_model():
                     print("Average  RL: {:.6f}".format(mean_rl_cost))
                     print("Average  BL: {:.6f}".format(mean_bl_cost))
                     print("Average SUM: {:.6f}".format(mean_sum_cost))
+                    print("Read ratio: ", read_ratio)
                     last_ckpt = last_save_op.save(sess,
                                                   os.path.join(FLAGS.log_dir, "last_model.ckpt"),
                                                   global_step=global_step)
