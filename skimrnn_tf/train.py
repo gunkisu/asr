@@ -180,7 +180,7 @@ def build_graph(FLAGS):
     ml_frame_loss *= tf.reshape(x_mask, [-1, 1])
 
     # Mean level
-    ml_mean_loss = tf.reduce_sum(ml_frame_loss)/tf.to_float(num_samples)
+    ml_mean_loss = tf.reduce_sum(ml_frame_loss) / tf.to_float(num_samples)
     ml_frame_loss = tf.reduce_sum(ml_frame_loss) / tf.reduce_sum(x_mask)
 
     # Define frame-wise accuracy
@@ -192,7 +192,7 @@ def build_graph(FLAGS):
     mean_frame_accr = tf.reduce_sum(sample_frame_accr)/tf.to_float(num_samples)
 
     # Define RL cost
-    sample_reward = 1.0 - sample_frame_accr
+    sample_reward = sample_frame_accr
     total_policy_cost = []
     total_baseline_cost = []
     # for each layer
@@ -229,7 +229,7 @@ def build_graph(FLAGS):
         # set policy cost
         rl_fwd_policy_cost = tf.stop_gradient(fwd_sample_reward)*tf.reduce_sum(fwd_lgp, axis=-1)*tf.squeeze(fwd_mask)
         rl_fwd_policy_cost = tf.reduce_sum(rl_fwd_policy_cost)/tf.reduce_sum(fwd_mask)
-        total_policy_cost.append([rl_fwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'fwd' in var.name]])
+        total_policy_cost.append([-rl_fwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'fwd' in var.name]])
 
         # Backward pass
         # Get action mask and corresponding hidden state
@@ -256,7 +256,7 @@ def build_graph(FLAGS):
         # set policy cost
         rl_bwd_policy_cost = tf.stop_gradient(bwd_sample_reward)*tf.reduce_sum(bwd_lgp, axis=-1)*tf.squeeze(bwd_mask)
         rl_bwd_policy_cost = tf.reduce_sum(rl_bwd_policy_cost)/tf.reduce_sum(bwd_mask)
-        total_policy_cost.append([rl_bwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'bwd' in var.name]])
+        total_policy_cost.append([-rl_bwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'bwd' in var.name]])
 
     ml_cost = [ml_mean_loss, ml_params]
 
@@ -477,9 +477,9 @@ def train_model():
                     print("----------------------------------------------------")
                     print("Average FER: {:.2f}%".format((1.0-mean_accr) * 100))
                     print("Average  ML: {:.6f}".format(mean_ml_cost))
-                    # print("Average  RL: {:.6f}".format(mean_rl_cost * 100))
+                    print("Average  RL: {:.6f}".format(mean_rl_cost * 100))
                     print("Average  BL: {:.6f}".format(mean_bl_cost))
-                    # print("Average SUM: {:.6f}".format(mean_sum_cost * 100))
+                    print("Average SUM: {:.6f}".format(mean_sum_cost * 100))
                     last_ckpt = last_save_op.save(sess,
                                                   os.path.join(FLAGS.log_dir, "last_model.ckpt"),
                                                   global_step=global_step)
