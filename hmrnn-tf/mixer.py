@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import scipy.signal
 import tensorflow as tf
 
 from tensorflow.python.framework import ops
@@ -189,3 +190,187 @@ def gumbel_softmax(logits, temperature, hard=False):
     y_hard = tf.cast(tf.equal(y,tf.reduce_max(y,1,keep_dims=True)),y.dtype)
     y = tf.stop_gradient(y_hard - y) + y
   return y
+
+class LinearVF(object):
+#    def __init__(self, reg_coeff=2.0, num_iter=1):
+    def __init__(self, reg_coeff=2.0, num_iter=5):
+        self.coeffs = None
+#        self.reg_coeff = 2.0
+        self.reg_coeff = 1e-5
+        self.num_iter = num_iter
+
+    def _features(self, X):
+        o = X.astype('float32')
+        return np.concatenate([o, o**2, o**3])
+
+    def get_featmat(self, X):
+        return np.asarray([self._features(x) for x in X])
+
+    def fit(self, X, returns):
+        featmat = self.get_featmat(X)
+        reg_coeff = self.reg_coeff
+        for _ in range(self.num_iter):
+            # Equation 3.28 in PRML
+            self.coeffs = np.linalg.lstsq(
+                featmat.T.dot(featmat) + reg_coeff * np.identity(featmat.shape[1]),
+                featmat.T.dot(returns)
+            )[0]
+            if not np.any(np.isnan(self.coeffs)):
+                break
+#            reg_coeff *= 2
+            reg_coeff *= 10
+
+    def predict(self, X):
+        if self.coeffs is None: 
+            return np.zeros(X.shape[0])
+        return self.get_featmat(X).dot(self.coeffs)
+
+def skip_rnn_act(x, x_mask, y, sess, sample_graph, args):
+    """Sampling episodes using Skip-RNN"""
+
+    # x shape is [time_step, batch_size, features]
+    x_size = x.shape[2]
+    act_size = args.n_action
+    reshape_x = np.transpose(x, [1, 0, 2])
+    reshape_y = np.transpose(y, [1, 0])
+    batch_size = len(reshape_x)
+
+    new_X = []
+    new_Y = []
+    actions = []
+    rewards = []
+    action_entropies = []
+
+    for x_i, y_i in zip(reshape_x, reshape_y):
+        prev_state = np.zeros((2, 1, args.n_hidden))
+        new_x_i = []
+        new_y_i = []
+        action_i = []
+        reward_i = []
+        action_entropy_i = []
+        action_cnt = 0    
+        # last action is ignored in this implementation
+        # find a way to better handle the last action sampling
+
+        for j, (x_step, y_step) in enumerate(zip(x_i, y_i)):
+            if j == len(x_i) - 1:
+                x_step = np.expand_dims(x_step, 0)
+                step_label_likelihood_j, prev_state  = \
+                    sess.run([sample_graph.step_label_probs,
+                               sample_graph.step_last_state],
+                              feed_dict={sample_graph.step_x_data: x_step,
+                                         sample_graph.prev_states: prev_state})
+                new_x_i.append(x_step)
+                new_y_i.append(y_step)
+                reward_i.append(np.log(step_label_likelihood_j.flatten()[y_step] + 1e-8))     
+            else:
+                if action_cnt == 0:
+                    x_step = np.expand_dims(x_step, 0)
+                    step_action_prob_j, step_label_likelihood_j, prev_state, action_entropy = \
+                         sess.run([sample_graph.step_action_probs,
+                                   sample_graph.step_label_probs,
+                                   sample_graph.step_last_state, sample_graph.action_entropy],
+                                  feed_dict={sample_graph.step_x_data: x_step,
+                                             sample_graph.prev_states: prev_state})
+                    new_x_i.append(x_step)
+                    new_y_i.append(y_step)
+                    action_entropy_i.append(action_entropy)
+
+                    # a_t ~ p(a_t|s_t) 
+                    action_one_hot, action_idx = sample_from_softmax(step_action_prob_j)
+                    action_i.append(action_one_hot)
+                 
+                    # action in {0, 1, 2}
+                    action_cnt = action_idx + 1
+
+                    action_cnt -= 1
+                    if j != 0:
+                        reward_i.append(np.log(step_label_likelihood_j.flatten()[y_step] + 1e-8))
+                else:
+                    action_cnt -= 1
+
+        new_X.append(new_x_i)
+        new_Y.append(new_y_i)
+        actions.append(action_i)
+        rewards.append(reward_i)
+        action_entropies.append(action_entropy_i)
+
+    # masking episodes
+    new_masked_X, new_masked_Y, masked_actions, masked_rewards, masked_action_entropies, new_mask, new_reward_mask = \
+        mask_episodes(new_X, new_Y, actions, rewards, action_entropies, batch_size, x_size, act_size)
+        
+    return (new_masked_X, new_masked_Y, masked_actions, masked_rewards, masked_action_entropies, new_mask, new_reward_mask)
+
+
+def sample_from_softmax(step_action_prob):
+    #if step_action_probs.ndim == 2:
+    #    step_action_probs = step_actions_probs.reshape([-1])
+    # Later change to batch version, ask junyoung
+    # can use idx directly
+    # sample is one-hot
+    action_one_hot = np.random.multinomial(1, step_action_prob.flatten())
+    action_idx = np.argmax(action_one_hot)
+    return action_one_hot, action_idx
+
+
+def mask_episodes(X, Y, actions, rewards, action_entropies, batch_size, x_size, act_size):
+#    X_size = X[0]
+    max_time_step = max([len(x) for x in X])
+    new_mask = np.zeros([batch_size, max_time_step])
+    new_reward_mask = np.zeros([batch_size, max_time_step-1])
+    masked_X = np.zeros([batch_size, max_time_step, x_size])
+    masked_Y = np.zeros([batch_size, max_time_step])
+    masked_actions = np.zeros([batch_size, max_time_step-1, act_size])
+    masked_rewards = np.zeros([batch_size, max_time_step-1])
+    masked_action_entropies = np.zeros([batch_size, max_time_step-1])
+    
+
+    for i, (x, y, action, reward, action_entropy) in enumerate(zip(X, Y, actions, rewards, action_entropies)):
+        this_x_len = len(x)
+        masked_X[i, :this_x_len, :] = x
+        masked_Y[i, :this_x_len] = y
+        masked_actions[i, :this_x_len-1, :] = action
+        masked_rewards[i, :this_x_len-1] = reward
+        masked_action_entropies[i, :this_x_len-1] = action_entropy
+        new_mask[i, :this_x_len] = 1.
+        new_reward_mask[i, :this_x_len-1] = 1.
+   
+    return masked_X, masked_Y, masked_actions, masked_rewards, masked_action_entropies, new_mask, new_reward_mask
+
+def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args):
+    reward_mask_1d = new_reward_mask.reshape([-1])
+    rewards_1d = rewards.reshape([-1])[reward_mask_1d==1.]
+    discounted_rewards = []
+    for reward, mask in zip(rewards, new_reward_mask):
+        this_len = int(mask.sum())
+        discounted_reward = discount(reward[:this_len], args.discount_gamma)
+        discounted_rewards.append(discounted_reward)
+
+    reshape_new_x = new_x.reshape([-1, new_x.shape[2]])
+    baseline_1d = vf.predict(reshape_new_x)
+    baseline_2d = baseline_1d.reshape([new_x.shape[0], -1]) * new_x_mask
+
+    advantages = np.zeros_like(rewards)
+    for i, (delta, mask) in enumerate(zip(baseline_2d, new_reward_mask)):
+        this_len = int(mask.sum())
+        advantages[i, :this_len] = discounted_rewards[i] - delta[:this_len]
+
+    advantages_1d = advantages.reshape([-1])[reward_mask_1d==1.]
+    advantages = ((advantages - advantages_1d.mean()) / (advantages_1d.std()+1e-8)) * new_reward_mask
+
+    valid_x_indices= np.where(new_reward_mask==1.) 
+    valid_new_x = new_x[valid_x_indices]
+    discounted_rewards_1d = np.concatenate(discounted_rewards, axis=0)
+    vf.fit(valid_new_x, discounted_rewards_1d)
+
+    return advantages
+
+def discount(x, gamma):
+    assert x.ndim >= 1
+    return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
+
+# Shannon entropy for a paramaterized categorical distributions 
+def categorical_ent(dist): 
+    ent = -tf.reduce_sum(dist * tf.log(dist + 1e-8), axis=-1) 
+    return ent
+
