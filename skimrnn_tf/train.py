@@ -90,7 +90,7 @@ def build_graph(FLAGS):
 
         # init counter (but mostly init with 0s)
         init_cntr = tf.placeholder(dtype=tf.float32,
-                                   shape=(None,),
+                                   shape=(None, 1),
                                    name='init_cntr')
 
     # Get one-hot label
