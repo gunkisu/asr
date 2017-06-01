@@ -96,7 +96,7 @@ def build_graph(FLAGS):
     # Get one-hot label
     y_1hot = tf.one_hot(y_data, depth=FLAGS.n_class)
     tf.summary.image(name='y_label',
-                     tensor=tf.expand_dims(tf.transpose(tf.transpose(y_1hot, [0, 1]), [1, 2]), -1))
+                     tensor=tf.transpose(tf.expand_dims(y_1hot, axis=1), [2, 3, 0, 1]))
 
     # Get sequence length and batch size
     seq_len = tf.shape(x_data)[0]
@@ -133,18 +133,18 @@ def build_graph(FLAGS):
         fwd_act_lgp, bwd_act_lgp = tf.split(value=act_lgp, num_or_size_splits=2, axis=2)
 
         # Set summary
-        tf.summary.image(name='fwd_read_mask_{}'.format(l),
-                         tensor=tf.expand_dims(tf.transpose(fwd_read_mask, [0, 1]), 1))
+        tf.summary.image(name='fwd_read_mask_{}'.format(l), # seq x num x 1 x 1
+                         tensor=tf.transpose(tf.expand_dims(fwd_read_mask, -1), [1, 2, 0, 3]))
         tf.summary.image(name='bwd_read_mask_{}'.format(l),
-                         tensor=tf.expand_dims(tf.transpose(bwd_read_mask, [0, 1]), 1))
+                         tensor=tf.transpose(tf.expand_dims(bwd_read_mask, -1), [1, 2, 0, 3]))
         tf.summary.image(name='fwd_action_mask_{}'.format(l),
-                         tensor=tf.expand_dims(tf.transpose(fwd_act_mask, [0, 1]), 1))
+                         tensor=tf.transpose(tf.expand_dims(fwd_act_mask, -1), [1, 2, 0, 3]))
         tf.summary.image(name='bwd_action_mask_{}'.format(l),
-                         tensor=tf.expand_dims(tf.transpose(bwd_act_mask, [0, 1]), 1))
+                         tensor=tf.transpose(tf.expand_dims(bwd_act_mask, -1), [1, 2, 0, 3]))
         tf.summary.image(name='fwd_fwd_act_lgp_{}'.format(l),
-                         tensor=tf.expand_dims(tf.transpose(tf.transpose(fwd_act_lgp, [0, 1]), [1, 2]), -1))
+                         tensor=tf.transpose(tf.expand_dims(fwd_act_lgp, axis=1), [2, 3, 0, 1]))
         tf.summary.image(name='bwd_fwd_act_lgp_{}'.format(l),
-                         tensor=tf.expand_dims(tf.transpose(tf.transpose(bwd_act_lgp, [0, 1]), [1, 2]), -1))
+                         tensor=tf.transpose(tf.expand_dims(bwd_act_lgp, axis=1), [2, 3, 0, 1]))
 
         # Set baseline
         with tf.variable_scope("fwd_baseline_{}".format(l)) as vs:
