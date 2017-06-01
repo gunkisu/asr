@@ -27,12 +27,11 @@ flags.DEFINE_integer('add_seed', 0, 'Add this amount to the base random seed')
 
 # Learning
 flags.DEFINE_float('weight_decay', 0.0005, 'Weight decay factor')
-flags.DEFINE_float('ml_grad_clip', 1.0, 'Gradient norm clipping (ML)')
-flags.DEFINE_float('rl_grad_clip', 0.0, 'Gradient norm clipping (RL)')
-flags.DEFINE_float('ml_learning_rate', 0.001, 'Initial ml learning rate')
-flags.DEFINE_float('rl_learning_rate', 0.01, 'Initial rl learning rate')
+flags.DEFINE_float('grad_clip', 1.0, 'Gradient norm clipping')
+flags.DEFINE_float('learning_rate', 0.001, 'Initial learning rate')
 flags.DEFINE_integer('batch_size', 16, 'Size of mini-batch')
 flags.DEFINE_integer('n_epoch', 200, 'Maximum number of epochs')
+flags.DEFINE_integer('max_length', 100, 'Maximum number of epochs')
 
 # Dataset
 flags.DEFINE_string('data_path', '/u/songinch/song/data/speech/wsj_fbank123.h5', 'Data path')
@@ -57,12 +56,10 @@ graph_attr_list = ['x_data',
                    'init_state',
                    'init_cntr',
                    'mean_accr',
-                   'mean_ml_cost',
-                   'mean_rl_cost',
-                   'mean_bl_cost',
-                   'ml_cost_param',
-                   'rl_cost_param_list',
-                   'bl_cost_param_list',
+                   'mean_loss',
+                   'ml_cost',
+                   'rl_cost',
+                   'bl_cost',
                    'read_ratio_list']
 
 Graph = namedtuple('Graph', ' '.join(graph_attr_list))
@@ -78,7 +75,7 @@ def build_graph(FLAGS):
 
         # input mask
         x_mask = tf.placeholder(dtype=tf.float32,
-                                shape=(None, None, 1),
+                                shape=(None, None),
                                 name='x_mask')
 
         # gt label
@@ -93,25 +90,25 @@ def build_graph(FLAGS):
 
         # init counter (but mostly init with 0s)
         init_cntr = tf.placeholder(dtype=tf.float32,
-                                   shape=(None, 1),
+                                   shape=(None,),
                                    name='init_cntr')
 
-    # Define model (get outputs from each layer and each direction)
-    fwd_hid_list = []
-    fwd_read_mask_list = []
-    fwd_act_lgp_list = []
-    fwd_act_mask_list = []
+    # Get one-hot label
+    y_1hot = tf.one_hot(y_data, depth=FLAGS.n_class)
+    tf.summary.image(name='y_label',
+                     tensor=tf.expand_dims(tf.transpose(tf.transpose(y_1hot, [0, 1]), [1, 2]), -1))
 
-    bwd_hid_list = []
-    bwd_read_mask_list = []
-    bwd_act_lgp_list = []
-    bwd_act_mask_list = []
+    # Get sequence length and batch size
+    seq_len = tf.shape(x_data)[0]
+    num_samples = tf.shape(x_data)[1]
 
     # For each layer
+    policy_data_list = []
+    read_mask_list = []
     prev_hid_data = x_data
     for l in range(FLAGS.n_layer):
         # Set input data (concat input and mask)
-        prev_input = tf.concat(values=[prev_hid_data, x_mask],
+        prev_input = tf.concat(values=[prev_hid_data, tf.expand_dims(x_mask, axis=-1)],
                                axis=-1)
 
         # Set skim lstm
@@ -127,160 +124,94 @@ def build_graph(FLAGS):
                                 use_bidir=True)
 
         # Get output
-        cur_hid_data, cur_read_mask, cur_act_mask, curr_act_lgp = outputs
+        hid_data, read_mask, act_mask, act_lgp = outputs
 
-        # Save hidden
-        cur_fwd_hid, cur_bwd_hid = tf.split(value=cur_hid_data,
-                                            num_or_size_splits=2,
-                                            axis=2)
-        fwd_hid_list.append(cur_fwd_hid)
-        bwd_hid_list.append(cur_bwd_hid)
+        # Split data
+        fwd_hid_data, bwd_hid_data = tf.split(value=hid_data, num_or_size_splits=2, axis=2)
+        fwd_read_mask, bwd_read_mask = tf.split(value=read_mask, num_or_size_splits=2, axis=2)
+        fwd_act_mask, bwd_act_mask = tf.split(value=act_mask, num_or_size_splits=2, axis=2)
+        fwd_act_lgp, bwd_act_lgp = tf.split(value=act_lgp, num_or_size_splits=2, axis=2)
 
-        # Save read mask
-        cur_fwd_read_mask, cur_bwd_read_mask = tf.split(value=cur_read_mask,
-                                                        num_or_size_splits=2,
-                                                        axis=2)
-        fwd_read_mask_list.append(cur_fwd_read_mask)
-        bwd_read_mask_list.append(cur_bwd_read_mask)
+        # Set summary
+        tf.summary.image(name='fwd_read_mask_{}'.format(l),
+                         tensor=tf.expand_dims(tf.transpose(fwd_read_mask, [0, 1]), 1))
+        tf.summary.image(name='bwd_read_mask_{}'.format(l),
+                         tensor=tf.expand_dims(tf.transpose(bwd_read_mask, [0, 1]), 1))
+        tf.summary.image(name='fwd_action_mask_{}'.format(l),
+                         tensor=tf.expand_dims(tf.transpose(fwd_act_mask, [0, 1]), 1))
+        tf.summary.image(name='bwd_action_mask_{}'.format(l),
+                         tensor=tf.expand_dims(tf.transpose(bwd_act_mask, [0, 1]), 1))
+        tf.summary.image(name='fwd_fwd_act_lgp_{}'.format(l),
+                         tensor=tf.expand_dims(tf.transpose(tf.transpose(fwd_act_lgp, [0, 1]), [1, 2]), -1))
+        tf.summary.image(name='bwd_fwd_act_lgp_{}'.format(l),
+                         tensor=tf.expand_dims(tf.transpose(tf.transpose(bwd_act_lgp, [0, 1]), [1, 2]), -1))
 
-        # save action mask
-        cur_fwd_act_mask, cur_bwd_act_mask = tf.split(value=cur_act_mask,
-                                                      num_or_size_splits=2,
-                                                      axis=2)
-        fwd_act_mask_list.append(cur_fwd_act_mask)
-        bwd_act_mask_list.append(cur_bwd_act_mask)
-
-        # save action log prob
-        cur_fwd_act_lgp, cur_bwd_act_lgp = tf.split(value=curr_act_lgp,
-                                                    num_or_size_splits=2,
-                                                    axis=2)
-        fwd_act_lgp_list.append(cur_fwd_act_lgp)
-        bwd_act_lgp_list.append(cur_bwd_act_lgp)
+        # Set baseline
+        with tf.variable_scope("fwd_baseline_{}".format(l)) as vs:
+            fwd_baseline_cell = LinearCell(num_units=1)
+        fwd_basline = fwd_baseline_cell(tf.reshape(tf.stop_gradient(fwd_hid_data), [-1, FLAGS.n_hidden]))
+        fwd_basline = tf.reshape(fwd_basline, [seq_len, num_samples])
+        with tf.variable_scope("bwd_baseline_{}".format(l)) as vs:
+            bwd_baseline_cell = LinearCell(num_units=1)
+        bwd_basline = bwd_baseline_cell(tf.reshape(tf.stop_gradient(bwd_hid_data), [-1, FLAGS.n_hidden]))
+        bwd_basline = tf.reshape(bwd_basline, [seq_len, num_samples])
 
         # Set next input
-        prev_hid_data = cur_hid_data
+        prev_hid_data = hid_data
 
-    # Get sequence length and batch size
-    seq_len = tf.shape(prev_hid_data)[0]
-    num_samples = tf.shape(prev_hid_data)[1]
+        # Save data
+        policy_data_list.append([fwd_act_mask, fwd_act_lgp, fwd_basline])
+        policy_data_list.append([bwd_act_mask, bwd_act_lgp, bwd_basline])
+        read_mask_list.extend([fwd_read_mask, bwd_read_mask])
 
     # Set output layer
     with tf.variable_scope('output') as vs:
-        output_linear = LinearCell(FLAGS.n_class)
+        output_cell = LinearCell(FLAGS.n_class)
+    output_logit = output_cell(tf.reshape(prev_hid_data, [-1, 2*FLAGS.n_hidden]))
+    output_logit = tf.reshape(output_logit, (seq_len, num_samples, FLAGS.n_class))
 
-        # Get output logit (linear projection)
-        output_logit = output_linear(tf.reshape(prev_hid_data, [-1, 2*FLAGS.n_hidden]))
-        output_logit = tf.reshape(output_logit, (seq_len, num_samples, -1))
+    # Frame-wise cross entropy
+    frame_cce = tf.nn.softmax_cross_entropy_with_logits(labels=tf.reshape(y_1hot, [-1, FLAGS.n_class]),
+                                                        logits=tf.reshape(output_logit, [-1, FLAGS.n_class]))
+    frame_cce *= tf.reshape(x_mask, [-1,])
 
-    # Get one-hot label
-    y_1hot = tf.one_hot(y_data, depth=FLAGS.n_class)
+    # Frame mean cce
+    mean_frame_cce = tf.reduce_sum(frame_cce) / tf.reduce_sum(x_mask)
+    tf.summary.scalar(name='frame_cce', tensor=mean_frame_cce)
 
-    # Get parameters
-    model_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-    rl_params = []
-    ml_params = []
-    for var in model_params:
-        if 'action' in var.name:
-            rl_params.append(var)
-        else:
-            ml_params.append(var)
+    # Model cce
+    model_cce = tf.reduce_sum(frame_cce) / tf.to_float(num_samples)
 
-    # Define loss based cross entropy
-    # Frame level
-    ml_frame_loss = tf.nn.softmax_cross_entropy_with_logits(labels=tf.reshape(y_1hot, [-1, FLAGS.n_class]),
-                                                            logits=tf.reshape(output_logit, [-1, FLAGS.n_class]))
-    ml_frame_loss *= tf.reshape(x_mask, [-1,])
+    # Frame-wise accuracy
+    frame_accr = tf.to_float(tf.equal(tf.argmax(output_logit, axis=-1), tf.argmax(y_1hot, axis=-1)))
+    sample_frame_accr = tf.reduce_sum(frame_accr*x_mask, axis=0)/tf.reduce_sum(x_mask, axis=0)
+    mean_frame_accr = tf.reduce_sum(frame_accr)/tf.to_float(x_mask)
+    tf.summary.scalar(name='frame_accr', tensor=mean_frame_accr)
 
-    # Mean level
-    ml_mean_loss = tf.reduce_sum(ml_frame_loss) / tf.to_float(num_samples)
-    ml_frame_loss = tf.reduce_sum(ml_frame_loss) / tf.reduce_sum(x_mask)
-
-    # Define frame-wise accuracy
-    # Sample level
-    sample_frame_accr = tf.to_float(tf.equal(tf.argmax(output_logit, axis=-1), tf.argmax(y_1hot, axis=-1)))
-    sample_frame_accr = tf.reduce_sum(sample_frame_accr*tf.squeeze(x_mask, axis=-1), axis=0)/tf.reduce_sum(x_mask, axis=[0, 2])
-
-    # Mean level
-    mean_frame_accr = tf.reduce_sum(sample_frame_accr)/tf.to_float(num_samples)
-
-    # Define RL cost
+    # Sample-wise REWARD
     sample_reward = sample_frame_accr
-    total_policy_cost = []
-    total_baseline_cost = []
 
-    # for each layer
-    for i, act_data_list in enumerate(zip(fwd_hid_list,
-                                          fwd_act_lgp_list,
-                                          fwd_act_mask_list,
-                                          bwd_hid_list,
-                                          bwd_act_lgp_list,
-                                          bwd_act_mask_list)):
-        fwd_hid, fwd_lgp, fwd_mask, bwd_hid, bwd_lgp, bwd_mask = act_data_list
+    # Define policy cost
+    baseline_cost_list = []
+    policy_cost_list = []
+    for i, policy_data in enumerate(policy_data_list):
+        act_mask, act_lgp, baseline = policy_data
+        revised_reward = (tf.expand_dims(sample_reward, axis=0) - baseline) * tf.squeeze(act_mask)
+        baseline_cost = tf.reduce_sum(tf.square(revised_reward)) # /tf.reduce_sum(act_mask)
+        policy_cost = tf.stop_gradient(revised_reward)*tf.reduce_sum(act_lgp, axis=-1) * tf.squeeze(act_mask)
+        policy_cost = -tf.reduce_sum(policy_cost)/tf.to_float(num_samples) # /tf.reduce_sum(act_mask)
 
-        # Forward pass
-        # Get action mask and corresponding hidden state
-        with tf.variable_scope('fwd_baseline_{}'.format(i)) as vs:
-            fwd_W = tf.get_variable('W', [FLAGS.n_hidden, 1], dtype=fwd_hid.dtype,
-                                    initializer=tf.truncated_normal_initializer(stddev=0.01))
-            fwd_b = tf.get_variable('b', [1, ], dtype=fwd_hid.dtype,
-                                    initializer=tf.constant_initializer(0.0))
-            tf.add_to_collection('weights', fwd_W)
-            tf.add_to_collection('vars', fwd_W)
-            tf.add_to_collection('vars', fwd_b)
-
-        # set baseline based on the hidden (state)
-        fwd_basline = tf.matmul(tf.reshape(tf.stop_gradient(fwd_hid), [-1, FLAGS.n_hidden]), fwd_W) + fwd_b
-        fwd_basline = tf.reshape(fwd_basline, [seq_len, num_samples])
-
-        # set sample-wise reward
-        fwd_sample_reward = (tf.expand_dims(sample_reward, axis=0) - fwd_basline)*tf.squeeze(fwd_mask)
-
-        # set baseline cost
-        rl_fwd_baseline_cost = tf.reduce_sum(tf.square(fwd_sample_reward)) # /tf.reduce_sum(fwd_mask)
-        total_baseline_cost.append([rl_fwd_baseline_cost, [fwd_W, fwd_b]])
-
-        # set policy cost
-        rl_fwd_policy_cost = tf.stop_gradient(fwd_sample_reward)*tf.reduce_sum(fwd_lgp, axis=-1)*tf.squeeze(fwd_mask)
-        rl_fwd_policy_cost = tf.reduce_sum(rl_fwd_policy_cost)/tf.to_float(num_samples) # /tf.reduce_sum(fwd_mask)
-        total_policy_cost.append([-rl_fwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'fwd' in var.name]])
-
-        # Backward pass
-        # Get action mask and corresponding hidden state
-        with tf.variable_scope('bwd_baseline_{}'.format(i)) as vs:
-            bwd_W = tf.get_variable('W', [FLAGS.n_hidden, 1], dtype=bwd_hid.dtype,
-                                    initializer=tf.truncated_normal_initializer(stddev=0.01))
-            bwd_b = tf.get_variable('b', [1, ], dtype=bwd_hid.dtype,
-                                    initializer=tf.constant_initializer(0.0))
-            tf.add_to_collection('weights', bwd_W)
-            tf.add_to_collection('vars', bwd_W)
-            tf.add_to_collection('vars', bwd_b)
-
-        # set baseline
-        bwd_basline = tf.matmul(tf.reshape(tf.stop_gradient(bwd_hid), [-1, FLAGS.n_hidden]), bwd_W) + bwd_b
-        bwd_basline = tf.reshape(bwd_basline, [seq_len, num_samples])
-
-        # set sample-wise reward
-        bwd_sample_reward = (tf.expand_dims(sample_reward, axis=0) - bwd_basline)*tf.squeeze(bwd_mask)
-
-        # set baseline cost
-        rl_bwd_baseline_cost = tf.reduce_sum(tf.square(bwd_sample_reward)) # /tf.reduce_sum(bwd_mask)
-        total_baseline_cost.append([rl_bwd_baseline_cost, [bwd_W, bwd_b]])
-
-        # set policy cost
-        rl_bwd_policy_cost = tf.stop_gradient(bwd_sample_reward)*tf.reduce_sum(bwd_lgp, axis=-1)*tf.squeeze(bwd_mask)
-        rl_bwd_policy_cost = tf.reduce_sum(rl_bwd_policy_cost)/tf.to_float(num_samples) # /tf.reduce_sum(bwd_mask)
-        total_policy_cost.append([-rl_bwd_policy_cost, [var for var in rl_params if str(i) in var.name and 'bwd' in var.name]])
-
-    ml_cost = [ml_mean_loss, ml_params]
+        baseline_cost_list.append(baseline_cost)
+        policy_cost_list.append(policy_cost)
 
     # Compute read ratio
-    sample_seq_len = tf.reduce_sum(x_mask, axis=0)
-    read_ratio_list = []
-    for mask in fwd_read_mask_list + bwd_read_mask_list:
-        read_ratio_list.append(tf.reduce_sum(mask, axis=0)/sample_seq_len)
+    sample_seq_len = tf.expand_dims(tf.reduce_sum(x_mask, axis=0), axis=-1)
+    read_ratio = []
+    for read_mask in read_mask_list:
+        read_ratio.append(tf.reduce_sum(read_mask, axis=0)/sample_seq_len)
 
-    read_ratio_list = tf.concat(read_ratio_list, axis=1)
-    read_ratio_list = tf.reduce_mean(read_ratio_list, axis=1)
+    read_ratio = tf.concat(read_ratio, axis=1)
+    read_ratio = tf.reduce_mean(read_ratio, axis=1)
 
     return Graph(x_data=x_data,
                  x_mask=x_mask,
@@ -288,40 +219,36 @@ def build_graph(FLAGS):
                  init_state=init_state,
                  init_cntr=init_cntr,
                  mean_accr=mean_frame_accr,
-                 mean_ml_cost=ml_frame_loss,
-                 mean_rl_cost=tf.add_n([cost for cost, _ in total_policy_cost]),
-                 mean_bl_cost=tf.add_n([cost for cost, _ in total_baseline_cost]),
-                 ml_cost_param=ml_cost,
-                 rl_cost_param_list=total_policy_cost,
-                 bl_cost_param_list=total_baseline_cost,
-                 read_ratio_list=read_ratio_list)
+                 mean_loss=mean_frame_cce,
+                 ml_cost=model_cce,
+                 rl_cost=tf.add_n(policy_cost_list),
+                 bl_cost=tf.add_n(baseline_cost_list),
+                 read_ratio_list=read_ratio)
 
 
 def updater(model_graph,
             model_updater,
-            # ml_updater,
-            # rl_updater,
-            # bl_updater,
             x_data,
             x_mask,
             y_data,
+            summary,
             session):
     outputs = session.run([model_graph.mean_accr,
-                           model_graph.mean_ml_cost,
-                           model_graph.mean_rl_cost,
-                           model_graph.mean_bl_cost,
+                           model_graph.mean_loss,
+                           model_graph.ml_cost,
+                           model_graph.rl_cost,
+                           model_graph.bl_cost,
                            model_graph.read_ratio_list,
-                           model_updater],
-                           # rl_updater,
-                           # bl_updater],
+                           model_updater,
+                           summary],
                           feed_dict={model_graph.x_data: x_data,
                                      model_graph.x_mask: x_mask,
                                      model_graph.y_data: y_data,
                                      model_graph.init_state: np.zeros(shape=(x_data.shape[1], FLAGS.n_hidden), dtype=x_data.dtype),
                                      model_graph.init_cntr: np.zeros(shape=(x_data.shape[1], 1), dtype=x_data.dtype)})
 
-    mean_accr, ml_cost, rl_cost, bl_cost, read_ratio,  _ = outputs
-    return mean_accr, ml_cost, rl_cost, bl_cost, read_ratio
+    mean_accr, mean_loss, ml_cost, rl_cost, bl_cost, read_ratio, _, summary_output = outputs
+    return mean_accr, mean_loss, ml_cost, rl_cost, bl_cost, read_ratio, summary_output
 
 
 def evaluation(model_graph,
@@ -330,31 +257,31 @@ def evaluation(model_graph,
     # for each batch
     total_accr = 0.
     total_loss = 0.
+    total_read_ratio = 0.
     total_updates = 0.
-    for b_idx, batch_data in dataset.get_epoch_iterator():
+    for b_idx, batch_data in enumerate(dataset.get_epoch_iterator()):
         # Get data x, y
         x_data, x_mask, _, _, y_data, _ = batch_data
 
         # Roll axis
         x_data = x_data.transpose((1, 0, 2))
         x_mask = x_mask.transpose((1, 0))
-        x_mask = np.expand_dims(x_mask, -1)
         y_data = y_data.transpose((1, 0))
 
         # Run model
         outputs = session.run([model_graph.mean_accr,
-                               model_graph.mean_ml_cost],
+                               model_graph.mean_loss,
+                               model_graph.read_ratio_list],
                               feed_dict={model_graph.x_data: x_data,
                                          model_graph.x_mask: x_mask,
                                          model_graph.y_data: y_data,
-                                         model_graph.init_state: np.zeros(shape=(x_data.shape[1], FLAGS.n_hidden),
-                                                                          dtype=x_data.dtype),
-                                         model_graph.init_cntr: np.zeros(shape=(x_data.shape[1], 1),
-                                                                         dtype=x_data.dtype)})
+                                         model_graph.init_state: np.zeros(shape=(x_data.shape[1], FLAGS.n_hidden), dtype=x_data.dtype),
+                                         model_graph.init_cntr: np.zeros(shape=(x_data.shape[1], 1), dtype=x_data.dtype)})
 
-        mean_accr, mean_ml_cost = outputs
+        mean_accr, mean_loss, read_ratio = outputs
         total_accr += mean_accr
-        total_loss += mean_ml_cost
+        total_loss += mean_loss
+        total_read_ratio += read_ratio.mean()
         total_updates += 1.0
     total_accr /= total_updates
     total_loss /= total_updates
@@ -371,74 +298,36 @@ def train_model():
     # Get module graph
     model_graph = build_graph(FLAGS)
 
-    # Get model train max likelihood cost
-    tf.add_to_collection('ml_cost', model_graph.ml_cost_param[0])
-    ml_param = model_graph.ml_cost_param[1]
-
-    # Get model train policy cost
-    rl_param = []
-    for c, v in model_graph.rl_cost_param_list:
-        tf.add_to_collection('rl_cost', c)
-        rl_param.extend(v)
-
-    # Get model train baseline
-    bl_param = []
-    for c, v in model_graph.bl_cost_param_list:
-        tf.add_to_collection('bl_cost', c)
-        bl_param.extend(v)
+    # Get model parameter
+    model_param = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 
     # Set weight decay
     if FLAGS.weight_decay > 0.0:
-        weights_norm = tf.add_n([0.5*tf.nn.l2_loss(W) for W in ml_param if 'W' in W.name])
-        weights_norm *= FLAGS.weight_decay
-        tf.add_to_collection('ml_cost', weights_norm)
+        l2_cost = tf.add_n([0.5*tf.nn.l2_loss(W) for W in model_param
+                                 if 'W' in W.name and 'action' not in W.name and 'baseline' not in W.name])
+        l2_cost *= FLAGS.weight_decay
+    else:
+        l2_cost = 0.0
 
-    # Set model max likelihood cost
-    model_ml_cost = tf.add_n(tf.get_collection('ml_cost'), name='ml_cost')
-
-    # Set model reinforce cost
-    model_rl_cost = tf.add_n(tf.get_collection('rl_cost'), name='rl_cost')
-
-    # Set model reinforce cost
-    model_bl_cost = tf.add_n(tf.get_collection('bl_cost'), name='bl_cost')
+    # Set total cost
+    model_total_cost = model_graph.ml_cost + model_graph.rl_cost +  model_graph.bl_cost + l2_cost
 
     # Define global training step
     global_step = tf.contrib.framework.get_or_create_global_step()
 
-
-
     # Set ml optimizer (Adam optimizer, in the original paper, we use 0.99 for beta2
-    model_opt = tf.train.AdamOptimizer(learning_rate=FLAGS.ml_learning_rate,
+    model_opt = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate,
                                        name='model_optimizer')
-    ml_grad = tf.gradients(ys=model_ml_cost, xs=ml_param, aggregation_method=2)
-
-    # Set rl optimizer (SGD optimizer)
-    # rl_opt = tf.train.AdamOptimizer(learning_rate=FLAGS.ml_learning_rate,
-    #                                 name='rl_optimizer')
-    rl_grad = tf.gradients(ys=model_rl_cost, xs=rl_param, aggregation_method=2)
-
-    # Set bl optimizer (SGD optimizer)
-    # bl_opt = tf.train.AdamOptimizer(learning_rate=FLAGS.ml_learning_rate,
-    #                                 name='bl_optimizer')
-    bl_grad = tf.gradients(ys=model_bl_cost, xs=bl_param, aggregation_method=2)
+    model_grad = tf.gradients(ys=model_total_cost, xs=model_param, aggregation_method=2)
 
     # Set gradient clipping
-    if FLAGS.ml_grad_clip > 0.0:
-        ml_grad, _ = tf.clip_by_global_norm(t_list=ml_grad,
-                                            clip_norm=FLAGS.ml_grad_clip)
-    # if FLAGS.ml_grad_clip > 0.0:
-        # rl_grad, _ = tf.clip_by_global_norm(t_list=rl_grad,
-        #                                     clip_norm=FLAGS.rl_grad_clip)
+    if FLAGS.grad_clip > 0.0:
+        model_grad, _ = tf.clip_by_global_norm(t_list=model_grad,
+                                               clip_norm=FLAGS.grad_clip)
 
-    model_update = model_opt.apply_gradients(grads_and_vars=zip(ml_grad+rl_grad+bl_grad,
-                                                                ml_param+rl_param+bl_param),
+    model_update = model_opt.apply_gradients(grads_and_vars=zip(model_grad,
+                                                                model_param),
                                              global_step=global_step)
-
-    # rl_update = rl_opt.apply_gradients(grads_and_vars=zip(rl_grad, rl_param),
-    #                                    global_step=global_step)
-
-    # bl_update = bl_opt.apply_gradients(grads_and_vars=zip(bl_grad, bl_param),
-    #                                    global_step=global_step)
 
     # Set dataset (sync_data(FLAGS))
     datasets = [FLAGS.train_dataset,
@@ -464,6 +353,11 @@ def train_model():
 
     # Set session
     with tf.Session(config=config) as sess:
+        # Get summary
+        merged_summary = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train',
+                                             sess.graph)
+
         # Init model
         sess.run(init_op)
 
@@ -475,6 +369,7 @@ def train_model():
 
         # For each epoch
         accr_history = []
+        loss_history = []
         ml_cost_history = []
         rl_cost_history = []
         bl_cost_history = []
@@ -497,16 +392,20 @@ def train_model():
                 seq_len, n_sample, _ = x_data.shape
 
                 # Update model
-                mean_accr, ml_cost, rl_cost, bl_cost, read_ratio = updater(model_graph=model_graph,
-                                                                           model_updater=model_update,
-                                                                           # ml_updater=ml_update,
-                                                                           # rl_updater=rl_update,
-                                                                           # bl_updater=bl_update,
-                                                                           x_data=x_data,
-                                                                           x_mask=x_mask,
-                                                                           y_data=y_data,
-                                                                           session=sess)
+                mean_accr, mean_loss, ml_cost, rl_cost, bl_cost, read_ratio, summary_output \
+                    = updater(model_graph=model_graph,
+                              model_updater=model_update,
+                              x_data=x_data,
+                              x_mask=x_mask,
+                              y_data=y_data,
+                              summary=merged_summary,
+                              session=sess)
+
+                # write summary
+                train_writer.add_summary(summary_output, global_step.eval())
+
                 accr_history.append(mean_accr)
+                loss_history.append(mean_loss)
                 ml_cost_history.append(ml_cost)
                 rl_cost_history.append(rl_cost)
                 bl_cost_history.append(bl_cost)
@@ -515,6 +414,7 @@ def train_model():
                 # Display results
                 if global_step.eval() % FLAGS.display_freq == 0:
                     mean_accr = np.array(accr_history).mean()
+                    mean_loss = np.array(loss_history).mean()
                     mean_ml_cost = np.array(ml_cost_history).mean()
                     mean_rl_cost = np.array(rl_cost_history).mean()
                     mean_bl_cost = np.array(bl_cost_history).mean()
@@ -523,6 +423,7 @@ def train_model():
                     print("Epoch " + str(e_idx) + ", Total Iter " + str(global_step.eval()))
                     print("----------------------------------------------------")
                     print("Average FER: {:.2f}%".format((1.0-mean_accr) * 100))
+                    print("Average CCE: {:.6f}".format(mean_loss))
                     print("Average  ML: {:.6f}".format(mean_ml_cost))
                     print("Average  RL: {:.6f}".format(mean_rl_cost))
                     print("Average  BL: {:.6f}".format(mean_bl_cost))
@@ -533,6 +434,7 @@ def train_model():
                                                   global_step=global_step)
                     print("Last checkpointed in: %s" % last_ckpt)
                     accr_history = []
+                    loss_history = []
                     ml_cost_history = []
                     rl_cost_history = []
                     bl_cost_history = []
