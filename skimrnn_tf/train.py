@@ -183,9 +183,9 @@ def build_graph(FLAGS):
     model_cce = tf.reduce_sum(frame_cce) / tf.to_float(num_samples)
 
     # Frame-wise accuracy
-    frame_accr = tf.to_float(tf.equal(tf.argmax(output_logit, axis=-1), tf.argmax(y_1hot, axis=-1)))
-    sample_frame_accr = tf.reduce_sum(frame_accr*x_mask, axis=0)/tf.reduce_sum(x_mask, axis=0)
-    mean_frame_accr = tf.reduce_sum(frame_accr*x_mask)/tf.reduce_sum(x_mask)
+    frame_accr = tf.to_float(tf.equal(tf.argmax(output_logit, axis=-1), tf.argmax(y_1hot, axis=-1))) * x_mask
+    sample_frame_accr = tf.reduce_sum(frame_accr, axis=0)/tf.reduce_sum(x_mask, axis=0)
+    mean_frame_accr = tf.reduce_sum(frame_accr)/tf.reduce_sum(x_mask)
     tf.summary.scalar(name='frame_accr', tensor=mean_frame_accr)
 
     # Sample-wise REWARD
