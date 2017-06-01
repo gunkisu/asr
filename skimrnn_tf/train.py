@@ -149,12 +149,12 @@ def build_graph(FLAGS):
         # Set baseline
         with tf.variable_scope("fwd_baseline_{}".format(l)) as vs:
             fwd_baseline_cell = LinearCell(num_units=1)
-        fwd_basline = fwd_baseline_cell(tf.reshape(tf.stop_gradient(fwd_hid_data), [-1, FLAGS.n_hidden]))
-        fwd_basline = tf.reshape(fwd_basline, [seq_len, num_samples])
+            fwd_basline = fwd_baseline_cell(tf.reshape(tf.stop_gradient(fwd_hid_data), [-1, FLAGS.n_hidden]))
+            fwd_basline = tf.reshape(fwd_basline, [seq_len, num_samples])
         with tf.variable_scope("bwd_baseline_{}".format(l)) as vs:
             bwd_baseline_cell = LinearCell(num_units=1)
-        bwd_basline = bwd_baseline_cell(tf.reshape(tf.stop_gradient(bwd_hid_data), [-1, FLAGS.n_hidden]))
-        bwd_basline = tf.reshape(bwd_basline, [seq_len, num_samples])
+            bwd_basline = bwd_baseline_cell(tf.reshape(tf.stop_gradient(bwd_hid_data), [-1, FLAGS.n_hidden]))
+            bwd_basline = tf.reshape(bwd_basline, [seq_len, num_samples])
 
         # Set next input
         prev_hid_data = hid_data
@@ -167,8 +167,8 @@ def build_graph(FLAGS):
     # Set output layer
     with tf.variable_scope('output') as vs:
         output_cell = LinearCell(FLAGS.n_class)
-    output_logit = output_cell(tf.reshape(prev_hid_data, [-1, 2*FLAGS.n_hidden]))
-    output_logit = tf.reshape(output_logit, (seq_len, num_samples, FLAGS.n_class))
+        output_logit = output_cell(tf.reshape(prev_hid_data, [-1, 2*FLAGS.n_hidden]))
+        output_logit = tf.reshape(output_logit, (seq_len, num_samples, FLAGS.n_class))
 
     # Frame-wise cross entropy
     frame_cce = tf.nn.softmax_cross_entropy_with_logits(labels=tf.reshape(y_1hot, [-1, FLAGS.n_class]),
