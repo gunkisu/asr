@@ -1,10 +1,8 @@
 '''Tensorflow implementation of models, libraries, functions, modules'''
 import numpy as np
 import tensorflow as tf
-from collections import namedtuple
 
-from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import LSTMStateTuple, _checked_scope
-from tensorflow.python.ops import variable_scope as vs
+from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import LSTMStateTuple
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import math_ops
@@ -18,244 +16,28 @@ from mixer import custom_init
 from mixer import glorot_init
 from mixer import orthogonal_init
 
-_SkimLSTMStateTuple = namedtuple("SkimLSTMStateTuple", ("c",  # cell state (vector, matrix)
-                                                        "h",  # hidden state (vector, matrix)
-                                                        "s",  # skim counter (integer, vector)
-                                                        "r")) # read counter (integer, vector)
-
-class SkimLSTMStateTuple(_SkimLSTMStateTuple):
-  """
-  cell state, hidden state, skim_counter, read_counter
-
-  """
-  __slots__ = ()
-  @property
-  def dtype(self):
-    (c, h, s) = self
-    if not c.dtype == h.dtype:
-      raise TypeError("Inconsistent internal state: %s vs %s" %
-                      (str(c.dtype), str(h.dtype)))
-    return c.dtype
-
-# skim lstm cell
-class SkimLSTMCell(RNNCell):
-  def __init__(self,
-               num_units, # hidden units
-               max_skims=5, # possible max skim steps (number of actions)
-               min_reads=2, # minimum read steps after skimming
-               forget_bias=0.0, # forget gate bias
-               activation=tanh,
-               reuse=None):
-    self._num_units = num_units
-    self._max_skims = max_skims
-    self._min_reads = float(min_reads)
-    self._forget_bias = forget_bias
-    self._activation = activation
-    self._reuse = reuse
-
-  @property
-  def state_size(self):
-    cell_size = self._num_units
-    hid_size = self._num_units
-    cntr_size = 1
-    return SkimLSTMStateTuple(cell_size, hid_size, cntr_size, cntr_size)
-
-  @property
-  def output_size(self):
-    return self._num_units, self._max_skims, 1, 1, 1
-
-  def __call__(self,
-               inputs,
-               state,
-               scope=None):
-    with _checked_scope(self, scope or "skim_lstm_cell", reuse=self._reuse):
-      # get input data and mask
-      input_data = inputs[:, :-1]
-      input_mask = tf.expand_dims(inputs[:, -1], axis=-1)
-
-      # get previous states
-      prev_c, prev_h, skim_cntr, read_cntr = state
-
-      # update mask based on mask and read_counter
-      # if read counter is larger than 0, need to update
-      read_mask = tf.to_float((read_cntr * input_mask) > 0, name='read_mask')
-
-      # action mask based on mask and read_counter
-      # if read counter is 1 that now requires action
-      action_mask = tf.to_float((tf.to_float(tf.equal(read_cntr,1.0)) * input_mask) > 0, name='action_mask')
-
-      # init read mask based on mask and skim_counter
-      # if skim counter is 1 that next should be read
-      init_mask = tf.to_float((tf.to_float(tf.equal(skim_cntr, 1.0)) * input_mask) > 0, name='init_mask')
-      skim_mask = tf.to_float((skim_cntr * input_mask) > 0, name='skim_mask')
-
-      # reduce read counter
-      new_read_cntr = tf.maximum(x=read_cntr - read_mask, y=0.0, name='new_read_cntr')
-      new_skim_cntr = tf.maximum(x=skim_cntr - skim_mask, y=0.0, name='new_skim_cntr')
-
-      # first update states
-      # compute gate
-      with vs.variable_scope("gate"):
-        gate_logits = _affine([input_data, prev_h], 4 * self._num_units)
-      i, f, o, j = _lstm_gates(gate_logits, forget_bias=self._forget_bias)
-      new_c = prev_c * f + i * j
-      new_h = o * self._activation(new_c)
-      new_c = new_c * read_mask + prev_c * (1. - read_mask)
-      new_h = new_h * read_mask + prev_h * (1. - read_mask)
-
-      # compute skim action
-      with vs.variable_scope("action"):
-        action_logit = _affine([new_h, ], self._max_skims)
-      action_sample = tf.to_float(tf.multinomial(logits=action_logit, num_samples=1))
-
-      # update skim counter
-      new_skim_cntr += (action_sample + 1.0) * action_mask
-
-      # update skim counter
-      new_read_cntr += self._min_reads * init_mask
-
-      # return
-      # 1) outputs (it will be return over sequence as output)
-      outputs = (new_h, action_logit, action_sample, read_mask, action_mask)
-
-      # 2) states (it will be return for just next step)
-      new_state = SkimLSTMStateTuple(new_c, new_h, new_skim_cntr, new_read_cntr)
-
-      return outputs, new_state
-
-
-class SkimLSTMModule(object):
-  def __init__(self,
-               num_units,
-               max_skims=5,
-               min_reads=1,
-               forget_bias=1.0,
-               activation=tanh):
-    self._num_units = num_units
-    self._max_skims = max_skims
-    self._min_reads = min_reads
-    self._forget_bias = forget_bias
-    self._activation = activation
-
-  def __call__(self,
-               inputs,
-               init_state,
-               use_bidir=False,
-               scope=None):
-    # Forward
-    # init state
-    fwd_init_state = SkimLSTMStateTuple(init_state[0],
-                                        init_state[1],
-                                        tf.zeros_like(init_state[2]),
-                                        tf.ones_like(init_state[2])*self._min_reads)
-    # init cell
-    fwd_rnn_cell = SkimLSTMCell(num_units=self._num_units,
-                                max_skims=self._max_skims,
-                                min_reads=self._min_reads,
-                                forget_bias=self._forget_bias,
-                                activation=self._activation)
-
-    # Backward
-    if use_bidir:
-      # init state
-      bwd_init_state = SkimLSTMStateTuple(init_state[0],
-                                          init_state[1],
-                                          tf.zeros_like(init_state[2]),
-                                          tf.ones_like(init_state[2])*self._min_reads)
-      # init cell
-      bwd_rnn_cell = SkimLSTMCell(num_units=self._num_units,
-                                  max_skims=self._max_skims,
-                                  min_reads=self._min_reads,
-                                  forget_bias=self._forget_bias,
-                                  activation=self._activation)
-      outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fwd_rnn_cell,
-                                                   cell_bw=bwd_rnn_cell,
-                                                   inputs=inputs,
-                                                   initial_state_fw=fwd_init_state,
-                                                   initial_state_bw=bwd_init_state,
-                                                   time_major=True,
-                                                   scope='bidir')
-      fwd_outputs, bwd_outputs = outputs
-
-      fwd_hid_seq, fwd_act_lgt_seq, fwd_act_sample_seq, fwd_read_mask, fwd_act_mask = fwd_outputs
-      bwd_hid_seq, bwd_act_lgt_seq, bwd_act_sample_seq, bwd_read_mask, bwd_act_mask = fwd_outputs
-
-      hid_seq = tf.concat([fwd_hid_seq, bwd_hid_seq], axis=-1)
-      read_mask = tf.to_float(tf.logical_and(x=fwd_read_mask, y=bwd_read_mask))
-    else:
-      # init loop
-      outputs, _ = tf.nn.dynamic_rnn(cell=fwd_rnn_cell,
-                                     inputs=inputs,
-                                     initial_state=fwd_init_state,
-                                     time_major=True,
-                                     scope='unidir')
-      hid_seq, act_lgt_seq, act_sample_seq, read_mask, act_mask = outputs
-
-    return outputs
-
-
-class LSTMCell(RNNCell):
-  """LSTM recurrent network cell.
-  """
-  def __init__(self, num_units, forget_bias=0.0, activation=tanh):
-    """Initialize the LSTM cell.
-    Args:
-      num_units: int, the number of units in the LSTM cell.
-      forget_bias: float, The bias added to forget gates (see above).
-      activation: Activation function of the inner states.
-    """
-    self._num_units = num_units
-    self._forget_bias = forget_bias
-    self._activation = activation
-
-  @property
-  def state_size(self):
-    return LSTMStateTuple(self._num_units, self._num_units)
-
-  @property
-  def output_size(self):
-    return self._num_units
-
-  def __call__(self, inputs, state, scope='lstm'):
-    """Long Short-Term Memory (LSTM) cell.
-    """
-    # Parameters of gates are concatenated into one multiply for efficiency.
-    c, h = state
-    logits = _affine([inputs, h], 4 * self._num_units, scope=scope)
-    i, f, o, j = _lstm_gates(logits, forget_bias=self._forget_bias)
-    # Update the states
-    new_c = c * f + i * j
-    new_h = o * self._activation(new_c)
-    # Update the returns
-    new_state = LSTMStateTuple(new_c, new_h)
-    return new_h, new_state
-
-
 class LSTMModule(object):
   """Implementation of LSTM module"""
   def __init__(self, num_units):
     self._num_units = num_units
 
   def __call__(self, inputs, init_state, one_step=False):
+    rnn_tuple_state = tf.contrib.rnn.LSTMStateTuple(init_state[0],
+                                                    init_state[1])
     # Define an LSTM cell with Tensorflow
     rnn_cell = LSTMCell(self._num_units)
 
     if one_step:
-      prv_states = init_state
       outputs, states = rnn_cell(inputs=inputs,
-                                 state=prv_states)
-      return states[0], states[2]
+                                 state=rnn_tuple_state)
 
     else:
-      init_tuple_state = tf.contrib.rnn.LSTMStateTuple(init_state[0],
-                                                       init_state[1])
       outputs, states = tf.nn.dynamic_rnn(cell=rnn_cell,
                                           inputs=inputs,
-                                          initial_state=init_tuple_state,
-                                          time_major=True)
-      states = tf.stack([states[0], states[1]], axis=0)
-
-      return outputs, states
+                                          initial_state=rnn_tuple_state)
+#                                          time_major=True)
+    last_state = tf.stack([states[0], states[1]], axis=0)
+    return outputs, last_state
 
 
 def _affine(args, output_size, bias=True, scope=None, init_W=None):
