@@ -93,6 +93,7 @@ class SkimLSTMCell(RNNCell):
         self._use_skim = use_skim
         self._activation = activation
         self._reuse = reuse
+        print(tf.to_float(self._use_skim))
 
     @property
     def state_size(self):
@@ -156,7 +157,7 @@ class SkimLSTMCell(RNNCell):
                                                                  keep_dims=True) + 1e-5)
             action_sample = tf.to_float(tf.multinomial(logits=action_logit, num_samples=1))
 
-            new_skim_cntr += action_sample * action_mask
+            new_skim_cntr += action_sample * action_mask*tf.to_float(self._use_skim)
 
             # init read mask based on read_counter and skim_counter
             init_mask = tf.to_float((tf.to_float(tf.equal(new_read_cntr, 0.0)) *
