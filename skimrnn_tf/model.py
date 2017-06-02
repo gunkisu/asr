@@ -82,6 +82,7 @@ class SkimLSTMCell(RNNCell):
                  min_reads=2, # minimum read steps after skimming
                  forget_bias=0.0, # forget gate bias
                  use_input=False,
+                 use_skim=True,
                  activation=tanh,
                  reuse=None):
         self._num_units = num_units
@@ -89,6 +90,7 @@ class SkimLSTMCell(RNNCell):
         self._min_reads = float(min_reads)
         self._forget_bias = forget_bias
         self._use_input = use_input
+        self._use_skim = use_skim
         self._activation = activation
         self._reuse = reuse
 
@@ -132,7 +134,7 @@ class SkimLSTMCell(RNNCell):
 
             # reduce read counter
             new_read_cntr = tf.maximum(x=read_cntr - read_mask, y=0.0, name='new_read_cntr')
-            new_skim_cntr = tf.maximum(x=skim_cntr - skim_mask, y=0.0, name='new_skim_cntr')
+            new_skim_cntr = tf.maximum(x=skim_cntr - skim_mask, y=0.0, name='new_skim_cntr')*tf.to_float(self._use_skim)
 
             # compute gate based on read_mask and update states
             with vs.variable_scope("gate") as scope:
@@ -182,12 +184,14 @@ class SkimLSTMModule(object):
                  min_reads=1,
                  forget_bias=1.0,
                  use_input=False,
+                 use_skim=True,
                  activation=tanh):
         self._num_units = num_units
         self._max_skims = max_skims
         self._min_reads = min_reads
         self._forget_bias = forget_bias
         self._use_input = use_input
+        self._use_skim = use_skim
         self._activation = activation
 
     def __call__(self,
@@ -208,6 +212,7 @@ class SkimLSTMModule(object):
                                     min_reads=self._min_reads,
                                     forget_bias=self._forget_bias,
                                     use_input=self._use_input,
+                                    use_skim=self._use_skim,
                                     activation=self._activation)
         # init loop
         fwd_outputs, _ = tf.nn.dynamic_rnn(cell=fwd_rnn_cell,
@@ -235,6 +240,7 @@ class SkimLSTMModule(object):
                                         min_reads=self._min_reads,
                                         forget_bias=self._forget_bias,
                                         use_input=self._use_input,
+                                        use_skim=self._use_skim,
                                         activation=self._activation)
             # init loop
             bwd_outputs, _ = tf.nn.dynamic_rnn(cell=bwd_rnn_cell,

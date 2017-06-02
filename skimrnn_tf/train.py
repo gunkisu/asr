@@ -17,6 +17,8 @@ flags.DEFINE_integer('n_class', 3436, 'Number of target symbols')
 flags.DEFINE_integer('n_layer', 3, 'Number of layers')
 flags.DEFINE_float('forget_bias', 1.0, 'forget bias')
 
+flags.DEFINE_boolean('use_skim', True, 'use skim')
+
 flags.DEFINE_boolean('use_input', False, 'set input as state')
 
 # Action size
@@ -120,7 +122,8 @@ def build_graph(FLAGS):
                                        max_skims=FLAGS.n_action,
                                        min_reads=FLAGS.n_read,
                                        forget_bias=FLAGS.forget_bias,
-                                       use_input=FLAGS.use_input)
+                                       use_input=FLAGS.use_input,
+                                       use_skim=FLAGS.use_skim)
 
             # Run bidir skim lstm
             outputs = skim_lstm(inputs=prev_input,
@@ -441,9 +444,10 @@ def train_model():
                     print("Average FER: {:.2f}%".format((1.0-mean_accr) * 100))
                     print("Average CCE: {:.6f}".format(mean_loss))
                     print("Average  ML: {:.6f}".format(mean_ml_cost))
-                    print("Average  RL: {:.6f}".format(mean_rl_cost))
-                    print("Average  BL: {:.6f}".format(mean_bl_cost))
-                    print("Average SUM: {:.6f}".format(mean_sum_cost))
+                    if FLAGS.use_skim:
+                        print("Average  RL: {:.6f}".format(mean_rl_cost))
+                        print("Average  BL: {:.6f}".format(mean_bl_cost))
+                        print("Average SUM: {:.6f}".format(mean_sum_cost))
                     print("Read ratio: ", read_ratio)
                     last_ckpt = last_save_op.save(sess,
                                                   os.path.join(FLAGS.log_dir, "last_model.ckpt"),
