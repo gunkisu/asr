@@ -135,7 +135,7 @@ class SkimLSTMCell(RNNCell):
 
             # reduce read counter
             new_read_cntr = tf.maximum(x=read_cntr - read_mask, y=0.0, name='new_read_cntr')
-            new_skim_cntr = tf.maximum(x=skim_cntr - skim_mask, y=0.0, name='new_skim_cntr')*tf.to_float(self._use_skim)
+            new_skim_cntr = tf.maximum(x=skim_cntr - skim_mask, y=0.0, name='new_skim_cntr')
 
             # compute gate based on read_mask and update states
             with vs.variable_scope("gate") as scope:
@@ -157,7 +157,8 @@ class SkimLSTMCell(RNNCell):
                                                                  keep_dims=True) + 1e-5)
             action_sample = tf.to_float(tf.multinomial(logits=action_logit, num_samples=1))
 
-            new_skim_cntr += action_sample * action_mask*tf.to_float(self._use_skim)
+            new_skim_cntr += action_sample * action_mask
+            new_skim_cntr *= tf.to_float(self._use_skim)
 
             # init read mask based on read_counter and skim_counter
             init_mask = tf.to_float((tf.to_float(tf.equal(new_read_cntr, 0.0)) *
