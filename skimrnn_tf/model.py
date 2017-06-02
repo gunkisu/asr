@@ -81,12 +81,14 @@ class SkimLSTMCell(RNNCell):
                  max_skims=5, # possible max skim steps (number of actions)
                  min_reads=2, # minimum read steps after skimming
                  forget_bias=0.0, # forget gate bias
+                 use_input=False,
                  activation=tanh,
                  reuse=None):
         self._num_units = num_units
         self._max_skims = max_skims
         self._min_reads = float(min_reads)
         self._forget_bias = forget_bias
+        self._use_input = use_input
         self._activation = activation
         self._reuse = reuse
 
@@ -143,7 +145,10 @@ class SkimLSTMCell(RNNCell):
 
             # compute skim action on action_mask and update counter
             with vs.variable_scope("action") as scope:
-                action_logit = _affine([tf.stop_gradient(new_h), ], self._max_skims)
+                action_state = [tf.stop_gradient(new_h)]
+                if self._use_input:
+                    action_state.append(tf.stop_gradient(input_data))
+                action_logit = _affine(action_state, self._max_skims)
             action_logprob = action_logit - tf.log(tf.reduce_sum(input_tensor=tf.exp(action_logit),
                                                                  axis=1,
                                                                  keep_dims=True) + 1e-5)
@@ -176,11 +181,13 @@ class SkimLSTMModule(object):
                  max_skims=5,
                  min_reads=1,
                  forget_bias=1.0,
+                 use_input=False,
                  activation=tanh):
         self._num_units = num_units
         self._max_skims = max_skims
         self._min_reads = min_reads
         self._forget_bias = forget_bias
+        self._use_input = use_input
         self._activation = activation
 
     def __call__(self,
@@ -200,6 +207,7 @@ class SkimLSTMModule(object):
                                     max_skims=self._max_skims,
                                     min_reads=self._min_reads,
                                     forget_bias=self._forget_bias,
+                                    use_input=self._use_input,
                                     activation=self._activation)
         # init loop
         fwd_outputs, _ = tf.nn.dynamic_rnn(cell=fwd_rnn_cell,
@@ -226,6 +234,7 @@ class SkimLSTMModule(object):
                                         max_skims=self._max_skims,
                                         min_reads=self._min_reads,
                                         forget_bias=self._forget_bias,
+                                        use_input=self._use_input,
                                         activation=self._activation)
             # init loop
             bwd_outputs, _ = tf.nn.dynamic_rnn(cell=bwd_rnn_cell,

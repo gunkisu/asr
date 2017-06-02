@@ -17,6 +17,8 @@ flags.DEFINE_integer('n_class', 3436, 'Number of target symbols')
 flags.DEFINE_integer('n_layer', 3, 'Number of layers')
 flags.DEFINE_float('forget_bias', 1.0, 'forget bias')
 
+flags.DEFINE_boolean('use_input', False, 'set input as state')
+
 # Action size
 flags.DEFINE_integer('n_read', 1, 'Number of minimum read')
 flags.DEFINE_integer('n_action', 4, 'Number of maximum skim')
@@ -68,17 +70,17 @@ Graph = namedtuple('Graph', ' '.join(graph_attr_list))
 def build_graph(FLAGS):
     # Define input data
     with tf.device(FLAGS.device):
-        # input sequence
+        # input sequence (seq_len, num_samples, num_input)
         x_data = tf.placeholder(dtype=tf.float32,
                                 shape=(None, None, FLAGS.n_input),
                                 name='x_data')
 
-        # input mask
+        # input mask (seq_len, num_samples)
         x_mask = tf.placeholder(dtype=tf.float32,
                                 shape=(None, None),
                                 name='x_mask')
 
-        # gt label
+        # gt label (seq_len, num_samples)
         y_data = tf.placeholder(dtype=tf.int32,
                                 shape=(None, None),
                                 name='y_data')
@@ -95,6 +97,8 @@ def build_graph(FLAGS):
 
     # Get one-hot label
     y_1hot = tf.one_hot(y_data, depth=FLAGS.n_class)
+
+    # Save label into image (num_sample, num_class, seq_len, 1)
     tf.summary.image(name='y_label',
                      tensor=tf.transpose(tf.expand_dims(y_1hot, axis=1), [2, 3, 0, 1]))
 
@@ -104,7 +108,6 @@ def build_graph(FLAGS):
 
     # For each layer
     policy_data_list = []
-    read_mask_list = []
     prev_hid_data = x_data
     for l in range(FLAGS.n_layer):
         # Set input data (concat input and mask)
@@ -116,7 +119,8 @@ def build_graph(FLAGS):
             skim_lstm = SkimLSTMModule(num_units=FLAGS.n_hidden,
                                        max_skims=FLAGS.n_action,
                                        min_reads=FLAGS.n_read,
-                                       forget_bias=FLAGS.forget_bias)
+                                       forget_bias=FLAGS.forget_bias,
+                                       use_input=FLAGS.use_input)
 
             # Run bidir skim lstm
             outputs = skim_lstm(inputs=prev_input,
@@ -133,7 +137,7 @@ def build_graph(FLAGS):
         fwd_act_lgp, bwd_act_lgp = tf.split(value=act_lgp, num_or_size_splits=2, axis=2)
 
         # Set summary
-        tf.summary.image(name='fwd_read_mask_{}'.format(l), # seq x num x 1 x 1
+        tf.summary.image(name='fwd_read_mask_{}'.format(l),
                          tensor=tf.transpose(tf.expand_dims(fwd_read_mask, -1), [1, 2, 0, 3]))
         tf.summary.image(name='bwd_read_mask_{}'.format(l),
                          tensor=tf.transpose(tf.expand_dims(bwd_read_mask, -1), [1, 2, 0, 3]))
@@ -148,21 +152,23 @@ def build_graph(FLAGS):
 
         # Set baseline
         with tf.variable_scope("fwd_baseline_{}".format(l)) as vs:
+            fwd_policy_input = tf.reshape(tf.stop_gradient(fwd_hid_data), [-1, FLAGS.n_hidden])
             fwd_baseline_cell = LinearCell(num_units=1)
-            fwd_basline = fwd_baseline_cell(tf.reshape(tf.stop_gradient(fwd_hid_data), [-1, FLAGS.n_hidden]))
+            fwd_basline = fwd_baseline_cell(fwd_policy_input)
             fwd_basline = tf.reshape(fwd_basline, [seq_len, num_samples])
+
         with tf.variable_scope("bwd_baseline_{}".format(l)) as vs:
+            bwd_policy_input = tf.reshape(tf.stop_gradient(bwd_hid_data), [-1, FLAGS.n_hidden])
             bwd_baseline_cell = LinearCell(num_units=1)
-            bwd_basline = bwd_baseline_cell(tf.reshape(tf.stop_gradient(bwd_hid_data), [-1, FLAGS.n_hidden]))
+            bwd_basline = bwd_baseline_cell(bwd_policy_input)
             bwd_basline = tf.reshape(bwd_basline, [seq_len, num_samples])
 
         # Set next input
         prev_hid_data = hid_data
 
         # Save data
-        policy_data_list.append([fwd_act_mask, fwd_act_lgp, fwd_basline])
-        policy_data_list.append([bwd_act_mask, bwd_act_lgp, bwd_basline])
-        read_mask_list.extend([fwd_read_mask, bwd_read_mask])
+        policy_data_list.append([tf.squeeze(fwd_read_mask), tf.squeeze(fwd_act_mask), fwd_act_lgp, fwd_basline])
+        policy_data_list.append([tf.squeeze(bwd_read_mask), tf.squeeze(bwd_act_mask), bwd_act_lgp, bwd_basline])
 
     # Set output layer
     with tf.variable_scope('output') as vs:
@@ -173,7 +179,7 @@ def build_graph(FLAGS):
     # Frame-wise cross entropy
     frame_cce = tf.nn.softmax_cross_entropy_with_logits(labels=tf.reshape(y_1hot, [-1, FLAGS.n_class]),
                                                         logits=tf.reshape(output_logit, [-1, FLAGS.n_class]))
-    frame_cce *= tf.reshape(x_mask, [-1,])
+    frame_cce *= tf.reshape(x_mask, [-1, ])
 
     # Frame mean cce
     mean_frame_cce = tf.reduce_sum(frame_cce) / tf.reduce_sum(x_mask)
@@ -191,27 +197,35 @@ def build_graph(FLAGS):
     # Sample-wise REWARD
     sample_reward = sample_frame_accr
 
-    # Define policy cost
+    # Define policy cost for each network
     baseline_cost_list = []
     policy_cost_list = []
+    read_ratio_list = []
     for i, policy_data in enumerate(policy_data_list):
-        act_mask, act_lgp, baseline = policy_data
-        revised_reward = (tf.expand_dims(sample_reward, axis=0) - baseline) * tf.squeeze(act_mask)
-        baseline_cost = tf.reduce_sum(tf.square(revised_reward)) # /tf.reduce_sum(act_mask)
-        policy_cost = tf.stop_gradient(revised_reward)*tf.reduce_sum(act_lgp, axis=-1) * tf.squeeze(act_mask)
-        policy_cost = -tf.reduce_sum(policy_cost)/tf.to_float(num_samples) # /tf.reduce_sum(act_mask)
+        # Get data
+        read_mask, act_mask, act_lgp, baseline = policy_data
 
+        # Get read ratio
+        read_ratio = tf.reduce_sum(read_mask, axis=0)/tf.reduce_sum(x_mask, axis=0)
+        skim_ratio = 1.0 - read_ratio
+
+        # combine reward (frame accuracy and skim ratio)
+        original_reward = (sample_reward + skim_ratio)*100.
+
+        # revised with baseline
+        revised_reward = (tf.expand_dims(original_reward, axis=0) - baseline)*act_mask
+
+        # baseline cost
+        baseline_cost = tf.reduce_sum(tf.square(revised_reward))
+
+        # policy cost
+        policy_cost = tf.stop_gradient(revised_reward)*tf.reduce_sum(act_lgp, axis=-1)*act_mask
+        policy_cost = -tf.reduce_sum(policy_cost)/tf.to_float(num_samples)
+
+        # Save values
         baseline_cost_list.append(baseline_cost)
         policy_cost_list.append(policy_cost)
-
-    # Compute read ratio
-    sample_seq_len = tf.expand_dims(tf.reduce_sum(x_mask, axis=0), axis=-1)
-    read_ratio = []
-    for read_mask in read_mask_list:
-        read_ratio.append(tf.reduce_sum(read_mask, axis=0)/sample_seq_len)
-
-    read_ratio = tf.concat(read_ratio, axis=1)
-    read_ratio = tf.reduce_mean(read_ratio, axis=1)
+        read_ratio_list.append(tf.reduce_mean(read_ratio))
 
     return Graph(x_data=x_data,
                  x_mask=x_mask,
@@ -223,9 +237,10 @@ def build_graph(FLAGS):
                  ml_cost=model_cce,
                  rl_cost=tf.add_n(policy_cost_list),
                  bl_cost=tf.add_n(baseline_cost_list),
-                 read_ratio_list=read_ratio)
+                 read_ratio_list=tf.concat(read_ratio_list, axis=0))
 
 
+# Single update
 def updater(model_graph,
             model_updater,
             x_data,
@@ -233,13 +248,15 @@ def updater(model_graph,
             y_data,
             summary,
             session):
-    outputs = session.run([model_graph.mean_accr,
-                           model_graph.mean_loss,
-                           model_graph.ml_cost,
-                           model_graph.rl_cost,
-                           model_graph.bl_cost,
-                           model_graph.read_ratio_list,
-                           model_updater,
+
+    # Run session
+    outputs = session.run([model_graph.mean_accr, # frame-wise accuracy
+                           model_graph.mean_loss, # frame-wise cost
+                           model_graph.ml_cost, # full ml cost
+                           model_graph.rl_cost, # full rl cost
+                           model_graph.bl_cost, # full bl cost
+                           model_graph.read_ratio_list, # read_ratio_list
+                           model_updater, # model update
                            summary],
                           feed_dict={model_graph.x_data: x_data,
                                      model_graph.x_mask: x_mask,
@@ -251,6 +268,7 @@ def updater(model_graph,
     return mean_accr, mean_loss, ml_cost, rl_cost, bl_cost, read_ratio, summary_output
 
 
+# Model evaluation
 def evaluation(model_graph,
                session,
                dataset):
@@ -283,12 +301,14 @@ def evaluation(model_graph,
         total_loss += mean_loss
         total_read_ratio += read_ratio.mean()
         total_updates += 1.0
+
     total_accr /= total_updates
     total_loss /= total_updates
 
     return total_accr, total_loss
 
 
+# Train model
 def train_model():
     # Fix random seeds
     rand_seed = FLAGS.base_seed + FLAGS.add_seed
@@ -310,7 +330,7 @@ def train_model():
         l2_cost = 0.0
 
     # Set total cost
-    model_total_cost = model_graph.ml_cost + model_graph.rl_cost +  model_graph.bl_cost + l2_cost
+    model_total_cost = model_graph.ml_cost + model_graph.rl_cost + model_graph.bl_cost + l2_cost
 
     # Define global training step
     global_step = tf.contrib.framework.get_or_create_global_step()
@@ -375,7 +395,7 @@ def train_model():
         bl_cost_history = []
         sum_cost_history = []
 
-        best_accr = np.iinfo(np.int32).min
+        best_accr = 0.0
         for e_idx in xrange(FLAGS.n_epoch):
             # for each batch (update)
             for b_idx, batch_data in enumerate(train_set.get_epoch_iterator()):
@@ -386,9 +406,6 @@ def train_model():
                 x_data = x_data.transpose((1, 0, 2))
                 x_mask = x_mask.transpose((1, 0))
                 y_data = y_data.transpose((1, 0))
-
-                # Get input size
-                seq_len, n_sample, _ = x_data.shape
 
                 # Update model
                 mean_accr, mean_loss, ml_cost, rl_cost, bl_cost, read_ratio, summary_output \
@@ -445,6 +462,14 @@ def train_model():
                     valid_accr, valid_cce = evaluation(model_graph=model_graph,
                                                        session=sess,
                                                        dataset=valid_set)
+                    # Save model
+                    if best_accr < valid_accr:
+                        best_accr = valid_accr
+                        best_ckpt = best_save_op.save(sess,
+                                                      os.path.join(FLAGS.log_dir, "best_model.ckpt"),
+                                                      global_step=global_step)
+                        print("Best checkpoint stored in: %s" % best_ckpt)
+
                     print("----------------------------------------------------")
                     print("Validation evaluation")
                     print("----------------------------------------------------")
@@ -453,15 +478,7 @@ def train_model():
                     print("----------------------------------------------------")
                     print("Best FER: {:.2f}%".format((1.0 - best_accr) * 100.))
 
-                    # Save model
-                    if best_accr < valid_accr:
-                        best_accr = valid_accr
-                        best_ckpt = best_save_op.save(sess,
-                                                      os.path.join(FLAGS.log_dir, "best_model.ckpt"),
-                                                      global_step=global_step)
-                        print("Best checkpoint stored in: %s" % best_ckpt)
         print("Optimization Finished.")
-
 
 def main(_):
     if not FLAGS.start_from_ckpt:
