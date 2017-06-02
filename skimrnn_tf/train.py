@@ -100,9 +100,8 @@ def build_graph(FLAGS):
     # Get one-hot label
     y_1hot = tf.one_hot(y_data, depth=FLAGS.n_class)
 
-    # Save label into image (num_sample, num_class, seq_len, 1)
-    tf.summary.image(name='y_label',
-                     tensor=tf.transpose(tf.expand_dims(y_1hot, axis=1), [2, 3, 0, 1]))
+    y_diff = y_data[:-1] - y_data[1:]
+    y_diff = tf.to_float(tf.not_equal(y_diff, 0))
 
     # Get sequence length and batch size
     seq_len = tf.shape(x_data)[0]
@@ -140,18 +139,18 @@ def build_graph(FLAGS):
         fwd_act_lgp, bwd_act_lgp = tf.split(value=act_lgp, num_or_size_splits=2, axis=2)
 
         # Set summary
-        tf.summary.image(name='fwd_read_mask_{}'.format(l),
-                         tensor=tf.transpose(tf.expand_dims(fwd_read_mask, -1), [1, 2, 0, 3]))
-        tf.summary.image(name='bwd_read_mask_{}'.format(l),
-                         tensor=tf.transpose(tf.expand_dims(bwd_read_mask, -1), [1, 2, 0, 3]))
-        tf.summary.image(name='fwd_action_mask_{}'.format(l),
-                         tensor=tf.transpose(tf.expand_dims(fwd_act_mask, -1), [1, 2, 0, 3]))
-        tf.summary.image(name='bwd_action_mask_{}'.format(l),
-                         tensor=tf.transpose(tf.expand_dims(bwd_act_mask, -1), [1, 2, 0, 3]))
-        tf.summary.image(name='fwd_fwd_act_lgp_{}'.format(l),
-                         tensor=tf.transpose(tf.expand_dims(fwd_act_lgp, axis=1), [2, 3, 0, 1]))
-        tf.summary.image(name='bwd_fwd_act_lgp_{}'.format(l),
-                         tensor=tf.transpose(tf.expand_dims(bwd_act_lgp, axis=1), [2, 3, 0, 1]))
+        tf.summary.image(name='fwd_results_{}'.format(l),
+                         tensor=tf.concat(values=[tf.expand_dims(tf.expand_dims(tf.transpose(y_data, [1, 0]), axis=-1), axis=1)[:, :, :-1, :],
+                                                  tf.expand_dims(tf.expand_dims(tf.transpose(y_diff, [1, 0]), axis=-1), axis=1),
+                                                  tf.expand_dims(tf.transpose(fwd_read_mask, [1, 0, 2]), axis=1)[:, :, :-1, :],
+                                                  tf.expand_dims(tf.transpose(fwd_act_mask, [1, 0, 2]), axis=1)[:, :, :-1, :],],
+                                          axis=1))
+        tf.summary.image(name='bwd_results_{}'.format(l),
+                         tensor=tf.concat(values=[tf.expand_dims(tf.expand_dims(tf.transpose(y_data, [1, 0]), axis=-1), axis=1)[:, :, :-1, :],
+                                                  tf.expand_dims(tf.expand_dims(tf.transpose(y_diff, [1, 0]), axis=-1), axis=1),
+                                                  tf.expand_dims(tf.transpose(bwd_read_mask, [1, 0, 2]), axis=1)[:, :, :-1, :],
+                                                  tf.expand_dims(tf.transpose(bwd_act_mask, [1, 0, 2]), axis=1)[:, :, :-1, :]],
+                                          axis=1))
 
         # Set baseline
         with tf.variable_scope("fwd_baseline_{}".format(l)) as vs:
@@ -229,6 +228,11 @@ def build_graph(FLAGS):
         baseline_cost_list.append(baseline_cost)
         policy_cost_list.append(policy_cost)
         read_ratio_list.append(tf.reduce_mean(read_ratio, keep_dims=True))
+
+        tf.summary.scalar(name='frame_read_ratio_{}'.format(i), tensor=tf.reduce_mean(read_ratio))
+
+    tf.summary.scalar(name='policy_cost', tensor=tf.add_n(policy_cost_list))
+    tf.summary.scalar(name='baseline_cost', tensor=tf.add_n(baseline_cost_list))
 
     return Graph(x_data=x_data,
                  x_mask=x_mask,
