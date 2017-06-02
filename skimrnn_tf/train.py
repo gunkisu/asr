@@ -141,16 +141,16 @@ def build_graph(FLAGS):
 
         # Set summary
         tf.summary.image(name='fwd_results_{}'.format(l),
-                         tensor=tf.concat(values=[tf.expand_dims(tf.expand_dims(tf.transpose(tf.to_float(y_data)/tf.to_float(FLAGS.n_class), [1, 0]), axis=-1), axis=1)[:, :, :-1, :],
-                                                  tf.expand_dims(tf.expand_dims(tf.transpose(y_diff, [1, 0]), axis=-1), axis=1),
-                                                  tf.expand_dims(tf.transpose(fwd_read_mask, [1, 0, 2]), axis=1)[:, :, :-1, :],
-                                                  tf.expand_dims(tf.transpose(fwd_act_mask, [1, 0, 2]), axis=1)[:, :, :-1, :],],
+                         tensor=tf.concat(values=[tf.tile(tf.expand_dims(tf.expand_dims(tf.transpose(tf.to_float(y_data)/tf.to_float(FLAGS.n_class), [1, 0]), axis=-1), axis=1)[:, :, :-1, :], [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.expand_dims(tf.transpose(y_diff, [1, 0]), axis=-1), axis=1), [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.transpose(fwd_read_mask, [1, 0, 2]), axis=1)[:, :, :-1, :], [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.transpose(fwd_act_mask, [1, 0, 2]), axis=1)[:, :, :-1, :], [1, 20, 1, 1]),],
                                           axis=1))
         tf.summary.image(name='bwd_results_{}'.format(l),
-                         tensor=tf.concat(values=[tf.expand_dims(tf.expand_dims(tf.transpose(tf.to_float(y_data)/tf.to_float(FLAGS.n_class), [1, 0]), axis=-1), axis=1)[:, :, :-1, :],
-                                                  tf.expand_dims(tf.expand_dims(tf.transpose(y_diff, [1, 0]), axis=-1), axis=1),
-                                                  tf.expand_dims(tf.transpose(bwd_read_mask, [1, 0, 2]), axis=1)[:, :, :-1, :],
-                                                  tf.expand_dims(tf.transpose(bwd_act_mask, [1, 0, 2]), axis=1)[:, :, :-1, :]],
+                         tensor=tf.concat(values=[tf.tile(tf.expand_dims(tf.expand_dims(tf.transpose(tf.to_float(y_data)/tf.to_float(FLAGS.n_class), [1, 0]), axis=-1), axis=1)[:, :, :-1, :], [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.expand_dims(tf.transpose(y_diff, [1, 0]), axis=-1), axis=1), [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.transpose(bwd_read_mask, [1, 0, 2]), axis=1)[:, :, :-1, :], [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.transpose(bwd_act_mask, [1, 0, 2]), axis=1)[:, :, :-1, :], [1, 20, 1, 1]),],
                                           axis=1))
 
         # Set baseline
