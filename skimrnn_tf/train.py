@@ -228,7 +228,7 @@ def build_graph(FLAGS):
         # Save values
         baseline_cost_list.append(baseline_cost)
         policy_cost_list.append(policy_cost)
-        read_ratio_list.append(tf.reduce_mean(read_ratio))
+        read_ratio_list.append(tf.reduce_mean(read_ratio, keep_dims=True))
 
     return Graph(x_data=x_data,
                  x_mask=x_mask,
