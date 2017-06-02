@@ -13,7 +13,7 @@ from collections import namedtuple
 from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import skip_rnn_act
+from mixer import skip_rnn_act, skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent
 from model import LinearCell
@@ -226,6 +226,7 @@ def main(_):
     epoch_sw = StopWatch()
     disp_sw = StopWatch()
     eval_sw = StopWatch()
+    per_sw = StopWatch()
     # For each epoch 
     for _epoch in xrange(args.n_epoch):
       _n_exp = 0
@@ -246,8 +247,9 @@ def main(_):
 
         new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask = \
             skip_rnn_act(x, x_mask, y, sess, sg, args)
+
         advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
-          
+                  
         _feed_states = initial_states(n_batch, args.n_hidden)
 
         _tr_ml_cost, _tr_rl_cost, _, _ = \

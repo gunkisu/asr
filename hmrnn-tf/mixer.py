@@ -2,6 +2,7 @@ import math
 import numpy as np
 import scipy.signal
 import tensorflow as tf
+import itertools
 
 from tensorflow.python.framework import ops
 
@@ -301,17 +302,188 @@ def skip_rnn_act(x, x_mask, y, sess, sample_graph, args):
         
     return (new_masked_X, new_masked_Y, masked_actions, masked_rewards, masked_action_entropies, new_mask, new_reward_mask)
 
+def filter_last(x_step, y_step, prev_state, j, seq_lens, sample_done):
+    new_x_step = []
+    new_y_step = []
+    new_prev_state = []
+    target_indices = [] 
+
+    for i, (x, y, l, p) in enumerate(itertools.izip(x_step, y_step, seq_lens, prev_state)):
+        if i in sample_done: continue 
+
+        if j == l-1:
+            new_x_step.append(x)
+            new_y_step.append(y)
+            new_prev_state.append(p)
+            target_indices.append(i)
+    
+    return np.asarray(new_x_step), np.asarray(new_y_step), \
+        np.asarray(new_prev_state), target_indices
+
+def filter_action_end(x_step, y_step, prev_state, j, action_counters, sample_done):
+    new_x_step = []
+    new_y_step = []
+    new_prev_state = []
+    target_indices = [] 
+
+    for i, (x, y, p, ac) in enumerate(zip(x_step, y_step, prev_state, action_counters)):
+        if i in sample_done: continue 
+
+        if ac == 0:
+            new_x_step.append(x)
+            new_y_step.append(y)
+            new_prev_state.append(p)
+            target_indices.append(i)
+
+    return np.asarray(new_x_step), np.asarray(new_y_step), \
+        np.asarray(new_prev_state), target_indices
+
+def fill(x, x_step, target_indices, update_pos):
+    for x_value, idx in zip(x_step, target_indices):
+        x[update_pos[idx], idx] = x_value
+
+def fill_reward(rewards, reward_step, target_indices, reward_update_pos, ref_update_pos):
+    reward_target_indices = []
+    for r, idx in zip(reward_step, target_indices):
+        if ref_update_pos[idx] == 0:
+            continue
+
+        rewards[reward_update_pos[idx], idx] = r
+        reward_target_indices.append(idx)
+
+    return reward_target_indices
+
+def advance_pos(update_pos, target_indices):
+    for i in target_indices:
+        update_pos[i] += 1
+
+def update_prev_state(prev_state, new_prev_state, target_indices):
+    for ps, i in zip(new_prev_state, target_indices):
+        prev_state[i] = ps
+
+def update_action_counter(action_counter, action_idx, target_indices):
+    new_ac = [ac-1 for ac in action_counter]
+    for u, i in zip(action_idx, target_indices):
+        new_ac[i] = u
+    action_counter[:] = new_ac
+
+def gen_mask(update_pos, reward_update_pos, batch_size):
+    max_seq_len = max(update_pos)
+    max_reward_seq_len = max(reward_update_pos)
+    mask = np.zeros([max_seq_len, batch_size])
+    reward_mask = np.zeros([max_seq_len-1, batch_size])
+
+    for i, pos in enumerate(update_pos):
+        mask[:pos, i] = 1.
+
+    for i, pos in enumerate(reward_update_pos):
+        reward_mask[:pos, i] = 1.
+
+    return max_seq_len, mask, max_reward_seq_len, reward_mask
+
+def skip_rnn_act_parallel(x, x_mask, y, sess, sample_graph, args):
+    def transpose_all(new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask):
+        return np.transpose(new_x, [1,0,2]), np.transpose(new_y, [1,0]), \
+            np.transpose(actions, [1,0,2]), np.transpose(rewards, [1,0]), \
+            np.transpose(action_entropies, [1,0]), np.transpose(new_x_mask, [1,0]), \
+            np.transpose(new_reward_mask, [1,0])
+
+    """Sampling episodes using Skip-RNN"""
+
+    # x shape is [time_step, batch_size, features]
+    n_seq, n_batch, n_feat = x.shape
+    seq_lens = x_mask.sum(axis=0)
+    max_seq_len = int(max(seq_lens))
+
+    # shape should be (2, n_batch, n_hidden) when it is used
+    prev_state = np.zeros((n_batch, 2, args.n_hidden))
+
+    action_counters = [0]*n_batch
+    update_pos = [0]*n_batch
+    reward_update_pos = [0]*n_batch
+    sample_done = [] # indices of examples fully processed
+
+    new_x = np.zeros([max_seq_len, n_batch, n_feat])
+    new_y = np.zeros([max_seq_len, n_batch])
+    actions = np.zeros([max_seq_len-1, n_batch, args.n_action])
+    rewards = np.zeros([max_seq_len-1, n_batch])
+    action_entropies = np.zeros([max_seq_len-1, n_batch])
+    
+    for j, (x_step, y_step) in enumerate(itertools.izip(x, y)):
+        # final step processing
+
+        _x_step, _y_step, _prev_state, target_indices = \
+            filter_last(x_step, y_step, prev_state, j, seq_lens, sample_done)
+        if len(_x_step):
+            step_label_likelihood_j, new_prev_state  = \
+                sess.run([sample_graph.step_label_probs,
+                           sample_graph.step_last_state],
+                          feed_dict={sample_graph.step_x_data: _x_step,
+                                     sample_graph.prev_states: np.transpose(_prev_state, [1,0,2])})
+            new_prev_state = np.transpose(new_prev_state, [1,0,2])
+            fill(new_x, _x_step, target_indices, update_pos)
+            fill(new_y, _y_step, target_indices, update_pos)
+            reward_target_indices = fill_reward(rewards, 
+                np.log(step_label_likelihood_j[range(len(_y_step)),_y_step] + 1e-8), 
+                target_indices, reward_update_pos, update_pos)
+            advance_pos(update_pos, target_indices)
+            advance_pos(reward_update_pos, reward_target_indices)
+            update_prev_state(prev_state, new_prev_state, target_indices)
+            sample_done.extend(target_indices)
+
+        # action sampling
+        _x_step, _y_step, _prev_state, target_indices = \
+            filter_action_end(x_step, y_step, prev_state, j, action_counters, sample_done)
+
+        if len(_x_step):
+            step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy = \
+                sess.run([sample_graph.step_action_probs, sample_graph.step_label_probs,
+                        sample_graph.step_last_state, sample_graph.action_entropy],
+                        feed_dict={sample_graph.step_x_data: _x_step,
+                                 sample_graph.prev_states: np.transpose(_prev_state, [1,0,2])})
+            new_prev_state = np.transpose(new_prev_state, [1,0,2])
+            fill(new_x, _x_step, target_indices, update_pos)
+            fill(new_y, _y_step, target_indices, update_pos)
+            fill(action_entropies, action_entropy, target_indices, update_pos)        
+            # a_t ~ p(a_t|s_t) 
+            action_one_hot, action_idx = sample_from_softmax_batch(step_action_prob_j)
+            fill(actions, action_one_hot, target_indices, update_pos)
+                            
+            update_action_counter(action_counters, action_idx, target_indices)
+            reward_target_indices = fill_reward(rewards, 
+                np.log(step_label_likelihood_j[range(len(_y_step)),_y_step] + 1e-8), 
+                target_indices, reward_update_pos, update_pos)
+            advance_pos(update_pos, target_indices)
+            advance_pos(reward_update_pos, reward_target_indices)
+            update_prev_state(prev_state, new_prev_state, target_indices)
+        else:
+            update_action_counter(action_counters, [], [])
+        
+    max_seq_len, mask, max_reward_seq_len, reward_mask = gen_mask(update_pos, reward_update_pos, n_batch)
+
+    # new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask
+    
+    # shape = [n_seq, n_batch, n_feat]
+    return transpose_all(new_x[:max_seq_len], new_y[:max_seq_len], 
+        actions[:max_seq_len-1], rewards[:max_reward_seq_len], 
+        action_entropies[:max_seq_len-1], mask, reward_mask)
+    
+def sample_from_softmax_batch(step_action_prob):
+    action_one_hot = []
+    action_idx = []
+
+    for p in step_action_prob: 
+        _action_one_hot = np.random.multinomial(1, p)
+        action_one_hot.append(_action_one_hot)
+        action_idx.append(np.argmax(_action_one_hot))
+     
+    return np.asarray(action_one_hot), np.asarray(action_idx)        
 
 def sample_from_softmax(step_action_prob):
-    #if step_action_probs.ndim == 2:
-    #    step_action_probs = step_actions_probs.reshape([-1])
-    # Later change to batch version, ask junyoung
-    # can use idx directly
-    # sample is one-hot
     action_one_hot = np.random.multinomial(1, step_action_prob.flatten())
     action_idx = np.argmax(action_one_hot)
+     
     return action_one_hot, action_idx
-
 
 def mask_episodes(X, Y, actions, rewards, action_entropies, batch_size, x_size, act_size):
 #    X_size = X[0]
@@ -323,7 +495,6 @@ def mask_episodes(X, Y, actions, rewards, action_entropies, batch_size, x_size, 
     masked_actions = np.zeros([batch_size, max_time_step-1, act_size])
     masked_rewards = np.zeros([batch_size, max_time_step-1])
     masked_action_entropies = np.zeros([batch_size, max_time_step-1])
-    
 
     for i, (x, y, action, reward, action_entropy) in enumerate(zip(X, Y, actions, rewards, action_entropies)):
         this_x_len = len(x)
