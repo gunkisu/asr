@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import tensorflow as tf
+from libs.utils import StopWatch
 from data.fuel_utils import create_ivector_datastream
 from model import LinearCell, SkimLSTMModule
 from collections import namedtuple
@@ -317,6 +318,8 @@ def evaluation(model_graph,
 
 # Train model
 def train_model():
+    sw = StopWatch()
+
     # Fix random seeds
     rand_seed = FLAGS.base_seed + FLAGS.add_seed
     tf.set_random_seed(rand_seed)
@@ -415,6 +418,7 @@ def train_model():
                 y_data = y_data.transpose((1, 0))
 
                 # Update model
+                sw.reset()
                 mean_accr, mean_loss, ml_cost, rl_cost, bl_cost, read_ratio, summary_output \
                     = updater(model_graph=model_graph,
                               model_updater=model_update,
@@ -453,6 +457,8 @@ def train_model():
                         print("Average  BL: {:.6f}".format(mean_bl_cost))
                         print("Average SUM: {:.6f}".format(mean_sum_cost))
                     print("Read ratio: ", read_ratio)
+                    sw.print_elapsed()
+                    sw.reset()
                     last_ckpt = last_save_op.save(sess,
                                                   os.path.join(FLAGS.log_dir, "last_model.ckpt"),
                                                   global_step=global_step)
