@@ -406,6 +406,7 @@ def train_model():
         sum_cost_history = []
 
         best_accr = 0.0
+        sw.reset()
         for e_idx in xrange(FLAGS.n_epoch):
             # for each batch (update)
             for b_idx, batch_data in enumerate(train_set.get_epoch_iterator()):
@@ -418,7 +419,6 @@ def train_model():
                 y_data = y_data.transpose((1, 0))
 
                 # Update model
-                sw.reset()
                 mean_accr, mean_loss, ml_cost, rl_cost, bl_cost, read_ratio, summary_output \
                     = updater(model_graph=model_graph,
                               model_updater=model_update,
