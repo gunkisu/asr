@@ -24,28 +24,29 @@ from libs.utils import sync_data, StopWatch
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('learning_rate', 0.002, 'Initial learning rate')
-flags.DEFINE_float('rl_learning_rate', 0.01, 'Initial learning rate for RL')
-flags.DEFINE_integer('batch_size', 64, 'Size of mini-batch')
-flags.DEFINE_integer('n_epoch', 200, 'Maximum number of epochs')
-flags.DEFINE_integer('display_freq', 100, 'Display frequency')
-flags.DEFINE_integer('n_input', 123, 'Number of RNN hidden units')
-flags.DEFINE_integer('n_hidden', 1024, 'Number of RNN hidden units')
-flags.DEFINE_integer('n_class', 3436, 'Number of target symbols')
-flags.DEFINE_integer('n_action', 3, 'Number of actions (max skim size)')
-flags.DEFINE_integer('base_seed', 20170309, 'Base random seed') 
-flags.DEFINE_integer('add_seed', 0, 'Add this amount to the base random seed')
-flags.DEFINE_boolean('start_from_ckpt', False, 'If true, start from a ckpt')
-flags.DEFINE_boolean('grad_clip', True, 'If true, clip the gradients')
+flags.DEFINE_float('learning-rate', 0.002, 'Initial learning rate')
+flags.DEFINE_float('rl-learning-rate', 0.01, 'Initial learning rate for RL')
+flags.DEFINE_integer('batch-size', 64, 'Size of mini-batch')
+flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
+flags.DEFINE_integer('display-freq', 100, 'Display frequency')
+flags.DEFINE_integer('n-input', 123, 'Number of RNN hidden units')
+flags.DEFINE_integer('n-hidden', 1024, 'Number of RNN hidden units')
+flags.DEFINE_integer('n-class', 3436, 'Number of target symbols')
+flags.DEFINE_integer('n-action', 3, 'Number of actions (max skim size)')
+flags.DEFINE_integer('base-seed', 20170309, 'Base random seed') 
+flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
+flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
+flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
+flags.DEFINE_boolean('parallel', True, 'If true, do parallel sampling')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
-flags.DEFINE_string('log_dir', 'skip_lstm_wsj', 'Directory path to files')
-flags.DEFINE_boolean('no_copy', False, '')
+flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
+flags.DEFINE_boolean('no-copy', False, '')
 flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
-flags.DEFINE_string('data_path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
-flags.DEFINE_string('train_dataset', 'train_si284', '')
-flags.DEFINE_string('valid_dataset', 'test_dev93', '')
-flags.DEFINE_string('test_dataset', 'test_eval92', '')
-flags.DEFINE_float('discount_gamma', 0.99, 'discount_factor')
+flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
+flags.DEFINE_string('train-dataset', 'train_si284', '')
+flags.DEFINE_string('valid-dataset', 'test_dev93', '')
+flags.DEFINE_string('test-dataset', 'test_eval92', '')
+flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 
 TrainGraph = namedtuple('TrainGraph', 'ml_cost rl_cost seq_x_data seq_x_mask seq_y_data init_state seq_action seq_advantage, seq_action_mask')
 SampleGraph = namedtuple('SampleGraph', 'step_h_state step_last_state step_label_probs step_action_probs step_x_data prev_states action_entropy')
@@ -204,6 +205,11 @@ def main(_):
 
   vf = LinearVF()
 
+  if args.parallel:
+      gen_episodes = skip_rnn_act_parallel
+  else:
+      gen_episodes = skip_rnn_act
+
   with tf.Session() as sess:
     sess.run(init_op)
 
@@ -246,7 +252,7 @@ def main(_):
         _n_exp += n_batch
 
         new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask = \
-            skip_rnn_act(x, x_mask, y, sess, sg, args)
+            gen_episodes(x, x_mask, y, sess, sg, args)
         
         advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
                   
@@ -274,7 +280,7 @@ def main(_):
           avg_tr_action_entropy = np.asarray(tr_action_entropies).mean()
           avg_tr_reward = np.asarray(tr_rewards).mean()
 
-          print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} rl_cost={:.2f} reward={:.2f} action_entropy={:.2f} time_taken={:.2f}".format(
+          print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} time_taken={:.2f}".format(
               _epoch, global_step.eval(), avg_tr_ce, avg_tr_rl_cost, avg_tr_reward, avg_tr_action_entropy, disp_sw.elapsed()))
 
           tr_ces = []
@@ -305,7 +311,7 @@ def main(_):
         _, n_batch, _ = x.shape
 
         new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask = \
-            skip_rnn_act(x, x_mask, y, sess, sg, args)
+            gen_episodes(x, x_mask, y, sess, sg, args)
         advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
         _feed_states = initial_states(n_batch, args.n_hidden)
@@ -319,8 +325,8 @@ def main(_):
         _val_ce = _val_ml_cost.sum() / new_x_mask.sum()
 
         val_ces.append(_val_ce)
-        val_rl_costs.append(_val_rl_cost.mean())
-        val_action_entropies.append(action_entropies.mean())
+        val_rl_costs.append(_val_rl_cost.sum() / new_reward_mask.sum())
+        val_action_entropies.append(action_entropies.sum() / new_reward_mask.sum())
         val_rewards.append(rewards.sum())
 
       avg_val_ce = np.asarray(val_ces).mean()
@@ -328,7 +334,7 @@ def main(_):
       avg_val_action_entropy = np.asarray(val_action_entropies).mean()
       avg_val_reward = np.asarray(val_rewards).mean()
 
-      print("VALID: epoch={} ml_cost(ce/frame)={:.2f} rl_cost={:.2f} reward={:.2f} action_entropy={:.2f} time_taken={:.2f}".format(
+      print("VALID: epoch={} ml_cost(ce/frame)={:.2f} rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} time_taken={:.2f}".format(
           _epoch, avg_val_ce, avg_val_rl_cost, avg_val_reward, avg_val_action_entropy, eval_sw.elapsed()))
 
       _val_ce_summary, = sess.run([val_ce_summary], feed_dict={val_ce: avg_val_ce}) 
