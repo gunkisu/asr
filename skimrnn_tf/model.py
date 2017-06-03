@@ -93,7 +93,6 @@ class SkimLSTMCell(RNNCell):
         self._use_skim = use_skim
         self._activation = activation
         self._reuse = reuse
-        print(tf.to_float(self._use_skim))
 
     @property
     def state_size(self):

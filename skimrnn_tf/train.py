@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import tensorflow as tf
+from libs.utils import StopWatch
 from data.fuel_utils import create_ivector_datastream
 from model import LinearCell, SkimLSTMModule
 from collections import namedtuple
@@ -100,9 +101,6 @@ def build_graph(FLAGS):
     # Get one-hot label
     y_1hot = tf.one_hot(y_data, depth=FLAGS.n_class)
 
-    y_diff = y_data[:-1] - y_data[1:]
-    y_diff = tf.to_float(tf.not_equal(y_diff, 0))
-
     # Get sequence length and batch size
     seq_len = tf.shape(x_data)[0]
     num_samples = tf.shape(x_data)[1]
@@ -140,16 +138,16 @@ def build_graph(FLAGS):
 
         # Set summary
         tf.summary.image(name='fwd_results_{}'.format(l),
-                         tensor=tf.concat(values=[tf.expand_dims(tf.expand_dims(tf.transpose(tf.to_float(y_data), [1, 0]), axis=-1), axis=1)[:, :, :-1, :],
-                                                  tf.expand_dims(tf.expand_dims(tf.transpose(y_diff, [1, 0]), axis=-1), axis=1),
-                                                  tf.expand_dims(tf.transpose(fwd_read_mask, [1, 0, 2]), axis=1)[:, :, :-1, :],
-                                                  tf.expand_dims(tf.transpose(fwd_act_mask, [1, 0, 2]), axis=1)[:, :, :-1, :],],
+                         tensor=tf.concat(values=[tf.tile(tf.expand_dims(tf.expand_dims(tf.transpose(x_mask, [1, 0]), axis=-1), axis=1), [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.expand_dims(tf.transpose(tf.to_float(y_data)/tf.to_float(FLAGS.n_class), [1, 0]), axis=-1), axis=1), [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.transpose(fwd_read_mask, [1, 0, 2]), axis=1), [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.transpose(fwd_act_mask, [1, 0, 2]), axis=1), [1, 20, 1, 1]),],
                                           axis=1))
         tf.summary.image(name='bwd_results_{}'.format(l),
-                         tensor=tf.concat(values=[tf.expand_dims(tf.expand_dims(tf.transpose(tf.to_float(y_data), [1, 0]), axis=-1), axis=1)[:, :, :-1, :],
-                                                  tf.expand_dims(tf.expand_dims(tf.transpose(y_diff, [1, 0]), axis=-1), axis=1),
-                                                  tf.expand_dims(tf.transpose(bwd_read_mask, [1, 0, 2]), axis=1)[:, :, :-1, :],
-                                                  tf.expand_dims(tf.transpose(bwd_act_mask, [1, 0, 2]), axis=1)[:, :, :-1, :]],
+                         tensor=tf.concat(values=[tf.tile(tf.expand_dims(tf.expand_dims(tf.transpose(x_mask, [1, 0]), axis=-1), axis=1), [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.expand_dims(tf.transpose(tf.to_float(y_data)/tf.to_float(FLAGS.n_class), [1, 0]), axis=-1), axis=1), [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.transpose(bwd_read_mask, [1, 0, 2]), axis=1), [1, 20, 1, 1]),
+                                                  tf.tile(tf.expand_dims(tf.transpose(bwd_act_mask, [1, 0, 2]), axis=1), [1, 20, 1, 1]),],
                                           axis=1))
 
         # Set baseline
@@ -212,7 +210,7 @@ def build_graph(FLAGS):
         skim_ratio = 1.0 - read_ratio
 
         # combine reward (frame accuracy and skim ratio)
-        original_reward = (sample_reward + skim_ratio)*100.
+        original_reward = (sample_reward + skim_ratio*0.00)
 
         # revised with baseline
         revised_reward = (tf.expand_dims(original_reward, axis=0) - baseline)*act_mask
@@ -317,6 +315,8 @@ def evaluation(model_graph,
 
 # Train model
 def train_model():
+    sw = StopWatch()
+
     # Fix random seeds
     rand_seed = FLAGS.base_seed + FLAGS.add_seed
     tf.set_random_seed(rand_seed)
@@ -403,6 +403,7 @@ def train_model():
         sum_cost_history = []
 
         best_accr = 0.0
+        sw.reset()
         for e_idx in xrange(FLAGS.n_epoch):
             # for each batch (update)
             for b_idx, batch_data in enumerate(train_set.get_epoch_iterator()):
@@ -453,6 +454,8 @@ def train_model():
                         print("Average  BL: {:.6f}".format(mean_bl_cost))
                         print("Average SUM: {:.6f}".format(mean_sum_cost))
                     print("Read ratio: ", read_ratio)
+                    sw.print_elapsed()
+                    sw.reset()
                     last_ckpt = last_save_op.save(sess,
                                                   os.path.join(FLAGS.log_dir, "last_model.ckpt"),
                                                   global_step=global_step)
