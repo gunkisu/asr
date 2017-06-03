@@ -210,7 +210,7 @@ def build_graph(FLAGS):
         skim_ratio = 1.0 - read_ratio
 
         # combine reward (frame accuracy and skim ratio)
-        original_reward = (sample_reward + skim_ratio)*100.
+        original_reward = (sample_reward + skim_ratio*0.00)
 
         # revised with baseline
         revised_reward = (tf.expand_dims(original_reward, axis=0) - baseline)*act_mask
