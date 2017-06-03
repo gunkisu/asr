@@ -364,7 +364,7 @@ def update_prev_state(prev_state, new_prev_state, target_indices):
 def update_action_counter(action_counter, action_idx, target_indices):
     new_ac = [ac-1 for ac in action_counter]
     for u, i in zip(action_idx, target_indices):
-        new_ac[i] = u
+        new_ac[i] = u # Note that this is not u + 1 
     action_counter[:] = new_ac
 
 def gen_mask(update_pos, reward_update_pos, batch_size):
@@ -411,7 +411,6 @@ def skip_rnn_act_parallel(x, x_mask, y, sess, sample_graph, args):
     
     for j, (x_step, y_step) in enumerate(itertools.izip(x, y)):
         # final step processing
-
         _x_step, _y_step, _prev_state, target_indices = \
             filter_last(x_step, y_step, prev_state, j, seq_lens, sample_done)
         if len(_x_step):

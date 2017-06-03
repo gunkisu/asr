@@ -247,7 +247,7 @@ def main(_):
 
         new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask = \
             skip_rnn_act(x, x_mask, y, sess, sg, args)
-
+        
         advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
                   
         _feed_states = initial_states(n_batch, args.n_hidden)
@@ -264,8 +264,8 @@ def main(_):
         summary_writer.add_summary(_tr_ce_summary, global_step.eval())
 
         tr_ces.append(_tr_ce)
-        tr_rl_costs.append(_tr_rl_cost.mean())
-        tr_action_entropies.append(action_entropies.mean())
+        tr_rl_costs.append(_tr_rl_cost.sum() / new_reward_mask.sum())
+        tr_action_entropies.append(action_entropies.sum() / new_reward_mask.sum())
         tr_rewards.append(rewards.sum())
                   
         if global_step.eval() % args.display_freq == 0:
