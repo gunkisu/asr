@@ -38,6 +38,7 @@ flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
 flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
 flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
 flags.DEFINE_boolean('parallel', True, 'If true, do parallel sampling')
+flags.DEFINE_boolean('ref-input', False, 'If true, policy refers input')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
 flags.DEFINE_boolean('no-copy', False, '')
@@ -49,7 +50,7 @@ flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 
 TrainGraph = namedtuple('TrainGraph', 'ml_cost rl_cost seq_x_data seq_x_mask seq_y_data init_state seq_action seq_advantage, seq_action_mask')
-SampleGraph = namedtuple('SampleGraph', 'step_h_state step_last_state step_label_probs step_action_probs step_x_data prev_states action_entropy')
+SampleGraph = namedtuple('SampleGraph', 'step_h_state step_last_state step_label_probs step_action_probs step_action_samples step_x_data prev_states action_entropy')
 
 def build_graph(args):
   with tf.device(args.device):
@@ -85,11 +86,13 @@ def build_graph(args):
   step_label_logits = _label_logit(step_h_state, 'label_logit')
   step_label_probs = tf.nn.softmax(logits=step_label_logits)
 
-  step_action_logits = _action_logit(step_h_state, 'action_logit')
+  if FLAGS.ref_input:
+    step_action_logits = _action_logit([step_x_data, step_h_state], 'action_logit')
+  else:
+    step_action_logits = _action_logit(step_h_state, 'action_logit')
   step_action_probs = tf.nn.softmax(logits=step_action_logits)
-
-  # [batch_size]
-  action_entropy = categorical_ent(step_action_probs)
+  step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1)
+  step_action_entropy = categorical_ent(step_action_probs)
 
   # training graph
   seq_hid_3d, _ = _rnn(seq_x_data, init_state)
@@ -128,9 +131,10 @@ def build_graph(args):
                              step_last_state,
                              step_label_probs,
                              step_action_probs,
+                             step_action_samples,
                              step_x_data,
                              prev_states,
-                             action_entropy)
+                             step_action_entropy)
 
   return train_graph, sample_graph
 

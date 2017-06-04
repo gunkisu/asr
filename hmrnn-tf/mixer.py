@@ -267,18 +267,21 @@ def skip_rnn_act(x, x_mask, y, sess, sample_graph, args):
             else:
                 if action_cnt == 0:
                     x_step = np.expand_dims(x_step, 0)
-                    step_action_prob_j, step_label_likelihood_j, prev_state, action_entropy = \
-                         sess.run([sample_graph.step_action_probs,
+                    step_action_idx, step_action_prob_j, step_label_likelihood_j, prev_state, action_entropy = \
+                         sess.run([sample_graph.step_action_samples,
+                                   sample_graph.step_action_probs,
                                    sample_graph.step_label_probs,
-                                   sample_graph.step_last_state, sample_graph.action_entropy],
+                                   sample_graph.step_last_state,
+                                   sample_graph.action_entropy],
                                   feed_dict={sample_graph.step_x_data: x_step,
                                              sample_graph.prev_states: prev_state})
                     new_x_i.append(x_step)
                     new_y_i.append(y_step)
                     action_entropy_i.append(action_entropy)
 
-                    # a_t ~ p(a_t|s_t) 
-                    action_one_hot, action_idx = sample_from_softmax(step_action_prob_j)
+                    # a_t ~ p(a_t|s_t)
+                    action_idx = step_action_idx.flatten()
+                    action_one_hot = np.eye(args.n_action)[action_idx]
                     action_i.append(action_one_hot)
                  
                     # action in {0, 1, 2}
@@ -435,22 +438,24 @@ def skip_rnn_act_parallel(x, x_mask, y, sess, sample_graph, args):
             filter_action_end(x_step, y_step, prev_state, j, action_counters, sample_done)
 
         if len(_x_step):
-            step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy = \
-                sess.run([sample_graph.step_action_probs, sample_graph.step_label_probs,
-                        sample_graph.step_last_state, sample_graph.action_entropy],
+            action_idx, step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy = \
+                sess.run([sample_graph.step_action_samples,
+                          sample_graph.step_action_probs,
+                          sample_graph.step_label_probs,
+                          sample_graph.step_last_state,
+                          sample_graph.action_entropy],
                         feed_dict={sample_graph.step_x_data: _x_step,
                                  sample_graph.prev_states: np.transpose(_prev_state, [1,0,2])})
             new_prev_state = np.transpose(new_prev_state, [1,0,2])
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
-            fill(action_entropies, action_entropy, target_indices, update_pos)        
-            # a_t ~ p(a_t|s_t) 
-            action_one_hot, action_idx = sample_from_softmax_batch(step_action_prob_j)
+            fill(action_entropies, action_entropy, target_indices, update_pos)
+            action_one_hot = np.eye(args.n_action)[action_idx.flatten()]
             fill(actions, action_one_hot, target_indices, update_pos)
                             
-            update_action_counter(action_counters, action_idx, target_indices)
+            update_action_counter(action_counters, action_idx.flatten(), target_indices)
             reward_target_indices = fill_reward(rewards, 
-                np.log(step_label_likelihood_j[range(len(_y_step)),_y_step] + 1e-8), 
+                np.log(step_label_likelihood_j[range(len(_y_step)), _y_step] + 1e-8),
                 target_indices, reward_update_pos, update_pos)
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
