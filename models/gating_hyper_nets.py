@@ -1738,3 +1738,47 @@ def deep_reg_lstm_dln_model_v2(input_var,
                                       nonlinearity=None)
     return output_layer, cond_layer_list
 
+
+####################
+# shallow versions #
+####################
+def uni_lstm_model(input_var,
+                   mask_var,
+                   num_inputs,
+                   num_outputs,
+                   num_layers,
+                   num_units,
+                   grad_clipping=1,
+                   dropout=0.2):
+    ###############
+    # input layer #
+    ###############
+    input_layer = InputLayer(shape=(None, None, num_inputs),
+                             input_var=input_var)
+    mask_layer = InputLayer(shape=(None, None),
+                            input_var=mask_var)
+
+    #####################
+    # stacked rnn layer #
+    #####################
+    prev_input_layer = input_layer
+    for l  in range(num_layers):
+        prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                        p=dropout)
+
+        fwd_feat_layer = RegularLSTM_v0_1_Layer(incoming=prev_input_layer,
+                                                mask_input=mask_layer,
+                                                num_units=num_units,
+                                                grad_clipping=grad_clipping,
+                                                backwards=False)
+        prev_input_layer = fwd_feat_layer
+
+    ################
+    # output layer #
+    ################
+    prev_input_layer = DropoutLayer(incoming=prev_input_layer,
+                                    p=dropout)
+    output_layer = SequenceDenseLayer(incoming=prev_input_layer,
+                                      num_outputs=num_outputs,
+                                      nonlinearity=None)
+    return output_layer
