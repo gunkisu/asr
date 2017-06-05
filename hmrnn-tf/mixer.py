@@ -284,8 +284,12 @@ def skip_rnn_act(x, x_mask, y, sess, sample_graph, args):
                     action_one_hot = np.eye(args.n_action)[action_idx]
                     action_i.append(action_one_hot)
                  
-                    # action in {0, 1, 2}
-                    action_cnt = action_idx + 1
+                    if args.fast_action and action_idx == args.n_action - 1:
+                        # action in {0, 1, 2, ... fast_action}
+                        action_cnt = args.n_fast_action
+                    else:
+                        # action in {0, 1, 2, ...}
+                        action_cnt = action_idx + 1
 
                     action_cnt -= 1
                     if j != 0:
@@ -364,11 +368,18 @@ def update_prev_state(prev_state, new_prev_state, target_indices):
     for ps, i in zip(new_prev_state, target_indices):
         prev_state[i] = ps
 
-def update_action_counter(action_counter, action_idx, target_indices):
-    new_ac = [ac-1 for ac in action_counter]
-    for u, i in zip(action_idx, target_indices):
-        new_ac[i] = u # Note that this is not u + 1 
-    action_counter[:] = new_ac
+def update_action_counters(action_counters, action_idx, target_indices, args):
+    new_ac = list(action_counters)
+    for ai, i in zip(action_idx, target_indices):
+        if args.fast_action and ai == args.n_action - 1:
+            import ipdb; ipdb.set_trace()
+            new_ac[i] = args.n_fast_action
+        else:
+            new_ac[i] = ai+1
+
+    # proceed to the next step
+    new_ac = [ac-1 for ac in new_ac]
+    action_counters[:] = new_ac
 
 def gen_mask(update_pos, reward_update_pos, batch_size):
     max_seq_len = max(update_pos)
@@ -508,7 +519,7 @@ def test_skip_rnn_act_parallel(x,
             fill(actions, action_one_hot, target_indices, update_pos)
 
             # update counter
-            update_action_counter(action_counters, action_idx.flatten(), target_indices)
+            update_action_counters(action_counters, action_idx.flatten(), target_indices, args)
 
             # Set reward for previous actions
             reward_target_indices = fill_reward(rewards,
@@ -528,7 +539,7 @@ def test_skip_rnn_act_parallel(x,
                 # Set action prob
                 full_action_probs[j, s_idx] = step_action_prob_j[i]
         else:
-            update_action_counter(action_counters, [], [])
+            update_action_counters(action_counters, [], [], args)
 
     max_seq_len, mask, max_reward_seq_len, reward_mask = gen_mask(update_pos, reward_update_pos, n_batch)
 
@@ -639,7 +650,7 @@ def skip_rnn_act_parallel(x, x_mask, y, sess, sample_graph, args):
             action_one_hot = np.eye(args.n_action)[action_idx.flatten()]
             fill(actions, action_one_hot, target_indices, update_pos)
                             
-            update_action_counter(action_counters, action_idx.flatten(), target_indices)
+            update_action_counters(action_counters, action_idx.flatten(), target_indices, args)
             reward_target_indices = fill_reward(rewards, 
                 np.log(step_label_likelihood_j[range(len(_y_step)), _y_step] + 1e-8),
                 target_indices, reward_update_pos, update_pos)
@@ -647,7 +658,7 @@ def skip_rnn_act_parallel(x, x_mask, y, sess, sample_graph, args):
             advance_pos(reward_update_pos, reward_target_indices)
             update_prev_state(prev_state, new_prev_state, target_indices)
         else:
-            update_action_counter(action_counters, [], [])
+            update_action_counters(action_counters, [], [], args)
         
     max_seq_len, mask, max_reward_seq_len, reward_mask = gen_mask(update_pos, reward_update_pos, n_batch)
 
