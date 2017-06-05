@@ -13,7 +13,7 @@ from collections import namedtuple
 from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import skip_rnn_act, skip_rnn_act_parallel
+from mixer import skip_rnn_act, skip_rnn_act_parallel, test_skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent
 from model import LinearCell
@@ -200,6 +200,9 @@ def main(_):
   with tf.name_scope("per_step_eval"):
     tr_ce = tf.placeholder(tf.float32)
     tr_ce_summary = tf.summary.scalar("tr_ce", tr_ce)
+    tr_image = tf.placeholder(tf.float32)
+    tr_image_summary = tf.summary.image("tr_image", tr_image)
+
 
   with tf.name_scope("per_epoch_eval"):
     best_val_ce = tf.placeholder(tf.float32)
@@ -210,7 +213,7 @@ def main(_):
   vf = LinearVF()
 
   if args.parallel:
-      gen_episodes = skip_rnn_act_parallel
+      gen_episodes = test_skip_rnn_act_parallel #skip_rnn_act_parallel
   else:
       gen_episodes = skip_rnn_act
 
@@ -255,9 +258,12 @@ def main(_):
         _, n_batch, _ = x.shape
         _n_exp += n_batch
 
-        new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask = \
+        # new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask = \
+        #     gen_episodes(x, x_mask, y, sess, sg, args)
+
+        new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
             gen_episodes(x, x_mask, y, sess, sg, args)
-        
+
         advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
                   
         _feed_states = initial_states(n_batch, args.n_hidden)
@@ -272,6 +278,9 @@ def main(_):
         _tr_ce = _tr_ml_cost.sum() / new_x_mask.sum()
         _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ce})
         summary_writer.add_summary(_tr_ce_summary, global_step.eval())
+
+        _tr_image_summary, = sess.run([tr_image_summary], feed_dict={tr_image: output_image})
+        summary_writer.add_summary(_tr_image_summary, global_step.eval())
 
         tr_ces.append(_tr_ce)
         tr_rl_costs.append(_tr_rl_cost.sum() / new_reward_mask.sum())
@@ -314,7 +323,7 @@ def main(_):
         y = np.transpose(y, (1, 0))
         _, n_batch, _ = x.shape
 
-        new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask = \
+        new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask, _ = \
             gen_episodes(x, x_mask, y, sess, sg, args)
         advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
