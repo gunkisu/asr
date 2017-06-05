@@ -243,7 +243,7 @@ def main(_):
             _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
             _pred_idx = _pred_idx[:,:n_seq]
 
-            val_acc_sum = ((_pred_idx == orig_y) * orig_y).sum()
+            val_acc_sum += ((_pred_idx == orig_y) * orig_y).sum()
             val_acc_count += orig_y.sum()
 
             val_ces.append(_val_ce)
