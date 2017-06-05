@@ -257,8 +257,8 @@ def skip_frames_fixed(batch, every_n, return_first=False):
 
                 else:
                     new_src_data.append(ex[start_idx::every_n,:])    
-
-            new_batch.append(new_src_data)
+            
+            new_batch.append(np.asarray(new_src_data))
         yield new_batch
 
 def skip_frames_random(batch, every_n):

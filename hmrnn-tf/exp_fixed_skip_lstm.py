@@ -10,7 +10,6 @@ from mixer import insert_item2dict
 from model import LinearCell
 from model import LSTMModule
 from mixer import save_npz2
-from train_loop_skip import TrainModel
 
 from collections import namedtuple, OrderedDict
 
@@ -42,7 +41,7 @@ flags.DEFINE_string('valid-dataset', 'test_dev93', '')
 flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_integer('n-skip', 1, 'Number of frames to skip')
 
-TrainGraph = namedtuple('TrainGraph', 'ml_cost seq_x_data seq_x_mask seq_y_data init_state')
+TrainGraph = namedtuple('TrainGraph', 'ml_cost seq_x_data seq_x_mask seq_y_data init_state, pred_idx')
 
 def build_graph(args):
   with tf.device(args.device):
@@ -72,11 +71,14 @@ def build_graph(args):
     labels=y_1hot)
   ml_cost = tf.reduce_sum(ml_cost*tf.reshape(seq_x_mask, [-1]))
 
+  pred_idx = tf.argmax(seq_label_logits, axis=1)
+
   train_graph = TrainGraph(ml_cost,
                            seq_x_data,
                            seq_x_mask,
                            seq_y_data,
-                           init_state)
+                           init_state,
+                           pred_idx)
 
   return train_graph
 
@@ -153,6 +155,8 @@ def main(_):
     summary_writer = tf.summary.FileWriter(args.log_dir, sess.graph, flush_secs=5.0)
 
     tr_ces = []
+    tr_acc_sum = 0
+    tr_acc_count = 0
     _best_score = np.iinfo(np.int32).max
 
     epoch_sw = StopWatch()
@@ -166,20 +170,21 @@ def main(_):
       epoch_sw.reset()
       disp_sw.reset()
 
+      print('--')
       print('Epoch {} training'.format(_epoch+1))
       
       # For each batch 
-      for batch in islice(train_set.get_epoch_iterator(), 10):
+      for batch in train_set.get_epoch_iterator():
         orig_x, orig_x_mask, _, _, orig_y, _ = batch
          
-        for x, x_mask, y in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1):
-            x, x_mask, _, _, y, _ = batch
+        for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1):
+            x, x_mask, y = sub_batch
             n_batch, _, _ = x.shape
             _n_exp += n_batch
 
             _feed_states = initial_states(n_batch, args.n_hidden)
 
-            _tr_ml_cost, _ = sess.run([tg.ml_cost, ml_op],
+            _tr_ml_cost, _pred_idx, _ = sess.run([tg.ml_cost, tg.pred_idx, ml_op],
                      feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask,
                           tg.seq_y_data: y, tg.init_state: _feed_states})
 
@@ -187,15 +192,24 @@ def main(_):
             _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ce})
             summary_writer.add_summary(_tr_ce_summary, global_step.eval())
 
+            _, n_seq = orig_y.shape
+            _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
+            _pred_idx = _pred_idx[:,:n_seq]
+
             tr_ces.append(_tr_ce)
-                  
+            tr_acc_sum += ((_pred_idx == orig_y) * orig_y).sum()
+            tr_acc_count += orig_y.sum()
+                 
         if global_step.eval() % args.display_freq == 0:
           avg_tr_ce = np.asarray(tr_ces).mean()
+          avg_tr_fer = 1. - float(tr_acc_sum) / tr_acc_count
 
-          print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} time_taken={:.2f}".format(
-              _epoch, global_step.eval(), avg_tr_ce, disp_sw.elapsed()))
+          print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} fer={:.2f} time_taken={:.2f}".format(
+              _epoch, global_step.eval(), avg_tr_ce, avg_tr_fer, disp_sw.elapsed()))
 
           tr_ces = []
+          tr_acc_sum = 0
+          tr_acc_count = 0
           disp_sw.reset()
 
       print('--')
@@ -206,29 +220,39 @@ def main(_):
 
       # Evaluate the model on the validation set
       val_ces = []
+      val_acc_sum = 0
+      val_acc_count = 0
 
       eval_sw.reset()
       for batch in valid_set.get_epoch_iterator():
         orig_x, orig_x_mask, _, _, orig_y, _ = batch
          
-        for x, x_mask, y in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1, return_first=True):
-            x, x_mask, _, _, y, _ = batch
+        for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1, return_first=True):
+            x, x_mask, y = sub_batch
             n_batch, _, _ = x.shape
 
             _feed_states = initial_states(n_batch, args.n_hidden)
 
-            _val_ml_cost, = sess.run([tg.ml_cost],
+            _val_ml_cost, _pred_idx = sess.run([tg.ml_cost, tg.pred_idx],
                     feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask,
                           tg.seq_y_data: y, tg.init_state: _feed_states})
             
             _val_ce = _val_ml_cost.sum() / x_mask.sum()
 
+            _, n_seq = orig_y.shape
+            _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
+            _pred_idx = _pred_idx[:,:n_seq]
+
+            val_acc_sum = ((_pred_idx == orig_y) * orig_y).sum()
+            val_acc_count += orig_y.sum()
+
             val_ces.append(_val_ce)
-
+        
       avg_val_ce = np.asarray(val_ces).mean()
+      avg_val_fer = 1. - float(val_acc_sum) / val_acc_count
 
-      print("VALID: epoch={} ml_cost(ce/frame)={:.2f} time_taken={:.2f}".format(
-          _epoch, avg_val_ce, eval_sw.elapsed()))
+      print("VALID: epoch={} ml_cost(ce/frame)={:.2f} fer={:.2f} time_taken={:.2f}".format(
+          _epoch, avg_val_ce, avg_val_fer, eval_sw.elapsed()))
 
       _val_ce_summary, = sess.run([val_ce_summary], feed_dict={val_ce: avg_val_ce}) 
       summary_writer.add_summary(_val_ce_summary, global_step.eval())
