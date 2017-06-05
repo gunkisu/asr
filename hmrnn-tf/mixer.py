@@ -563,7 +563,7 @@ def test_skip_rnn_act_parallel(x,
     full_label_data = np.transpose(full_label_data, [1, 2, 0])
     full_label_data = np.expand_dims(full_label_data, axis=-1)
     full_label_data = np.repeat(full_label_data, repeats=5, axis=1)
-    full_label_data = np.repeat(full_label_data, repeats=5, axis=2)
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
     full_label_data /= float(args.n_class)
 
     # stack
