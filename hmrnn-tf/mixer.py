@@ -578,7 +578,7 @@ def test_skip_rnn_act_parallel(x,
                          rewards[:max_reward_seq_len],
                          action_entropies[:max_seq_len-1],
                          mask,
-                         reward_mask) + output_image
+                         reward_mask) + [output_image,]
 
 def skip_rnn_act_parallel(x, x_mask, y, sess, sample_graph, args):
     def transpose_all(new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask):
