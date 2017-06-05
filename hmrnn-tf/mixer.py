@@ -428,7 +428,6 @@ def test_skip_rnn_act_parallel(x,
     action_entropies = np.zeros([max_seq_len-1, n_batch])
 
     # recording
-    full_read_mask = np.zeros([max_seq_len, n_batch, 1])
     full_action_samples = np.zeros([max_seq_len, n_batch, args.n_action])
     full_action_probs = np.zeros([max_seq_len, n_batch, args.n_action])
 
@@ -523,9 +522,6 @@ def test_skip_rnn_act_parallel(x,
 
             # Save status for visualization
             for i, s_idx in enumerate(target_indices):
-                # Set read mask
-                full_read_mask[j, s_idx] = 1.
-
                 # Set action sample
                 full_action_samples[j, s_idx] = action_one_hot[i]
 
@@ -537,12 +533,6 @@ def test_skip_rnn_act_parallel(x,
     max_seq_len, mask, max_reward_seq_len, reward_mask = gen_mask(update_pos, reward_update_pos, n_batch)
 
     # Make visual image
-    # 1) input mask x_mask
-    # 2) input label y
-    # 3) action one-hot
-    # 4) action log-like
-    # batch_size, num_actions, seq_len, 1
-    # [time_step, batch_size, num_actions]
     full_action_samples = np.transpose(full_action_samples, [1, 2, 0])
     full_action_samples = np.expand_dims(full_action_samples, axis=-1)
     full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1)
@@ -553,11 +543,6 @@ def test_skip_rnn_act_parallel(x,
     full_action_probs = np.repeat(full_action_probs, repeats=5, axis=1)
     full_action_probs = np.repeat(full_action_probs, repeats=5, axis=2)
 
-    full_read_mask = np.transpose(full_read_mask, [1, 2, 0])
-    full_read_mask = np.expand_dims(full_read_mask, axis=-1)
-    full_read_mask = np.repeat(full_read_mask, repeats=5, axis=1)
-    full_read_mask = np.repeat(full_read_mask, repeats=5, axis=2)
-
     # batch_size, seq_len
     full_label_data = np.expand_dims(y, axis=-1)
     full_label_data = np.transpose(full_label_data, [1, 2, 0])
@@ -567,10 +552,15 @@ def test_skip_rnn_act_parallel(x,
     full_label_data /= float(args.n_class)
 
     # stack
-    output_image = np.concatenate([full_label_data,
-                                   full_read_mask,
-                                   full_action_samples,
-                                   full_action_probs],
+    output_image = np.concatenate([np.concatenate([full_label_data,
+                                                   np.zeros_like(full_label_data),
+                                                   np.zeros_like(full_label_data)], axis=-1),
+                                   np.concatenate([np.zeros_like(full_action_samples),
+                                                   full_action_samples,
+                                                   np.zeros_like(full_action_samples)], axis=-1),
+                                   np.concatenate([np.zeros_like(full_action_probs),
+                                                   np.zeros_like(full_action_probs),
+                                                   full_action_probs], axis=-1)],
                                   axis=1)
     return transpose_all(new_x[:max_seq_len],
                          new_y[:max_seq_len],
