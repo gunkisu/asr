@@ -61,7 +61,8 @@ def build_graph(args):
   with tf.variable_scope('label'):
     _label_logit = LinearCell(num_units=args.n_class)
 
-  n_samples, seq_len, _ = tf.shape(seq_x_data)
+  n_samples = tf.shape(seq_x_data)[0] 
+  seq_len = tf.shape(seq_x_data)[1]
 
   seq_hid_3d, _ = _rnn(seq_x_data, init_state)
   seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden])
@@ -205,7 +206,7 @@ def main(_):
 
             _, n_seq = orig_y.shape
             _expand_seq_logit = interpolate_feat(_seq_logit, num_skips=args.n_skip+1, axis=1, use_bidir=True)
-            _pred_idx = _expand_seq_logit.max(args=2)
+            _pred_idx = _expand_seq_logit.argmax(axis=2)
 
             tr_acc_sum += ((_pred_idx == orig_y) * orig_x_mask).sum()
             tr_acc_count += orig_x_mask.sum()
@@ -257,7 +258,7 @@ def main(_):
 
             _, n_seq = orig_y.shape
             _expand_seq_logit = interpolate_feat(_seq_logit, num_skips=args.n_skip+1, axis=1, use_bidir=True)
-            _pred_idx = _expand_seq_logit.max(args=2)
+            _pred_idx = _expand_seq_logit.argmax(axis=2)
 
             val_acc_sum += ((_pred_idx == orig_y) * orig_x_mask).sum()
             val_acc_count += orig_x_mask.sum()
