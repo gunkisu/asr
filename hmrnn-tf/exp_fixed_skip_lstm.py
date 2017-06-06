@@ -154,7 +154,8 @@ def main(_):
 
     summary_writer = tf.summary.FileWriter(args.log_dir, sess.graph, flush_secs=5.0)
 
-    tr_ces = []
+    tr_ce_sum = 0.
+    tr_ce_count = 0
     tr_acc_sum = 0
     tr_acc_count = 0
     _best_score = np.iinfo(np.int32).max
@@ -174,7 +175,7 @@ def main(_):
       print('Epoch {} training'.format(_epoch+1))
       
       # For each batch 
-      for batch in train_set.get_epoch_iterator():
+      for batch in islice(train_set.get_epoch_iterator(), 5):
         orig_x, orig_x_mask, _, _, orig_y, _ = batch
          
         for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1):
@@ -188,26 +189,27 @@ def main(_):
                      feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask,
                           tg.seq_y_data: y, tg.init_state: _feed_states})
 
-            _tr_ce = _tr_ml_cost.sum() / x_mask.sum()
-            _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ce})
+            tr_ce_sum += _tr_ml_cost.sum()
+            tr_ce_count += x_mask.sum()
+            _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ml_cost.sum() / x_mask.sum()})
             summary_writer.add_summary(_tr_ce_summary, global_step.eval())
 
             _, n_seq = orig_y.shape
             _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
             _pred_idx = _pred_idx[:,:n_seq]
 
-            tr_ces.append(_tr_ce)
             tr_acc_sum += ((_pred_idx == orig_y) * orig_y).sum()
             tr_acc_count += orig_y.sum()
                  
         if global_step.eval() % args.display_freq == 0:
-          avg_tr_ce = np.asarray(tr_ces).mean()
+          avg_tr_ce = tr_ce_sum / tr_ce_count
           avg_tr_fer = 1. - float(tr_acc_sum) / tr_acc_count
 
           print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} fer={:.2f} time_taken={:.2f}".format(
               _epoch, global_step.eval(), avg_tr_ce, avg_tr_fer, disp_sw.elapsed()))
 
-          tr_ces = []
+          tr_ce_sum = 0.
+          tr_ce_count = 0
           tr_acc_sum = 0
           tr_acc_count = 0
           disp_sw.reset()
@@ -219,7 +221,8 @@ def main(_):
       print('Testing')
 
       # Evaluate the model on the validation set
-      val_ces = []
+      val_ce_sum = 0.
+      val_ce_count = 0
       val_acc_sum = 0
       val_acc_count = 0
 
@@ -237,7 +240,8 @@ def main(_):
                     feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask,
                           tg.seq_y_data: y, tg.init_state: _feed_states})
             
-            _val_ce = _val_ml_cost.sum() / x_mask.sum()
+            val_ce_sum += _val_ml_cost.sum()
+            val_ce_count += x_mask.sum()
 
             _, n_seq = orig_y.shape
             _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
@@ -246,9 +250,7 @@ def main(_):
             val_acc_sum += ((_pred_idx == orig_y) * orig_y).sum()
             val_acc_count += orig_y.sum()
 
-            val_ces.append(_val_ce)
-        
-      avg_val_ce = np.asarray(val_ces).mean()
+      avg_val_ce = val_ce_sum / val_ce_count
       avg_val_fer = 1. - float(val_acc_sum) / val_acc_count
 
       print("VALID: epoch={} ml_cost(ce/frame)={:.2f} fer={:.2f} time_taken={:.2f}".format(
