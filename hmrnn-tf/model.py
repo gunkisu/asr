@@ -39,6 +39,43 @@ class LSTMModule(object):
     last_state = tf.stack([states[0], states[1]], axis=0)
     return outputs, last_state
 
+class StackLSTMModule(object):
+  """Implementation of Stacked LSTM module"""
+  def __init__(self, num_units, num_layers=1):
+    self._num_units = num_units
+    self._num_layers = num_layers
+
+  def __call__(self,
+               inputs,
+               init_state,
+               one_step=False):
+    if isinstance(init_state, tuple) or isinstance(init_state, list):
+      rnn_tuple_state = tuple([tf.contrib.rnn.LSTMStateTuple(init_state[l][0], init_state[l][1])
+                               for l in range(self._num_layers)])
+    else:
+      rnn_tuple_state = tuple([tf.contrib.rnn.LSTMStateTuple(init_state[0], init_state[1])
+                               for l in range(self._num_layers)])
+
+    # Define an LSTM cell with Tensorflow
+    rnn_cell_list = []
+    for l in range(self._num_layers):
+      with tf.variable_scope('lstm_{}'.format(l)) as vs:
+        rnn_cell_list.append(LSTMCell(self._num_units))
+
+    # Stack
+    stack_rnn_cell = tf.contrib.rnn.MultiRNNCell(rnn_cell_list, state_is_tuple=True)
+
+    if one_step:
+      outputs, states = stack_rnn_cell(inputs=inputs,
+                                       state=rnn_tuple_state)
+
+    else:
+      outputs, states = tf.nn.dynamic_rnn(cell=stack_rnn_cell,
+                                          inputs=inputs,
+                                          initial_state=rnn_tuple_state)
+    last_state_list = [tf.stack([states[l][0], states[l][1]], axis=0) for l in range(self._num_layers)]
+    return outputs, last_state_list
+
 
 def _affine(args, output_size, bias=True, scope=None, init_W=None):
   # Calculate the total size of arguments on dimension 1
