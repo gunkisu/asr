@@ -658,3 +658,18 @@ def categorical_ent(dist):
     ent = -tf.reduce_sum(dist * tf.log(dist + 1e-8), axis=-1) 
     return ent
 
+def expand_pred_idx(actions_1hot, x_mask, pred_idx, n_batch, args):
+    new_pred_idx = np.zeros_like(x_mask)
+
+    skip_info = np.argmax(actions_1hot, axis=2) + 1 # number of repeats
+    pred_idx = pred_idx.reshape([n_batch, -1])
+
+    # for each example
+    for i, (s, p) in enumerate(zip(skip_info, pred_idx)):
+        # for each step
+        start_idx = 0
+        for s_step, p_step in itertools.izip_longest(s, p, fillvalue=1):
+            new_pred_idx[i, start_idx:start_idx+s_step] = p_step
+            start_idx += s_step
+
+    return new_pred_idx

@@ -175,7 +175,7 @@ def main(_):
       print('Epoch {} training'.format(_epoch+1))
       
       # For each batch 
-      for batch in islice(train_set.get_epoch_iterator(), 5):
+      for batch in train_set.get_epoch_iterator():
         orig_x, orig_x_mask, _, _, orig_y, _ = batch
          
         for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1):
@@ -198,8 +198,8 @@ def main(_):
             _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
             _pred_idx = _pred_idx[:,:n_seq]
 
-            tr_acc_sum += ((_pred_idx == orig_y) * orig_y).sum()
-            tr_acc_count += orig_y.sum()
+            tr_acc_sum += ((_pred_idx == orig_y) * orig_x_mask).sum()
+            tr_acc_count += orig_x_mask.sum()
                  
         if global_step.eval() % args.display_freq == 0:
           avg_tr_ce = tr_ce_sum / tr_ce_count
@@ -247,8 +247,8 @@ def main(_):
             _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
             _pred_idx = _pred_idx[:,:n_seq]
 
-            val_acc_sum += ((_pred_idx == orig_y) * orig_y).sum()
-            val_acc_count += orig_y.sum()
+            val_acc_sum += ((_pred_idx == orig_y) * orig_x_mask).sum()
+            val_acc_count += orig_x_mask.sum()
 
       avg_val_ce = val_ce_sum / val_ce_count
       avg_val_fer = 1. - float(val_acc_sum) / val_acc_count

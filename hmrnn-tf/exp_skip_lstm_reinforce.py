@@ -16,7 +16,7 @@ from mixer import insert_item2dict
 from mixer import save_npz2
 from mixer import skip_rnn_act, skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
-from mixer import categorical_ent
+from mixer import categorical_ent, expand_pred_idx
 from model import LinearCell
 from model import LSTMModule
 
@@ -255,8 +255,8 @@ def main(_):
 
     summary_writer = tf.summary.FileWriter(args.log_dir, sess.graph, flush_secs=5.0)
 
-    tr_ce_sum = 0.
-    tr_ce_count = 0
+    tr_ce_sum = 0.; tr_ce_count = 0
+    tr_acc_sum = 0; tr_acc_count = 0
     tr_rl_costs = []
     tr_action_entropies = []
     tr_rewards = []
@@ -277,7 +277,7 @@ def main(_):
       print('Epoch {} training'.format(_epoch+1))
       
       # For each batch 
-      for batch in islice(train_set.get_epoch_iterator(), 5):
+      for batch in train_set.get_epoch_iterator():
         x, x_mask, _, _, y, _ = batch
         x = np.transpose(x, (1, 0, 2))
         x_mask = np.transpose(x_mask, (1, 0))
@@ -307,21 +307,26 @@ def main(_):
         _tr_image_summary, = sess.run([tr_image_summary], feed_dict={tr_image: output_image})
         summary_writer.add_summary(_tr_image_summary, global_step.eval())
 
+        pred_idx = expand_pred_idx(actions, x_mask, pred_idx, n_batch, args)
+        tr_acc_sum += ((pred_idx == y) * x_mask).sum()
+        tr_acc_count += x_mask.sum()
+
         tr_rl_costs.append(_tr_rl_cost.sum() / new_reward_mask.sum())
         tr_action_entropies.append(action_entropies.sum() / new_reward_mask.sum())
         tr_rewards.append(rewards.sum())
                   
         if global_step.eval() % args.display_freq == 0:
           avg_tr_ce = tr_ce_sum / tr_ce_count
+          avg_tr_fer = 1. - tr_acc_sum / tr_acc_count
           avg_tr_rl_cost = np.asarray(tr_rl_costs).mean()
           avg_tr_action_entropy = np.asarray(tr_action_entropies).mean()
           avg_tr_reward = np.asarray(tr_rewards).mean()
 
-          print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} time_taken={:.2f}".format(
-              _epoch, global_step.eval(), avg_tr_ce, avg_tr_rl_cost, avg_tr_reward, avg_tr_action_entropy, disp_sw.elapsed()))
+          print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} fer={:.2f} rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} time_taken={:.2f}".format(
+              _epoch, global_step.eval(), avg_tr_ce, avg_tr_fer, avg_tr_rl_cost, avg_tr_reward, avg_tr_action_entropy, disp_sw.elapsed()))
 
-          tr_ce_sum = 0.
-          tr_ce_count = 0
+          tr_ce_sum = 0.; tr_ce_count = 0
+          tr_acc_sum = 0.; tr_acc_count = 0
           tr_rl_costs = []
           tr_action_entropies = []
           tr_rewards = []
@@ -335,14 +340,14 @@ def main(_):
       print('Testing')
 
       # Evaluate the model on the validation set
-      val_ce_sum = 0.
-      val_ce_count = 0
+      val_ce_sum = 0.; val_ce_count = 0
+      val_acc_sum = 0; val_acc_count = 0
       val_rl_costs = []
       val_action_entropies = []
       val_rewards = []
 
       eval_sw.reset()
-      for batch in islice(valid_set.get_epoch_iterator(), 5):
+      for batch in valid_set.get_epoch_iterator():
         x, x_mask, _, _, y, _ = batch
         x = np.transpose(x, (1, 0, 2))
         x_mask = np.transpose(x_mask, (1, 0))
@@ -364,17 +369,22 @@ def main(_):
         val_ce_sum += _val_ml_cost.sum()
         val_ce_count += new_x_mask.sum()
 
+        pred_idx = expand_pred_idx(actions, x_mask, pred_idx, n_batch, args)
+        val_acc_sum += ((pred_idx == y) * x_mask).sum()
+        val_acc_count += x_mask.sum()
+
         val_rl_costs.append(_val_rl_cost.sum() / new_reward_mask.sum())
         val_action_entropies.append(action_entropies.sum() / new_reward_mask.sum())
         val_rewards.append(rewards.sum())
 
       avg_val_ce = val_ce_sum / val_ce_count
+      avg_val_fer = 1. - val_acc_sum / val_acc_count
       avg_val_rl_cost = np.asarray(val_rl_costs).mean()
       avg_val_action_entropy = np.asarray(val_action_entropies).mean()
       avg_val_reward = np.asarray(val_rewards).mean()
 
-      print("VALID: epoch={} ml_cost(ce/frame)={:.2f} rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} time_taken={:.2f}".format(
-          _epoch, avg_val_ce, avg_val_rl_cost, avg_val_reward, avg_val_action_entropy, eval_sw.elapsed()))
+      print("VALID: epoch={} ml_cost(ce/frame)={:.2f} fer={:.2f} rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} time_taken={:.2f}".format(
+          _epoch, avg_val_ce, avg_val_fer, avg_val_rl_cost, avg_val_reward, avg_val_action_entropy, eval_sw.elapsed()))
 
       _val_ce_summary, = sess.run([val_ce_summary], feed_dict={val_ce: avg_val_ce}) 
       summary_writer.add_summary(_val_ce_summary, global_step.eval())
