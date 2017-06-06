@@ -3,7 +3,8 @@
 import os
 import sys
 sys.path.insert(0, '..')
-import itertools
+
+from itertools import islice
 
 import numpy as np
 import tensorflow as tf
@@ -13,7 +14,7 @@ from collections import namedtuple
 from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import skip_rnn_act, skip_rnn_act_parallel, test_skip_rnn_act_parallel
+from mixer import skip_rnn_act, skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent
 from model import LinearCell
@@ -51,8 +52,28 @@ flags.DEFINE_string('valid-dataset', 'test_dev93', '')
 flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 
-TrainGraph = namedtuple('TrainGraph', 'ml_cost rl_cost seq_x_data seq_x_mask seq_y_data init_state seq_action seq_advantage, seq_action_mask')
-SampleGraph = namedtuple('SampleGraph', 'step_h_state step_last_state step_label_probs step_action_probs step_action_samples step_x_data prev_states action_entropy')
+tg_fields = ['ml_cost',
+             'rl_cost',
+             'seq_x_data',
+             'seq_x_mask',
+             'seq_y_data',
+             'init_state',
+             'seq_action', 
+             'seq_advantage',
+             'seq_action_mask',
+             'pred_idx']
+
+sg_fields = ['step_h_state',
+             'step_last_state',
+             'step_label_probs',
+             'step_action_probs',
+             'step_action_samples',
+             'step_x_data',
+             'prev_states',
+             'action_entropy']
+
+TrainGraph = namedtuple('TrainGraph', ' '.join(tg_fields))
+SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
 
 def build_graph(args):
   with tf.device(args.device):
@@ -108,6 +129,8 @@ def build_graph(args):
     labels=y_1hot)
   ml_cost = tf.reduce_sum(ml_cost*tf.reshape(seq_x_mask, [-1]))
 
+  pred_idx = tf.argmax(seq_label_logits, axis=1)
+
   seq_hid_3d_rl = seq_hid_3d[:,:-1,:]
   seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
 
@@ -127,7 +150,8 @@ def build_graph(args):
                            init_state,
                            seq_action,
                            seq_advantage,
-                           seq_action_mask)
+                           seq_action_mask, 
+                           pred_idx)
 
   sample_graph = SampleGraph(step_h_state,
                              step_last_state,
@@ -163,7 +187,7 @@ def main(_):
   prefix_name = os.path.join(args.log_dir, 'model')
   file_name = '%s.npz' % prefix_name
 
-  eval_summary = OrderedDict() # 
+  eval_summary = OrderedDict()
 
   tg, sg = build_graph(args)
   tg_ml_cost = tf.reduce_mean(tg.ml_cost)
@@ -215,7 +239,7 @@ def main(_):
   vf = LinearVF()
 
   if args.parallel:
-      gen_episodes = test_skip_rnn_act_parallel #skip_rnn_act_parallel
+      gen_episodes = skip_rnn_act_parallel
   else:
       gen_episodes = skip_rnn_act
 
@@ -231,7 +255,8 @@ def main(_):
 
     summary_writer = tf.summary.FileWriter(args.log_dir, sess.graph, flush_secs=5.0)
 
-    tr_ces = []
+    tr_ce_sum = 0.
+    tr_ce_count = 0
     tr_rl_costs = []
     tr_action_entropies = []
     tr_rewards = []
@@ -252,16 +277,13 @@ def main(_):
       print('Epoch {} training'.format(_epoch+1))
       
       # For each batch 
-      for batch in train_set.get_epoch_iterator():
+      for batch in islice(train_set.get_epoch_iterator(), 5):
         x, x_mask, _, _, y, _ = batch
         x = np.transpose(x, (1, 0, 2))
         x_mask = np.transpose(x_mask, (1, 0))
         y = np.transpose(y, (1, 0))
         _, n_batch, _ = x.shape
         _n_exp += n_batch
-
-        # new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask = \
-        #     gen_episodes(x, x_mask, y, sess, sg, args)
 
         new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
             gen_episodes(x, x_mask, y, sess, sg, args)
@@ -270,27 +292,27 @@ def main(_):
                   
         _feed_states = initial_states(n_batch, args.n_hidden)
 
-        _tr_ml_cost, _tr_rl_cost, _, _ = \
-          sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op],
+        _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \
+          sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op, tg.pred_idx],
                  feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask,
                       tg.seq_y_data: new_y, tg.init_state: _feed_states,
                       tg.seq_action: actions, tg.seq_advantage: advantages, 
                       tg.seq_action_mask: new_reward_mask})
 
-        _tr_ce = _tr_ml_cost.sum() / new_x_mask.sum()
-        _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ce})
+        tr_ce_sum += _tr_ml_cost.sum()
+        tr_ce_count += new_x_mask.sum()
+        _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum()})
         summary_writer.add_summary(_tr_ce_summary, global_step.eval())
 
         _tr_image_summary, = sess.run([tr_image_summary], feed_dict={tr_image: output_image})
         summary_writer.add_summary(_tr_image_summary, global_step.eval())
 
-        tr_ces.append(_tr_ce)
         tr_rl_costs.append(_tr_rl_cost.sum() / new_reward_mask.sum())
         tr_action_entropies.append(action_entropies.sum() / new_reward_mask.sum())
         tr_rewards.append(rewards.sum())
                   
         if global_step.eval() % args.display_freq == 0:
-          avg_tr_ce = np.asarray(tr_ces).mean()
+          avg_tr_ce = tr_ce_sum / tr_ce_count
           avg_tr_rl_cost = np.asarray(tr_rl_costs).mean()
           avg_tr_action_entropy = np.asarray(tr_action_entropies).mean()
           avg_tr_reward = np.asarray(tr_rewards).mean()
@@ -298,7 +320,8 @@ def main(_):
           print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} time_taken={:.2f}".format(
               _epoch, global_step.eval(), avg_tr_ce, avg_tr_rl_cost, avg_tr_reward, avg_tr_action_entropy, disp_sw.elapsed()))
 
-          tr_ces = []
+          tr_ce_sum = 0.
+          tr_ce_count = 0
           tr_rl_costs = []
           tr_action_entropies = []
           tr_rewards = []
@@ -312,13 +335,14 @@ def main(_):
       print('Testing')
 
       # Evaluate the model on the validation set
-      val_ces = []
+      val_ce_sum = 0.
+      val_ce_count = 0
       val_rl_costs = []
       val_action_entropies = []
       val_rewards = []
 
       eval_sw.reset()
-      for batch in valid_set.get_epoch_iterator():
+      for batch in islice(valid_set.get_epoch_iterator(), 5):
         x, x_mask, _, _, y, _ = batch
         x = np.transpose(x, (1, 0, 2))
         x_mask = np.transpose(x_mask, (1, 0))
@@ -331,20 +355,20 @@ def main(_):
 
         _feed_states = initial_states(n_batch, args.n_hidden)
 
-        _val_ml_cost, _val_rl_cost = sess.run([tg.ml_cost, tg.rl_cost, ],
+        _val_ml_cost, _val_rl_cost, pred_idx = sess.run([tg.ml_cost, tg.rl_cost, tg.pred_idx],
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask,
                       tg.seq_y_data: new_y, tg.init_state: _feed_states,
                       tg.seq_action: actions, tg.seq_advantage: advantages, 
                       tg.seq_action_mask: new_reward_mask})
         
-        _val_ce = _val_ml_cost.sum() / new_x_mask.sum()
+        val_ce_sum += _val_ml_cost.sum()
+        val_ce_count += new_x_mask.sum()
 
-        val_ces.append(_val_ce)
         val_rl_costs.append(_val_rl_cost.sum() / new_reward_mask.sum())
         val_action_entropies.append(action_entropies.sum() / new_reward_mask.sum())
         val_rewards.append(rewards.sum())
 
-      avg_val_ce = np.asarray(val_ces).mean()
+      avg_val_ce = val_ce_sum / val_ce_count
       avg_val_rl_cost = np.asarray(val_rl_costs).mean()
       avg_val_action_entropy = np.asarray(val_action_entropies).mean()
       avg_val_reward = np.asarray(val_rewards).mean()
