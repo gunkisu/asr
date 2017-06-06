@@ -230,7 +230,7 @@ def skip_rnn_act(x, x_mask, y, sess, sample_graph, args):
     """Sampling episodes using Skip-RNN"""
 
     # x shape is [time_step, batch_size, features]
-    x_size = x.shape[2]
+    n_seq, n_batch, x_size = x.shape
     act_size = args.n_action
     reshape_x = np.transpose(x, [1, 0, 2])
     reshape_y = np.transpose(y, [1, 0])
@@ -242,7 +242,12 @@ def skip_rnn_act(x, x_mask, y, sess, sample_graph, args):
     rewards = []
     action_entropies = []
 
-    for x_i, y_i in zip(reshape_x, reshape_y):
+    # recording
+    full_action_samples = np.zeros([n_seq, n_batch, act_size])
+    full_action_probs = np.zeros([n_seq, n_batch, act_size])
+
+    # for each data (index i)
+    for i, (x_i, y_i) in enumerate(zip(reshape_x, reshape_y)):
         prev_state = np.zeros((2, 1, args.n_hidden))
         new_x_i = []
         new_y_i = []
@@ -253,37 +258,42 @@ def skip_rnn_act(x, x_mask, y, sess, sample_graph, args):
         # last action is ignored in this implementation
         # find a way to better handle the last action sampling
 
+        # for each step (index j)
         for j, (x_step, y_step) in enumerate(zip(x_i, y_i)):
+            # for the last step
             if j == len(x_i) - 1:
                 x_step = np.expand_dims(x_step, 0)
-                step_label_likelihood_j, prev_state  = \
-                    sess.run([sample_graph.step_label_probs,
-                               sample_graph.step_last_state],
-                              feed_dict={sample_graph.step_x_data: x_step,
-                                         sample_graph.prev_states: prev_state})
+                [step_label_likelihood_j,
+                 prev_state]  = sess.run([sample_graph.step_label_probs,
+                                          sample_graph.step_last_state],
+                                          feed_dict={sample_graph.step_x_data: x_step,
+                                                     sample_graph.prev_states: prev_state})
                 new_x_i.append(x_step)
                 new_y_i.append(y_step)
-                reward_i.append(np.log(step_label_likelihood_j.flatten()[y_step] + 1e-8))     
+                reward_i.append(np.log(step_label_likelihood_j.flatten()[y_step] + 1e-8))
             else:
+                # if action is required
                 if action_cnt == 0:
                     x_step = np.expand_dims(x_step, 0)
-                    step_action_idx, step_action_prob_j, step_label_likelihood_j, prev_state, action_entropy = \
-                         sess.run([sample_graph.step_action_samples,
-                                   sample_graph.step_action_probs,
-                                   sample_graph.step_label_probs,
-                                   sample_graph.step_last_state,
-                                   sample_graph.action_entropy],
-                                  feed_dict={sample_graph.step_x_data: x_step,
-                                             sample_graph.prev_states: prev_state})
+                    [step_action_idx,
+                     step_action_prob_j,
+                     step_label_likelihood_j,
+                     prev_state,
+                     action_entropy] = sess.run([sample_graph.step_action_samples,
+                                                 sample_graph.step_action_probs,
+                                                 sample_graph.step_label_probs,
+                                                 sample_graph.step_last_state,
+                                                 sample_graph.action_entropy],
+                                                feed_dict={sample_graph.step_x_data: x_step,
+                                                           sample_graph.prev_states: prev_state})
                     new_x_i.append(x_step)
                     new_y_i.append(y_step)
                     action_entropy_i.append(action_entropy)
 
-                    # a_t ~ p(a_t|s_t)
                     action_idx = step_action_idx.flatten()
                     action_one_hot = np.eye(args.n_action)[action_idx]
                     action_i.append(action_one_hot)
-                 
+
                     if args.fast_action and action_idx == args.n_action - 1:
                         # action in {0, 1, 2, ... fast_action}
                         action_cnt = args.n_fast_action
@@ -294,7 +304,13 @@ def skip_rnn_act(x, x_mask, y, sess, sample_graph, args):
                     action_cnt -= 1
                     if j != 0:
                         reward_i.append(np.log(step_label_likelihood_j.flatten()[y_step] + 1e-8))
+
+                    # record
+                    full_action_samples[j, i, action_idx] = 1.0
+                    full_action_probs[j, i] = step_action_prob_j
+
                 else:
+                    # skip frame
                     action_cnt -= 1
 
         new_X.append(new_x_i)
@@ -306,8 +322,39 @@ def skip_rnn_act(x, x_mask, y, sess, sample_graph, args):
     # masking episodes
     new_masked_X, new_masked_Y, masked_actions, masked_rewards, masked_action_entropies, new_mask, new_reward_mask = \
         mask_episodes(new_X, new_Y, actions, rewards, action_entropies, batch_size, x_size, act_size)
+
+    # Make visual image
+    full_action_samples = np.transpose(full_action_samples, [1, 2, 0])
+    full_action_samples = np.expand_dims(full_action_samples, axis=-1)
+    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1)
+    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=2)
+
+    full_action_probs = np.transpose(full_action_probs, [1, 2, 0])
+    full_action_probs = np.expand_dims(full_action_probs, axis=-1)
+    full_action_probs = np.repeat(full_action_probs, repeats=5, axis=1)
+    full_action_probs = np.repeat(full_action_probs, repeats=5, axis=2)
+
+    # batch_size, seq_len
+    full_label_data = np.expand_dims(y, axis=-1)
+    full_label_data = np.transpose(full_label_data, [1, 2, 0])
+    full_label_data = np.expand_dims(full_label_data, axis=-1)
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=1)
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
+    full_label_data /= float(args.n_class)
+
+    # stack
+    output_image = np.concatenate([np.concatenate([full_label_data,
+                                                   np.zeros_like(full_label_data),
+                                                   np.zeros_like(full_label_data)], axis=-1),
+                                   np.concatenate([np.zeros_like(full_action_samples),
+                                                   full_action_samples,
+                                                   np.zeros_like(full_action_samples)], axis=-1),
+                                   np.concatenate([np.zeros_like(full_action_probs),
+                                                   np.zeros_like(full_action_probs),
+                                                   full_action_probs], axis=-1)],
+                                  axis=1)
         
-    return (new_masked_X, new_masked_Y, masked_actions, masked_rewards, masked_action_entropies, new_mask, new_reward_mask)
+    return (new_masked_X, new_masked_Y, masked_actions, masked_rewards, masked_action_entropies, new_mask, new_reward_mask, output_image)
 
 def filter_last(x_step, y_step, prev_state, j, seq_lens, sample_done):
     new_x_step = []
