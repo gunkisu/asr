@@ -673,3 +673,22 @@ def expand_pred_idx(actions_1hot, x_mask, pred_idx, n_batch, args):
             start_idx += s_step
 
     return new_pred_idx
+
+def interpolate_feat(input_data, num_skips, axis=1, use_bidir=True):
+    # Fill skipped ones by repeating (forward)
+    full_fwd_data = np.repeat(input_data, repeats=num_skips, axis=axis)
+
+    if use_bidir:
+        full_bwd_data = np.repeat(np.flip(input_data, axis=axis), repeats=num_skips, axis=axis)
+        full_bwd_data = np.flip(full_bwd_data, axis=axis)
+
+        return (full_fwd_data + full_bwd_data)*0.5
+    else:
+        return full_fwd_data
+
+
+
+
+
+
+
