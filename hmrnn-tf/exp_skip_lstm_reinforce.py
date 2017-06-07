@@ -14,7 +14,7 @@ from collections import namedtuple
 from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import skip_rnn_act, skip_rnn_act_parallel
+from mixer import skip_rnn_act, skip_rnn_act_parallel, aggr_skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_pred_idx
 from model import LinearCell
@@ -40,6 +40,7 @@ flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
 flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
 flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
 flags.DEFINE_boolean('parallel', True, 'If true, do parallel sampling')
+flags.DEFINE_boolean('aggr-reward', True, 'If true, use reward from FER within skimm')
 flags.DEFINE_boolean('fast-action', False, 'If true, operate in the fast action mode')
 flags.DEFINE_boolean('ref-input', False, 'If true, policy refers input')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
@@ -239,9 +240,12 @@ def main(_):
   vf = LinearVF()
 
   if args.parallel:
+    if args.aggr_reward:
+      gen_episodes = aggr_skip_rnn_act_parallel
+    else:
       gen_episodes = skip_rnn_act_parallel
   else:
-      gen_episodes = skip_rnn_act
+    gen_episodes = skip_rnn_act
 
   with tf.Session() as sess:
     sess.run(init_op)
