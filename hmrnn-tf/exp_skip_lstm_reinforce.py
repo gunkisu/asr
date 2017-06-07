@@ -229,7 +229,10 @@ def main(_):
     tr_ce_summary = tf.summary.scalar("tr_ce", tr_ce)
     tr_image = tf.placeholder(tf.float32)
     tr_image_summary = tf.summary.image("tr_image", tr_image)
-
+    tr_fer = tf.placeholder(tf.float32)
+    tr_fer_summary = tf.summary.scalar("tr_fer", tr_fer)
+    tr_rl = tf.placeholder(tf.float32)
+    tr_rl_summary = tf.summary.scalar("tr_rl", tr_rl)
 
   with tf.name_scope("per_epoch_eval"):
     best_val_ce = tf.placeholder(tf.float32)
@@ -305,15 +308,26 @@ def main(_):
 
         tr_ce_sum += _tr_ml_cost.sum()
         tr_ce_count += new_x_mask.sum()
-        _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum()})
-        summary_writer.add_summary(_tr_ce_summary, global_step.eval())
-
-        _tr_image_summary, = sess.run([tr_image_summary], feed_dict={tr_image: output_image})
-        summary_writer.add_summary(_tr_image_summary, global_step.eval())
 
         pred_idx = expand_pred_idx(actions, x_mask, pred_idx, n_batch, args)
         tr_acc_sum += ((pred_idx == y) * x_mask).sum()
         tr_acc_count += x_mask.sum()
+
+        [_tr_ce_summary,
+         _tr_fer_summary,
+         _tr_rl_summary,
+         _tr_image_summary] = sess.run([tr_ce_summary,
+                                        tr_fer_summary,
+                                        tr_rl_summary,
+                                        tr_image_summary],
+                                       feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(),
+                                                  tr_fer: ((pred_idx == y) * x_mask).sum() / new_x_mask.sum(),
+                                                  tr_rl: _tr_rl_cost.sum() / new_reward_mask.sum(),
+                                                  tr_image: output_image})
+        summary_writer.add_summary(_tr_ce_summary, global_step.eval())
+        summary_writer.add_summary(_tr_fer_summary, global_step.eval())
+        summary_writer.add_summary(_tr_rl_summary, global_step.eval())
+        summary_writer.add_summary(_tr_image_summary, global_step.eval())
 
         tr_rl_costs.append(_tr_rl_cost.sum() / new_reward_mask.sum())
         tr_action_entropies.append(action_entropies.sum() / new_reward_mask.sum())
