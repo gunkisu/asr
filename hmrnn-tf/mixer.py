@@ -426,20 +426,24 @@ def fill_aggr_reward(reward_list,
             continue
 
         # Get previous action info
-        prev_step_idx = prev_step_idx_list[idx]
+        prev_step_idx = prev_step_idx_list[idx] + 1
         prev_pred_idx = prev_pred_idx_list[idx]
 
         # Get true label from previous action position to now
-        true_label = y_seq[prev_step_idx:cur_step_idx, idx]
+        true_label = y_seq[prev_step_idx:(cur_step_idx+1), idx]
 
         # Get prediction label (copy from previous action) and current prediction label
-        pred_label = [prev_pred_idx] * (cur_step_idx - prev_step_idx)
+        pred_label = [prev_pred_idx] * (cur_step_idx - prev_step_idx) + [cur_pred_idx_list[i]]
         pred_label = np.asarray(pred_label)
 
         # Aggregate reward
-        aggr_reward = np.equal(true_label, pred_label).sum().astype(np.float32)
+	true_label = (true_label[1:]-true_label[:-1])!=0
+        pred_label = (pred_label[1:]-pred_label[:-1])!=0
 
-        # Save rewards
+        aggr_reward = np.equal(true_label, pred_label).sum().astype(np.float32)
+        aggr_reward = np.square(aggr_reward) 
+
+	# Save rewards
         reward_list[reward_update_pos[idx], idx] = aggr_reward
         reward_target_indices.append(idx)
 

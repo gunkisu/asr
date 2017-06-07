@@ -147,7 +147,7 @@ def build_graph(args):
   rl_cost = tf.reduce_sum(tf.log(seq_action_probs+1e-8) \
     * tf.reshape(seq_action, [-1,args.n_action]), axis=-1)
   rl_cost *= tf.reshape(seq_advantage, [-1])
-  rl_cost = tf.reduce_sum(rl_cost*tf.reshape(seq_action_mask, [-1]))
+  rl_cost = -tf.reduce_sum(rl_cost*tf.reshape(seq_action_mask, [-1]))
 
   rl_ent_cost = -action_prob_entropy
 
@@ -304,9 +304,9 @@ def main(_):
         new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
             gen_episodes(x, x_mask, y, sess, sg, args)
 
-        advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
-                  
-        _feed_states = initial_states(n_batch, args.n_hidden)
+        #advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+        advantages = rewards - np.sum(rewards)/np.sum(new_reward_mask)
+	_feed_states = initial_states(n_batch, args.n_hidden)
 
         _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \
           sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op, tg.pred_idx],
@@ -340,7 +340,7 @@ def main(_):
 
         tr_rl_costs.append(_tr_rl_cost.sum() / new_reward_mask.sum())
         tr_action_entropies.append(action_entropies.sum() / new_reward_mask.sum())
-        tr_rewards.append(rewards.sum())
+        tr_rewards.append(rewards.sum()/new_reward_mask.sum())
                   
         if global_step.eval() % args.display_freq == 0:
           avg_tr_ce = tr_ce_sum / tr_ce_count
