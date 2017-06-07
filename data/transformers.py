@@ -8,9 +8,61 @@ import itertools
 import random
 
 from fuel.transformers import Transformer
+from fuel.schemes import BatchScheme, ConstantScheme
 from picklable_itertools.extras import equizip
 
 from six import iteritems
+
+class LengthSortTransformer(Transformer):
+    def __init__(self, data_stream, batch_size, min_after_cache, **kwargs):
+        if data_stream.produces_examples:
+                 raise ValueError('the wrapped data stream must produce batches of '
+                                                      'examples, not examples')
+        
+        if min_after_cache < batch_size:
+            raise ValueError('capacity is smaller than batch size')
+
+        iteration_scheme = ConstantScheme(batch_size)
+                
+        if data_stream.axis_labels:
+            kwargs.setdefault('axis_labels', data_stream.axis_labels.copy())
+        super(LengthSortTransformer, self).__init__(
+            data_stream, iteration_scheme=iteration_scheme, **kwargs)
+        self.cache = [[] for _ in self.sources]
+        self.min_after_cache = min_after_cache
+
+
+    def get_data(self, request=None):
+        if request is None:
+            raise ValueError
+        if request > len(self.cache[0]):
+            self._cache()
+        data = []
+
+        for i, cache in enumerate(self.cache):
+            data.append(numpy.asarray(cache[:request]))
+            self.cache[i] = cache[request:]
+        return tuple(data)
+
+    def get_epoch_iterator(self, **kwargs):
+        self.cache = [[] for _ in self.sources]
+        return super(LengthSortTransformer, self).get_epoch_iterator(**kwargs)
+
+    def _cache(self):
+        try:
+            while len(self.cache[0]) < self.min_after_cache:
+                for cache, data in zip(self.cache,
+                                       next(self.child_epoch_iterator)):
+                    cache.extend(data)
+        except StopIteration:
+            if not self.cache[0]:
+                raise
+
+        # sort by length
+        for i, cache in enumerate(self.cache):
+            cache.sort(key=lambda x: len(x))
+            self.cache[i] = cache
+        
 
 class ConcatenateTransformer(Transformer):
     '''Concatenate data sources into one data source.

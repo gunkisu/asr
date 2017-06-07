@@ -3,7 +3,8 @@ from fuel.streams import DataStream
 from fuel.schemes import ShuffledScheme, SequentialScheme
 from fuel.transformers import Padding, FilterSources
 
-from data.transformers import ConcatenateTransformer, TruncateTransformer, Normalize, DelayTransformer, FrameSkipTransformer
+from data.transformers import ConcatenateTransformer, TruncateTransformer, \
+    Normalize, DelayTransformer, FrameSkipTransformer, LengthSortTransformer
 
 import numpy
 
@@ -90,7 +91,7 @@ def get_datastream(path, which_set, batch_size=1, norm_path=None,
         fs = FilterSources(data_stream=base_stream, sources=['features', 'targets'])
     return Padding(fs)
 
-def create_ivector_datastream(path, which_set, batch_size=1, delay=0):
+def create_ivector_datastream(path, which_set, batch_size=1, delay=0, min_after_cache=1024, length_sort=False):
     wsj_dataset = H5PYDataset(path, which_sets=(which_set, ))
     iterator_scheme = ShuffledScheme(batch_size=batch_size, examples=wsj_dataset.num_examples)
         
@@ -98,6 +99,9 @@ def create_ivector_datastream(path, which_set, batch_size=1, delay=0):
                              iteration_scheme=iterator_scheme)
 
     fs = FilterSources(data_stream=base_stream, sources=['features', 'ivectors', 'targets'])
+
+    if length_sort:
+        fs = LengthSortTransformer(fs, batch_size, min_after_cache)
 
     if delay:
         fs = DelayTransformer(fs, delay)

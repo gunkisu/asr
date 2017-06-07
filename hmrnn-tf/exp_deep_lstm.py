@@ -35,6 +35,7 @@ flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
 flags.DEFINE_boolean('no-copy', False, '')
+flags.DEFINE_boolean('no-length-sort', False, '')
 flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
 flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
 flags.DEFINE_string('train-dataset', 'train_si284', '')
@@ -132,7 +133,7 @@ def main(_):
   sync_data(args)
   datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
   train_set, valid_set, test_set = [create_ivector_datastream(path=args.data_path, which_set=dataset,
-      batch_size=args.batch_size) for dataset in datasets]
+      batch_size=args.batch_size, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort) for dataset in datasets]
 
   init_op = tf.global_variables_initializer()
   save_op = tf.train.Saver(max_to_keep=5)
