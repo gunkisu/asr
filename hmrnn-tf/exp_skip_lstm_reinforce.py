@@ -27,6 +27,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('learning-rate', 0.002, 'Initial learning rate')
 flags.DEFINE_float('rl-learning-rate', 0.01, 'Initial learning rate for RL')
+flags.DEFINE_float('ent-weight', 0.1, 'entropy regularizer weight')
 flags.DEFINE_integer('batch-size', 64, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
 flags.DEFINE_integer('display-freq', 100, 'Display frequency')
@@ -55,6 +56,7 @@ flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 
 tg_fields = ['ml_cost',
              'rl_cost',
+             'rl_ent_cost',
              'seq_x_data',
              'seq_x_mask',
              'seq_y_data',
@@ -138,13 +140,20 @@ def build_graph(args):
   seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
   seq_action_probs = tf.nn.softmax(seq_action_logits)
 
+  action_prob_entropy = categorical_ent(seq_action_probs)
+  action_prob_entropy *= tf.reshape(seq_action_mask, [-1])
+  action_prob_entropy = tf.reduce_sum(action_prob_entropy)/tf.reduce_sum(seq_action_mask)
+
   rl_cost = tf.reduce_sum(tf.log(seq_action_probs+1e-8) \
     * tf.reshape(seq_action, [-1,args.n_action]), axis=-1)
   rl_cost *= tf.reshape(seq_advantage, [-1])
   rl_cost = tf.reduce_sum(rl_cost*tf.reshape(seq_action_mask, [-1]))
 
+  rl_ent_cost = -action_prob_entropy
+
   train_graph = TrainGraph(ml_cost,
                            rl_cost,
+                           rl_ent_cost,
                            seq_x_data,
                            seq_x_mask,
                            seq_y_data,
@@ -211,7 +220,7 @@ def main(_):
     ml_grads = tf.gradients(tg_ml_cost, ml_vars)
   ml_op = ml_opt_func.apply_gradients(zip(ml_grads, ml_vars), global_step=global_step)
 
-  tg_rl_cost = tf.reduce_mean(tg.rl_cost)
+  tg_rl_cost = tf.reduce_mean(tg.rl_cost) + tg.rl_ent_cost*args.ent_weight
   rl_grads = tf.gradients(tg_rl_cost, rl_vars)
   rl_op = rl_opt_func.apply_gradients(zip(rl_grads, rl_vars), global_step=global_step)
 
