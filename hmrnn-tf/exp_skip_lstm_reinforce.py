@@ -14,7 +14,7 @@ from collections import namedtuple
 from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import skip_rnn_act, skip_rnn_act_parallel
+from mixer import skip_rnn_act, skip_rnn_act_parallel, aggr_skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_pred_idx
 from model import LinearCell
@@ -27,6 +27,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('learning-rate', 0.002, 'Initial learning rate')
 flags.DEFINE_float('rl-learning-rate', 0.01, 'Initial learning rate for RL')
+flags.DEFINE_float('ent-weight', 0.1, 'entropy regularizer weight')
 flags.DEFINE_integer('batch-size', 64, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
 flags.DEFINE_integer('display-freq', 100, 'Display frequency')
@@ -40,6 +41,7 @@ flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
 flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
 flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
 flags.DEFINE_boolean('parallel', True, 'If true, do parallel sampling')
+flags.DEFINE_boolean('aggr-reward', True, 'If true, use reward from FER within skimm')
 flags.DEFINE_boolean('fast-action', False, 'If true, operate in the fast action mode')
 flags.DEFINE_boolean('ref-input', False, 'If true, policy refers input')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
@@ -54,6 +56,7 @@ flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 
 tg_fields = ['ml_cost',
              'rl_cost',
+             'rl_ent_cost',
              'seq_x_data',
              'seq_x_mask',
              'seq_y_data',
@@ -137,13 +140,20 @@ def build_graph(args):
   seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
   seq_action_probs = tf.nn.softmax(seq_action_logits)
 
+  action_prob_entropy = categorical_ent(seq_action_probs)
+  action_prob_entropy *= tf.reshape(seq_action_mask, [-1])
+  action_prob_entropy = tf.reduce_sum(action_prob_entropy)/tf.reduce_sum(seq_action_mask)
+
   rl_cost = tf.reduce_sum(tf.log(seq_action_probs+1e-8) \
     * tf.reshape(seq_action, [-1,args.n_action]), axis=-1)
   rl_cost *= tf.reshape(seq_advantage, [-1])
   rl_cost = tf.reduce_sum(rl_cost*tf.reshape(seq_action_mask, [-1]))
 
+  rl_ent_cost = -action_prob_entropy
+
   train_graph = TrainGraph(ml_cost,
                            rl_cost,
+                           rl_ent_cost,
                            seq_x_data,
                            seq_x_mask,
                            seq_y_data,
@@ -210,7 +220,7 @@ def main(_):
     ml_grads = tf.gradients(tg_ml_cost, ml_vars)
   ml_op = ml_opt_func.apply_gradients(zip(ml_grads, ml_vars), global_step=global_step)
 
-  tg_rl_cost = tf.reduce_mean(tg.rl_cost)
+  tg_rl_cost = tf.reduce_mean(tg.rl_cost) + tg.rl_ent_cost*args.ent_weight
   rl_grads = tf.gradients(tg_rl_cost, rl_vars)
   rl_op = rl_opt_func.apply_gradients(zip(rl_grads, rl_vars), global_step=global_step)
 
@@ -228,7 +238,10 @@ def main(_):
     tr_ce_summary = tf.summary.scalar("tr_ce", tr_ce)
     tr_image = tf.placeholder(tf.float32)
     tr_image_summary = tf.summary.image("tr_image", tr_image)
-
+    tr_fer = tf.placeholder(tf.float32)
+    tr_fer_summary = tf.summary.scalar("tr_fer", tr_fer)
+    tr_rl = tf.placeholder(tf.float32)
+    tr_rl_summary = tf.summary.scalar("tr_rl", tr_rl)
 
   with tf.name_scope("per_epoch_eval"):
     best_val_ce = tf.placeholder(tf.float32)
@@ -239,9 +252,12 @@ def main(_):
   vf = LinearVF()
 
   if args.parallel:
+    if args.aggr_reward:
+      gen_episodes = aggr_skip_rnn_act_parallel
+    else:
       gen_episodes = skip_rnn_act_parallel
   else:
-      gen_episodes = skip_rnn_act
+    gen_episodes = skip_rnn_act
 
   with tf.Session() as sess:
     sess.run(init_op)
@@ -301,15 +317,26 @@ def main(_):
 
         tr_ce_sum += _tr_ml_cost.sum()
         tr_ce_count += new_x_mask.sum()
-        _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum()})
-        summary_writer.add_summary(_tr_ce_summary, global_step.eval())
-
-        _tr_image_summary, = sess.run([tr_image_summary], feed_dict={tr_image: output_image})
-        summary_writer.add_summary(_tr_image_summary, global_step.eval())
 
         pred_idx = expand_pred_idx(actions, x_mask, pred_idx, n_batch, args)
         tr_acc_sum += ((pred_idx == y) * x_mask).sum()
         tr_acc_count += x_mask.sum()
+
+        [_tr_ce_summary,
+         _tr_fer_summary,
+         _tr_rl_summary,
+         _tr_image_summary] = sess.run([tr_ce_summary,
+                                        tr_fer_summary,
+                                        tr_rl_summary,
+                                        tr_image_summary],
+                                       feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(),
+                                                  tr_fer: ((pred_idx == y) * x_mask).sum() / new_x_mask.sum(),
+                                                  tr_rl: _tr_rl_cost.sum() / new_reward_mask.sum(),
+                                                  tr_image: output_image})
+        summary_writer.add_summary(_tr_ce_summary, global_step.eval())
+        summary_writer.add_summary(_tr_fer_summary, global_step.eval())
+        summary_writer.add_summary(_tr_rl_summary, global_step.eval())
+        summary_writer.add_summary(_tr_image_summary, global_step.eval())
 
         tr_rl_costs.append(_tr_rl_cost.sum() / new_reward_mask.sum())
         tr_action_entropies.append(action_entropies.sum() / new_reward_mask.sum())
