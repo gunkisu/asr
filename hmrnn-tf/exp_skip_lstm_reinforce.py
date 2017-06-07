@@ -47,6 +47,7 @@ flags.DEFINE_boolean('ref-input', False, 'If true, policy refers input')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
 flags.DEFINE_boolean('no-copy', False, '')
+flags.DEFINE_boolean('no-length-sort', False, '')
 flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
 flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
 flags.DEFINE_string('train-dataset', 'train_si284', '')
@@ -227,7 +228,7 @@ def main(_):
   sync_data(args)
   datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
   train_set, valid_set, test_set = [create_ivector_datastream(path=args.data_path, which_set=dataset, 
-      batch_size=args.batch_size) for dataset in datasets]
+      batch_size=args.batch_size, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort) for dataset in datasets]
 
   init_op = tf.global_variables_initializer()
   save_op = tf.train.Saver(max_to_keep=5)
@@ -306,7 +307,7 @@ def main(_):
 
         #advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
         advantages = rewards - np.sum(rewards)/np.sum(new_reward_mask)
-	_feed_states = initial_states(n_batch, args.n_hidden)
+        _feed_states = initial_states(n_batch, args.n_hidden)
 
         _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \
           sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op, tg.pred_idx],

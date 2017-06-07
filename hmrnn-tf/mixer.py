@@ -437,13 +437,13 @@ def fill_aggr_reward(reward_list,
         pred_label = np.asarray(pred_label)
 
         # Aggregate reward
-	true_label = (true_label[1:]-true_label[:-1])!=0
+        true_label = (true_label[1:]-true_label[:-1])!=0
         pred_label = (pred_label[1:]-pred_label[:-1])!=0
 
         aggr_reward = np.equal(true_label, pred_label).sum().astype(np.float32)
         aggr_reward = np.square(aggr_reward) 
 
-	# Save rewards
+        # Save rewards
         reward_list[reward_update_pos[idx], idx] = aggr_reward
         reward_target_indices.append(idx)
 
