@@ -23,6 +23,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('learning-rate', 0.002, 'Initial learning rate')
 flags.DEFINE_integer('batch-size', 64, 'Size of mini-batch')
+flags.DEFINE_integer('min-after-cache', 1024, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
 flags.DEFINE_integer('display-freq', 100, 'Display frequency')
 flags.DEFINE_integer('n-input', 123, 'Number of RNN hidden units')

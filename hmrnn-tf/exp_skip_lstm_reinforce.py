@@ -27,6 +27,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('learning-rate', 0.002, 'Initial learning rate')
 flags.DEFINE_float('rl-learning-rate', 0.01, 'Initial learning rate for RL')
+flags.DEFINE_integer('min-after-cache', 1024, 'Size of mini-batch')
 flags.DEFINE_float('ent-weight', 0.1, 'entropy regularizer weight')
 flags.DEFINE_integer('batch-size', 64, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
