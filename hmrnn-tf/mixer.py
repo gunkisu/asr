@@ -433,7 +433,7 @@ def fill_aggr_reward(reward_list,
         true_label = y_seq[prev_step_idx:cur_step_idx, idx]
 
         # Get prediction label (copy from previous action) and current prediction label
-        pred_label = [prev_pred_idx] * (cur_step_idx - prev_step_idx) + [cur_pred_idx_list[i]]
+        pred_label = [prev_pred_idx] * (cur_step_idx - prev_step_idx)
         pred_label = np.asarray(pred_label)
 
         # Aggregate reward
