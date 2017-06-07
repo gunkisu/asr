@@ -963,7 +963,7 @@ def expand_pred_idx(actions_1hot, x_mask, pred_idx, n_batch, args):
         # for each step
         start_idx = 0
         for s_step, p_step in itertools.izip_longest(s, p, fillvalue=1):
-            new_pred_idx[i, start_idx:start_idx+s_step] = p_step
+            new_pred_idx[start_idx:start_idx+s_step, i] = p_step
             start_idx += s_step
 
     return new_pred_idx
