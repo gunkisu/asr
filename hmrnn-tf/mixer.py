@@ -426,7 +426,7 @@ def fill_aggr_reward(reward_list,
             continue
 
         # Get previous action info
-        prev_step_idx = prev_step_idx_list[idx] + 1
+        prev_step_idx = prev_step_idx_list[idx]
         prev_pred_idx = prev_pred_idx_list[idx]
 
         # Get action size
