@@ -106,7 +106,7 @@ def build_graph(args):
     _label_logit = LinearCell(num_units=args.n_class)
 
   with tf.variable_scope('action'):
-    _action_logit = LinearCell(num_units=args.n_action if not FLAGS.ref_input else args.n_action + args.n_input)
+    _action_logit = LinearCell(num_units=args.n_action)
 
   # sampling graph
   step_h_state, step_last_state = _rnn(step_x_data, prev_states, one_step=True)
