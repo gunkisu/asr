@@ -138,8 +138,13 @@ def build_graph(args):
 
   seq_hid_3d_rl = seq_hid_3d[:,:-1,:]
   seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
+  seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
-  seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
+  if FLAGS.ref_input:
+    seq_action_logits = _action_logit([tf.reshape(seq_x_data, [-1, args.n_input]), seq_hid_2d_rl], 'action_logit')
+  else:
+    seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
+
   seq_action_probs = tf.nn.softmax(seq_action_logits)
 
   action_prob_entropy = categorical_ent(seq_action_probs)
