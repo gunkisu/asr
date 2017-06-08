@@ -443,12 +443,11 @@ def fill_aggr_reward(reward_list,
             else:
                 break
 
-        if action_size == 1:
-            aggr_reward = 0
-        elif cnt_seg_len == action_size:
+        if cnt_seg_len == action_size:
             aggr_reward = action_size
         else:
-            aggr_reward = cnt_seg_len - action_size
+            aggr_reward = 0.0
+        aggr_reward = np.square(aggr_reward)
 
         # # Get prediction label (copy from previous action) and current prediction label
         # pred_label = [prev_pred_idx] * (cur_step_idx - prev_step_idx) + [cur_pred_idx_list[i]]
