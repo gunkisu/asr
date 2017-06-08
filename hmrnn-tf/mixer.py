@@ -426,15 +426,15 @@ def fill_aggr_reward(reward_list,
             continue
 
         # Get previous action info
-        prev_step_idx = prev_step_idx_list[idx] + 1
+        prev_step_idx = prev_step_idx_list[idx]
         prev_pred_idx = prev_pred_idx_list[idx]
 
         # Get action size
         action_size = cur_step_idx - prev_step_idx
 
         # Get true label from previous action position to now
-        true_label = y_seq[prev_step_idx:cur_step_idx, idx]
-
+        true_label = y_seq[prev_step_idx:cur_step_idx, idx] 
+        
         cnt_seg_len = 0.
         seg_idx = true_label[0]
         for j in true_label:
