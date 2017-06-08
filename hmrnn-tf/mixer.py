@@ -457,7 +457,6 @@ def update_action_counters(action_counters, action_idx, target_indices, args):
     new_ac = list(action_counters)
     for ai, i in zip(action_idx, target_indices):
         if args.fast_action and ai == args.n_action - 1:
-            import ipdb; ipdb.set_trace()
             new_ac[i] = args.n_fast_action
         else:
             new_ac[i] = ai+1
