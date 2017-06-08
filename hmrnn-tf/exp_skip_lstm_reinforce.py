@@ -336,7 +336,7 @@ def main(_):
                                           tr_image_summary,
                                           tr_rw_hist_summary],
                                          feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(),
-                                                    tr_fer: ((pred_idx == y) * x_mask).sum() / new_x_mask.sum(),
+                                                    tr_fer: ((pred_idx == y) * x_mask).sum() / x_mask.sum(),
                                                     tr_rl: _tr_rl_cost.sum() / new_reward_mask.sum(),
                                                     tr_image: output_image,
                                                     tr_rw_hist: rewards})
