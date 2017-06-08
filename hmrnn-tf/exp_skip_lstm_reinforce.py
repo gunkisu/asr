@@ -141,7 +141,7 @@ def build_graph(args):
   seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
   if FLAGS.ref_input:
-    seq_action_logits = _action_logit([tf.reshape(seq_x_data, [-1, args.n_input]), seq_hid_2d_rl], 'action_logit')
+    seq_action_logits = _action_logit([tf.reshape(seq_x_data[:, :-1, :], [-1, args.n_input]), seq_hid_2d_rl], 'action_logit')
   else:
     seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
 
