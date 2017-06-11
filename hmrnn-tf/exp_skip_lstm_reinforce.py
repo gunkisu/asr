@@ -313,8 +313,8 @@ def main(_):
         new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
             gen_episodes(x, x_mask, y, sess, sg, args)
 
-        #advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
-        advantages = rewards - np.sum(rewards)/np.sum(new_reward_mask)
+        advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+        #advantages = rewards - np.sum(rewards)/np.sum(new_reward_mask)
         _feed_states = initial_states(n_batch, args.n_hidden)
 
         _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \

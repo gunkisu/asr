@@ -452,7 +452,7 @@ def fill_aggr_reward(reward_list,
         # # Get prediction label (copy from previous action) and current prediction label
         # pred_label = [prev_pred_idx] * (cur_step_idx - prev_step_idx) + [cur_pred_idx_list[i]]
         # pred_label = np.asarray(pred_label)
-        #
+        # 
         # # Aggregate reward
         # true_label = (true_label[1:]-true_label[:-1])!=0
         # pred_label = (pred_label[1:]-pred_label[:-1])!=0
@@ -940,10 +940,14 @@ def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args):
     reward_mask_1d = new_reward_mask.reshape([-1])
     rewards_1d = rewards.reshape([-1])[reward_mask_1d==1.]
     discounted_rewards = []
+    # For each sample, reward list and corresponding mask
     for reward, mask in zip(rewards, new_reward_mask):
+	# Get seq length
         this_len = int(mask.sum())
-        discounted_reward = discount(reward[:this_len], args.discount_gamma)
-        discounted_rewards.append(discounted_reward)
+	# Get discounted reward (not use this moment)
+        #discounted_reward = discount(reward[:this_len], args.discount_gamma)
+        discounted_reward = reward[:this_len]
+	discounted_rewards.append(discounted_reward)
 
     reshape_new_x = new_x.reshape([-1, new_x.shape[2]])
     baseline_1d = vf.predict(reshape_new_x)
