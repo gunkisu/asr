@@ -43,7 +43,7 @@ flags.DEFINE_string('valid-dataset', 'test_dev93', '')
 flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_integer('n-skip', 1, 'Number of frames to skip')
 
-TrainGraph = namedtuple('TrainGraph', 'ml_cost seq_x_data seq_x_mask seq_y_data init_state, pred_idx')
+TrainGraph = namedtuple('TrainGraph', 'ml_cost seq_x_data seq_x_mask seq_y_data init_state pred_idx seq_label_probs')
 
 def build_graph(args):
   with tf.device(args.device):
@@ -75,12 +75,15 @@ def build_graph(args):
 
   pred_idx = tf.argmax(seq_label_logits, axis=1)
 
+  seq_label_probs = tf.nn.softmax(seq_label_logits)
+
   train_graph = TrainGraph(ml_cost,
                            seq_x_data,
                            seq_x_mask,
                            seq_y_data,
                            init_state,
-                           pred_idx)
+                           pred_idx,
+                           seq_label_probs)
 
   return train_graph
 
