@@ -89,7 +89,7 @@ def initial_states(batch_size, n_hidden):
   return init_state
 
 def main(_):
-  print(' '.join(sys.argv))
+  print(' '.join(sys.argv), file=sys.stderr)
   args = FLAGS
   print(args.__flags, file=sys.stderr)
 
