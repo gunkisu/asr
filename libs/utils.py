@@ -237,6 +237,7 @@ def skip_frames_fixed(batch, every_n, return_first=False):
 
     if every_n == 1:
         yield batch
+        return 
 
     sub_seq_iter = None
     if return_first:
