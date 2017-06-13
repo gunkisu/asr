@@ -57,6 +57,8 @@ def main(_):
 
     print('Computing label probs...', file=sys.stderr)
 
+    sw = StopWatch()
+    
     for bidx, (batch, uttid_batch) in enumerate(zip(test_set.get_epoch_iterator(), uttid_stream.get_epoch_iterator())):
       orig_x, orig_x_mask, _, _ = batch
       uttid_batch, = uttid_batch
@@ -84,6 +86,7 @@ def main(_):
 
     print('', file=sys.stderr)
     print('Done', file=sys.stderr)
+    print('Took {}'.format(sw.elapsed()), file=sys.stderr)
 
 if __name__ == '__main__':
   tf.app.run()
