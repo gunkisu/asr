@@ -77,7 +77,8 @@ def main(_):
 
       for out_idx, (output, uttid) in enumerate(zip(seq_label_probs, uttid_batch)):
         valid_len = int(feat_lens[out_idx])
-        writer.write(uttid.encode('ascii'), np.log(output[:valid_len]))
+        uttid = uttid.encode('ascii')
+        writer.write(uttid, np.log(output[:valid_len] + 1e-8))
 
       print('.', file=sys.stderr, end='')
 
