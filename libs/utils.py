@@ -237,13 +237,13 @@ def skip_frames_fixed(batch, every_n, return_first=False):
 
     if every_n == 1:
         yield batch
+        return 
 
     sub_seq_iter = None
     if return_first:
         sub_seq_iter = range(1)
     else:
-        # sub_seq_iter = range(every_n)
-        sub_seq_iter = [random.randint(0, every_n*10)]
+        sub_seq_iter = [random.randint(0, every_n-1)]
 
     for start_idx in sub_seq_iter:
         new_batch = []

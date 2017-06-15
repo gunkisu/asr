@@ -483,7 +483,6 @@ def gen_mask(update_pos, reward_update_pos, batch_size):
 
     return max_seq_len, mask, max_reward_seq_len, reward_mask
 
-
 def aggr_skip_rnn_act_parallel(x,
                                x_mask,
                                y,

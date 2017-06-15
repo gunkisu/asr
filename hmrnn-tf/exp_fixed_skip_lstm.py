@@ -33,7 +33,7 @@ flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
 flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
 flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
-flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
+flags.DEFINE_string('log-dir', 'fix_skip_lstm_wsj', 'Directory path to files')
 flags.DEFINE_boolean('no-copy', False, '')
 flags.DEFINE_boolean('no-length-sort', False, '')
 flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
@@ -43,17 +43,17 @@ flags.DEFINE_string('valid-dataset', 'test_dev93', '')
 flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_integer('n-skip', 1, 'Number of frames to skip')
 
-TrainGraph = namedtuple('TrainGraph', 'ml_cost seq_x_data seq_x_mask seq_y_data init_state, pred_idx')
+TrainGraph = namedtuple('TrainGraph', 'ml_cost seq_x_data seq_x_mask seq_y_data init_state pred_idx seq_label_probs')
 
 def build_graph(args):
   with tf.device(args.device):
     # [batch_size, seq_len, ...]
-    seq_x_data = tf.placeholder(dtype=tf.float32, shape=(None, None, args.n_input))
-    seq_x_mask = tf.placeholder(dtype=tf.float32, shape=(None, None))
+    seq_x_data = tf.placeholder(dtype=tf.float32, shape=(None, None, args.n_input), name='seq_x_data')
+    seq_x_mask = tf.placeholder(dtype=tf.float32, shape=(None, None), name='seq_x_mask')
     seq_y_data = tf.placeholder(dtype=tf.int32, shape=(None, None))
 
     # [2, batch_size, ...]
-    init_state = tf.placeholder(tf.float32, shape=(2, None, args.n_hidden))
+    init_state = tf.placeholder(tf.float32, shape=(2, None, args.n_hidden), name='init_state')
 
   with tf.variable_scope('rnn'):
     _rnn = LSTMModule(num_units=args.n_hidden)
@@ -75,12 +75,15 @@ def build_graph(args):
 
   pred_idx = tf.argmax(seq_label_logits, axis=1)
 
+  seq_label_probs = tf.nn.softmax(seq_label_logits, name='seq_label_probs')
+
   train_graph = TrainGraph(ml_cost,
                            seq_x_data,
                            seq_x_mask,
                            seq_y_data,
                            init_state,
-                           pred_idx)
+                           pred_idx,
+                           seq_label_probs)
 
   return train_graph
 
