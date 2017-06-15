@@ -64,13 +64,13 @@ tg_fields = ['seq_x_data',
              'seq_action_ent']
 
 sg_fields = ['step_x_data',
-             'prev_state',
+             'prev_states',
              'step_h_state',
              'step_last_state',
              'step_label_probs',
              'step_action_probs',
              'step_action_samples',
-             'step_action_entropy']
+             'action_entropy']
 
 TrainGraph = namedtuple('TrainGraph', ' '.join(tg_fields))
 SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
