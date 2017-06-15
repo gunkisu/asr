@@ -465,13 +465,11 @@ def main(_):
                  _tr_rl_cost,
                  _,
                  _,
-                 _tr_pred_logit,
-                 _tr_action_ent] = sess.run([ml_cost,
+                 _tr_pred_logit] = sess.run([ml_cost,
                                              rl_cost,
                                              ml_op,
                                              rl_op,
-                                             tg.seq_label_logits,
-                                             tg.seq_action_ent],
+                                             tg.seq_label_logits],
                                             feed_dict={tg.seq_x_data: skip_x_data,
                                                        tg.seq_x_mask: skip_x_mask,
                                                        tg.seq_y_data: skip_y_data,
@@ -497,7 +495,7 @@ def main(_):
                 tr_rl_sum += _tr_rl_cost.sum()*batch_size
                 tr_rl_count += skip_action_mask.sum()
 
-                tr_ent_sum += _tr_action_ent.sum()
+                tr_ent_sum += skip_action_ent.sum()
                 tr_ent_count += skip_action_mask.sum()
 
                 tr_reward_sum += skip_rewards.sum()
