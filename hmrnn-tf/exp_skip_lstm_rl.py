@@ -214,7 +214,7 @@ def build_graph(args):
     seq_ml_cost *= tf.reshape(seq_x_mask, [-1])
 
     # RL cost
-    seq_rl_cost = tf.log(seq_action_probs+1e-8) * tf.reshape(seq_action_data, [-1, args.n_action])
+    seq_rl_cost = -tf.log(seq_action_probs+1e-8) * tf.reshape(seq_action_data, [-1, args.n_action])
     seq_rl_cost = tf.reduce_sum(seq_rl_cost, axis=-1)
     seq_rl_cost *= tf.reshape(seq_advantage, [-1])
     seq_rl_cost *= tf.reshape(seq_action_mask, [-1])
