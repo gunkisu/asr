@@ -407,7 +407,6 @@ def fill_reward(rewards, reward_step, target_indices, reward_update_pos, ref_upd
 
     return reward_target_indices
 
-
 def fill_aggr_reward(reward_list,
                      y_seq,
                      cur_pred_idx_list,
@@ -427,7 +426,6 @@ def fill_aggr_reward(reward_list,
 
         # Get previous action info
         prev_step_idx = prev_step_idx_list[idx]
-        prev_pred_idx = prev_pred_idx_list[idx]
 
         # Get action size
         action_size = cur_step_idx - prev_step_idx
@@ -443,22 +441,7 @@ def fill_aggr_reward(reward_list,
             else:
                 break
 
-        if cnt_seg_len == action_size:
-            aggr_reward = action_size
-        else:
-            aggr_reward = 0.0
-        aggr_reward = np.square(aggr_reward)
-
-        # # Get prediction label (copy from previous action) and current prediction label
-        # pred_label = [prev_pred_idx] * (cur_step_idx - prev_step_idx) + [cur_pred_idx_list[i]]
-        # pred_label = np.asarray(pred_label)
-        #
-        # # Aggregate reward
-        # true_label = (true_label[1:]-true_label[:-1])!=0
-        # pred_label = (pred_label[1:]-pred_label[:-1])!=0
-
-        # aggr_reward = np.equal(true_label, pred_label).sum().astype(np.float32)
-        # aggr_reward = np.square(aggr_reward)
+        aggr_reward = np.square(cnt_seg_len)-np.square(action_size - cnt_seg_len)
 
         # Save rewards
         reward_list[reward_update_pos[idx], idx] = aggr_reward
@@ -499,6 +482,7 @@ def gen_mask(update_pos, reward_update_pos, batch_size):
         reward_mask[:pos, i] = 1.
 
     return max_seq_len, mask, max_reward_seq_len, reward_mask
+
 
 def aggr_skip_rnn_act_parallel(x,
                                x_mask,
