@@ -289,11 +289,11 @@ def main(_):
 
     # Set model ml cost (sum over all and divide it by batch_size)
     ml_cost = tf.reduce_sum(tg.seq_ml_cost)
-    ml_cost /= tf.shape(tg.seq_x_data)[0]
+    ml_cost /= tf.to_float(tf.shape(tg.seq_x_data)[0])
 
     # Set model rl cost (sum over all and divide it by batch_size, also entropy cost)
     rl_cost = tf.reduce_sum(tg.seq_rl_cost) - args.ent_weight*tf.reduce_sum(tg.seq_action_ent)
-    rl_cost /= tf.shape(tg.seq_x_data)[0]
+    rl_cost /= tf.to_float(tf.shape(tg.seq_x_data)[0])
 
     # Gradient clipping for ML
     ml_grads = tf.gradients(ml_cost, ml_vars)
