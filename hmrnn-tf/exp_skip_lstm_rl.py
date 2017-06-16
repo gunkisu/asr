@@ -195,10 +195,10 @@ def build_graph(args):
 
     # Action logits
     if FLAGS.ref_input:
-        seq_action_input = [tf.stop_gradient(tf.reshape(seq_x_data[:, :-1, :], [-1, args.n_input])),
-                            tf.stop_gradient(tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden]))]
+        seq_action_input = [tf.reshape(seq_x_data[:, :-1, :], [-1, args.n_input]),
+                            tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])]
     else:
-        seq_action_input = tf.stop_gradient(tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden]))
+        seq_action_input = tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])
     seq_action_logits = _action_logit(inputs=seq_action_input,
                                       scope='action_logit')
 
