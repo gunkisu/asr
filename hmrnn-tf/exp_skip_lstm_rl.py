@@ -51,6 +51,7 @@ flags.DEFINE_string('valid-dataset', 'test_dev93', '')
 flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 flags.DEFINE_boolean('use-final-reward', False, '')
+flags.DEFINE_float('ml-l2', 0.0, 'ml l2 lambda')
 
 tg_fields = ['seq_x_data',
              'seq_x_mask',
@@ -291,6 +292,7 @@ def main(_):
     # Set model ml cost (sum over all and divide it by batch_size)
     ml_cost = tf.reduce_sum(tg.seq_ml_cost)
     ml_cost /= tf.to_float(tf.shape(tg.seq_x_data)[0])
+    ml_cost += args.ml_l2*0.5*tf.add_n([tf.reduce_sum(tf.square(var)) for var in ml_vars])
 
     # Set model rl cost (sum over all and divide it by batch_size, also entropy cost)
     rl_cost = tf.reduce_sum(tg.seq_rl_cost) - args.ent_weight*tf.reduce_sum(tg.seq_action_ent)
@@ -614,8 +616,6 @@ def main(_):
                 # Update model
                 [_val_ml_cost,
                  _val_rl_cost,
-                 _,
-                 _,
                  _val_pred_logit,
                  _val_action_ent] = sess.run([ml_cost,
                                               rl_cost,
