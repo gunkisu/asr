@@ -50,6 +50,7 @@ flags.DEFINE_string('train-dataset', 'train_si284', '')
 flags.DEFINE_string('valid-dataset', 'test_dev93', '')
 flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
+flags.DEFINE_boolean('use-final-reward', False, '')
 
 tg_fields = ['seq_x_data',
              'seq_x_mask',
@@ -455,7 +456,8 @@ def main(_):
                                                    rewards=skip_rewards,
                                                    new_reward_mask=skip_action_mask,
                                                    vf=vf,
-                                                   args=args)
+                                                   args=args,
+                                                   final_cost=args.use_final_reward)
 
                 ##################
                 # Training Phase #
@@ -603,7 +605,8 @@ def main(_):
                                                    rewards=skip_rewards,
                                                    new_reward_mask=skip_action_mask,
                                                    vf=vf,
-                                                   args=args)
+                                                   args=args,
+                                                   final_cost=args.use_final_reward)
 
                 #################
                 # Forward Phase #

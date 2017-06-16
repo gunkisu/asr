@@ -918,13 +918,15 @@ def mask_episodes(X, Y, actions, rewards, action_entropies, batch_size, x_size, 
    
     return masked_X, masked_Y, masked_actions, masked_rewards, masked_action_entropies, new_mask, new_reward_mask
 
-def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args):
+def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args, final_cost=False):
     reward_mask_1d = new_reward_mask.reshape([-1])
     rewards_1d = rewards.reshape([-1])[reward_mask_1d==1.]
     discounted_rewards = []
     for reward, mask in zip(rewards, new_reward_mask):
         this_len = int(mask.sum())
         discounted_reward = discount(reward[:this_len], args.discount_gamma)
+        if final_cost:
+            discounted_reward = np.ones_like(discounted_reward)*discounted_reward[0]
         discounted_rewards.append(discounted_reward)
 
     reshape_new_x = new_x.reshape([-1, new_x.shape[2]])
