@@ -317,12 +317,22 @@ def main(_):
         #advantages = rewards - np.sum(rewards)/np.sum(new_reward_mask)
         _feed_states = initial_states(n_batch, args.n_hidden)
 
-        _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \
-          sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op, tg.pred_idx],
-                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask,
-                      tg.seq_y_data: new_y, tg.init_state: _feed_states,
-                      tg.seq_action: actions, tg.seq_advantage: advantages, 
-                      tg.seq_action_mask: new_reward_mask})
+        [_tr_ml_cost,
+         _tr_rl_cost,
+         _,
+         _,
+         pred_idx] = sess.run([tg.ml_cost,
+                               tg.rl_cost,
+                               ml_op,
+                               rl_op,
+                               tg.pred_idx],
+                              feed_dict={tg.seq_x_data: new_x,
+                                         tg.seq_x_mask: new_x_mask,
+                                         tg.seq_y_data: new_y,
+                                         tg.init_state: _feed_states,
+                                         tg.seq_action: actions,
+                                         tg.seq_advantage: advantages,
+                                         tg.seq_action_mask: new_reward_mask})
 
         tr_ce_sum += _tr_ml_cost.sum()
         tr_ce_count += new_x_mask.sum()
