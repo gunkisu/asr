@@ -474,9 +474,9 @@ def fill_ml_aggr_reward(reward_list,
         # Get previous likelihood
         likelihood = prev_likelihood_list[idx]
 
-        if likelihood.sum() != 1.0:
+        if likelihood.sum() < 0.99:
             print(likelihood.sum())
-            assert likelihood.sum() == 1.0
+            assert likelihood.sum() < 0.99
 
         # compute aggr_reward
         aggr_reward = 0.0
