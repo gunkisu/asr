@@ -9,7 +9,7 @@ from collections import OrderedDict
 from collections import namedtuple
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import skip_rnn_act_parallel, aggr_skip_rnn_act_parallel
+from mixer import skip_rnn_act_parallel, aggr_skip_rnn_act_parallel, aggr_ml_skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_pred_idx
 from model import LinearCell
@@ -381,7 +381,7 @@ def main(_):
 
     # Set module
     if args.aggr_reward:
-      gen_episodes = aggr_skip_rnn_act_parallel
+      gen_episodes = aggr_ml_skip_rnn_act_parallel
     else:
       gen_episodes = skip_rnn_act_parallel
 
