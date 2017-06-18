@@ -60,9 +60,11 @@ tg_fields = ['seq_x_data',
              'seq_action_data',
              'seq_action_mask',
              'seq_advantage',
+             'seq_reward',
              'seq_label_logits',
              'seq_ml_cost',
              'seq_rl_cost',
+             'seq_real_rl_cost',
              'seq_action_ent']
 
 sg_fields = ['step_x_data',
@@ -113,7 +115,9 @@ def build_graph(args):
         seq_advantage = tf.placeholder(dtype=tf.float32,
                                        shape=(None, None),
                                        name='seq_advantage')
-
+        seq_reward = tf.placeholder(dtype=tf.float32,
+                                    shape=(None, None),
+                                    name='seq_reward')
         ##############
         # Step-level #
         ##############
@@ -221,6 +225,12 @@ def build_graph(args):
     seq_rl_cost *= tf.reshape(seq_advantage, [-1])
     seq_rl_cost *= tf.reshape(seq_action_mask, [-1])
 
+    # RL cost wo/ baseline
+    seq_real_rl_cost = -tf.log(seq_action_probs+1e-8) * tf.reshape(seq_action_data, [-1, args.n_action])
+    seq_real_rl_cost = tf.reduce_sum(seq_real_rl_cost, axis=-1)
+    seq_real_rl_cost *= tf.reshape(seq_reward, [-1])
+    seq_real_rl_cost *= tf.reshape(seq_action_mask, [-1])
+
     # Set training graph
     train_graph = TrainGraph(seq_x_data,
                              seq_x_mask,
@@ -229,9 +239,11 @@ def build_graph(args):
                              seq_action_data,
                              seq_action_mask,
                              seq_advantage,
+                             seq_reward,
                              seq_label_logits,
                              seq_ml_cost,
                              seq_rl_cost,
+                             seq_real_rl_cost,
                              seq_action_ent)
 
     return train_graph, sample_graph
@@ -297,6 +309,10 @@ def main(_):
     # Set model rl cost (sum over all and divide it by batch_size, also entropy cost)
     rl_cost = tf.reduce_sum(tg.seq_rl_cost) - args.ent_weight*tf.reduce_sum(tg.seq_action_ent)
     rl_cost /= tf.to_float(tf.shape(tg.seq_x_data)[0])
+
+    # Set model rl cost (sum over all and divide it by batch_size, also entropy cost)
+    real_rl_cost = tf.reduce_sum(tg.seq_real_rl_cost)
+    real_rl_cost /= tf.to_float(tf.shape(tg.seq_x_data)[0])
 
     # Gradient clipping for ML
     ml_grads = tf.gradients(ml_cost, ml_vars)
@@ -453,13 +469,13 @@ def main(_):
                                               args=args)
 
                 # Compute baseline and refine reward
-                skip_advantage = compute_advantage(new_x=skip_x_data,
-                                                   new_x_mask=skip_x_mask,
-                                                   rewards=skip_rewards,
-                                                   new_reward_mask=skip_action_mask,
-                                                   vf=vf,
-                                                   args=args,
-                                                   final_cost=args.use_final_reward)
+                skip_advantage, skip_disc_rewards = compute_advantage(new_x=skip_x_data,
+                                                                      new_x_mask=skip_x_mask,
+                                                                      rewards=skip_rewards,
+                                                                      new_reward_mask=skip_action_mask,
+                                                                      vf=vf,
+                                                                      args=args,
+                                                                      final_cost=args.use_final_reward)
 
                 ##################
                 # Training Phase #
@@ -470,7 +486,7 @@ def main(_):
                  _,
                  _,
                  _tr_pred_logit] = sess.run([ml_cost,
-                                             rl_cost,
+                                             real_rl_cost,
                                              ml_op,
                                              rl_op,
                                              tg.seq_label_logits],
@@ -480,7 +496,8 @@ def main(_):
                                                        tg.init_state: initial_states(batch_size, args.n_hidden),
                                                        tg.seq_action_data: skip_action_data,
                                                        tg.seq_action_mask: skip_action_mask,
-                                                       tg.seq_advantage: skip_advantage})
+                                                       tg.seq_advantage: skip_advantage,
+                                                       tg.seq_reward: skip_disc_rewards})
 
                 # Get full sequence prediction
                 _tr_pred_full = expand_pred_idx(actions_1hot=skip_action_data,
@@ -602,13 +619,13 @@ def main(_):
                                               args=args)
 
                 # Compute baseline and refine reward
-                skip_advantage = compute_advantage(new_x=skip_x_data,
-                                                   new_x_mask=skip_x_mask,
-                                                   rewards=skip_rewards,
-                                                   new_reward_mask=skip_action_mask,
-                                                   vf=vf,
-                                                   args=args,
-                                                   final_cost=args.use_final_reward)
+                skip_advantage, skip_disc_rewards = compute_advantage(new_x=skip_x_data,
+                                                                      new_x_mask=skip_x_mask,
+                                                                      rewards=skip_rewards,
+                                                                      new_reward_mask=skip_action_mask,
+                                                                      vf=vf,
+                                                                      args=args,
+                                                                      final_cost=args.use_final_reward)
 
                 #################
                 # Forward Phase #
@@ -618,7 +635,7 @@ def main(_):
                  _val_rl_cost,
                  _val_pred_logit,
                  _val_action_ent] = sess.run([ml_cost,
-                                              rl_cost,
+                                              real_rl_cost,
                                               tg.seq_label_logits,
                                               tg.seq_action_ent],
                                              feed_dict={tg.seq_x_data: skip_x_data,
@@ -627,7 +644,8 @@ def main(_):
                                                         tg.init_state: initial_states(batch_size, args.n_hidden),
                                                         tg.seq_action_data: skip_action_data,
                                                         tg.seq_action_mask: skip_action_mask,
-                                                        tg.seq_advantage: skip_advantage})
+                                                        tg.seq_advantage: skip_advantage,
+                                                        tg.seq_reward: skip_disc_rewards})
 
                 # Get full sequence prediction
                 _val_pred_full = expand_pred_idx(actions_1hot=skip_action_data,

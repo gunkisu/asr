@@ -1172,9 +1172,11 @@ def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args, fin
     baseline_2d = baseline_1d.reshape([new_x.shape[0], -1]) * new_x_mask
 
     advantages = np.zeros_like(rewards)
+    discounted_rewards_arr = np.zeros_like(rewards)
     for i, (delta, mask) in enumerate(zip(baseline_2d, new_reward_mask)):
         this_len = int(mask.sum())
         advantages[i, :this_len] = discounted_rewards[i] - delta[:this_len]
+        discounted_rewards_arr[i, :this_len] = discounted_rewards[i]
 
     advantages_1d = advantages.reshape([-1])[reward_mask_1d==1.]
     advantages = ((advantages - advantages_1d.mean()) / (advantages_1d.std()+1e-8)) * new_reward_mask
@@ -1184,7 +1186,7 @@ def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args, fin
     discounted_rewards_1d = np.concatenate(discounted_rewards, axis=0)
     vf.fit(valid_new_x, discounted_rewards_1d)
 
-    return advantages
+    return advantages, discounted_rewards_arr
 
 def discount(x, gamma):
     assert x.ndim >= 1
