@@ -18,6 +18,8 @@ from model import LSTMModule
 from data.fuel_utils import create_ivector_datastream
 from libs.utils import sync_data, StopWatch
 
+from tensorflow.contrib.distributions import Categorical
+
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('learning-rate', 0.002, 'Initial learning rate')
@@ -170,8 +172,7 @@ def build_graph(args):
     step_action_probs = tf.nn.softmax(logits=step_action_logits)
 
     # Action sampling
-    step_action_samples = tf.multinomial(logits=step_action_logits,
-                                         num_samples=1)
+    step_action_samples = Categorical(logits=step_action_logits).sample()
 
     # Action probs entropy
     step_action_entropy = categorical_ent(dist=step_action_probs)
