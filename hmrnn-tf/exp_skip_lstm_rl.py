@@ -312,7 +312,7 @@ def main(_):
 
     # Set model rl cost (sum over all and divide it by batch_size, also entropy cost)
     real_rl_cost = tf.reduce_sum(tg.seq_real_rl_cost)
-    real_rl_cost /= tf.to_float(tf.shape(tg.seq_x_data)[0])
+    real_rl_cost /= tf.reduce_sum(tg.seq_action_mask)
 
     # Gradient clipping for ML
     ml_grads = tf.gradients(ml_cost, ml_vars)
@@ -514,6 +514,12 @@ def main(_):
                                                     args=args)
 
                     # Update history
+                    tr_ce_sum += _tr_ml_cost.sum() * batch_size
+                    tr_ce_count += skip_x_mask.sum()
+
+                    tr_acc_sum += ((_tr_pred_full == seq_y_data) * seq_x_mask).sum()
+                    tr_acc_count += seq_x_mask.sum()
+
                     tr_rl_sum += _tr_rl_cost.sum()*batch_size
                     tr_rl_count += skip_action_mask.sum()
 
@@ -558,12 +564,14 @@ def main(_):
                                                           tg.seq_y_data: seq_y_data,
                                                           tg.init_state: initial_states(batch_size, args.n_hidden)})
 
-                # Update history
-                tr_ce_sum += _tr_ml_cost.sum()*batch_size
-                tr_ce_count += skip_x_mask.sum()
+                    # Update history
+                    tr_ce_sum += _tr_ml_cost.sum()*batch_size
+                    tr_ce_count += seq_x_mask.sum()
 
-                tr_acc_sum += ((_tr_pred_full == seq_y_data) * seq_x_mask).sum()
-                tr_acc_count += seq_x_mask.sum()
+                    tr_acc_sum += ((_tr_pred_full == seq_y_data) * seq_x_mask).sum()
+                    tr_acc_count += seq_x_mask.sum()
+
+                    skip_x_mask = seq_x_mask
 
 
                 ################
@@ -694,6 +702,12 @@ def main(_):
                                                      args=args)
 
                     # Update history
+                    val_ce_sum += _val_ml_cost.sum() * batch_size
+                    val_ce_count += skip_x_mask.sum()
+
+                    val_acc_sum += ((_val_pred_full == seq_y_data) * seq_x_mask).sum()
+                    val_acc_count += seq_x_mask.sum()
+
                     val_rl_sum += _val_rl_cost.sum()*batch_size
                     val_rl_count += skip_action_mask.sum()
 
@@ -719,12 +733,12 @@ def main(_):
                                                             tg.init_state: initial_states(batch_size, args.n_hidden)})
 
 
-                # Update history
-                val_ce_sum += _val_ml_cost.sum()*batch_size
-                val_ce_count += skip_x_mask.sum()
+                    # Update history
+                    val_ce_sum += _val_ml_cost.sum()*batch_size
+                    val_ce_count += seq_x_mask.sum()
 
-                val_acc_sum += ((_val_pred_full == seq_y_data) * seq_x_mask).sum()
-                val_acc_count += seq_x_mask.sum()
+                    val_acc_sum += ((_val_pred_full == seq_y_data) * seq_x_mask).sum()
+                    val_acc_count += seq_x_mask.sum()
 
             # Aggregate over all valid data
             avg_val_ce = val_ce_sum / val_ce_count
