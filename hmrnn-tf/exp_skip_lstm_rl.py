@@ -54,6 +54,7 @@ flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 flags.DEFINE_boolean('use-final-reward', False, '')
 flags.DEFINE_float('ml-l2', 0.0, 'ml l2 lambda')
+flags.DEFINE_boolean('use-baseline', True, '')
 
 tg_fields = ['seq_x_data',
              'seq_x_mask',
@@ -227,8 +228,6 @@ def build_graph(args):
     seq_rl_cost *= tf.reshape(seq_action_mask, [-1])
 
     # RL cost wo/ baseline
-    # seq_real_rl_cost = -tf.log(seq_action_probs+1e-8) * tf.reshape(seq_action_data, [-1, args.n_action])
-    # seq_real_rl_cost = tf.reduce_sum(seq_real_rl_cost, axis=-1)
     seq_real_rl_cost = tf.reshape(seq_reward, [-1])*tf.reshape(seq_action_mask, [-1])
 
     # Set training graph
@@ -299,7 +298,7 @@ def main(_):
 
     # Set optimizer
     ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.rl_learning_rate)
+    rl_opt_func = tf.train.MomentumOptimizer(learning_rate=args.rl_learning_rate)
 
     # Set model ml cost (sum over all and divide it by batch_size)
     ml_cost = tf.reduce_sum(tg.seq_ml_cost)
@@ -307,7 +306,8 @@ def main(_):
     ml_cost += args.ml_l2*0.5*tf.add_n([tf.reduce_sum(tf.square(var)) for var in ml_vars])
 
     # Set model rl cost (sum over all and divide it by batch_size, also entropy cost)
-    rl_cost = tf.reduce_sum(tg.seq_rl_cost) - args.ent_weight*tf.reduce_sum(tg.seq_action_ent)
+    rl_cost = tg.seq_rl_cost - args.ent_weight*tg.seq_action_ent
+    rl_cost = tf.reduce_sum(rl_cost)
     rl_cost /= tf.to_float(tf.shape(tg.seq_x_data)[0])
 
     # Set model rl cost (sum over all and divide it by batch_size, also entropy cost)
@@ -373,9 +373,13 @@ def main(_):
         tr_rl = tf.placeholder(tf.float32)
         tr_rl_summary = tf.summary.scalar("train_rl", tr_rl)
 
-        # For RL reward histogram
+        # For RL reward
         tr_reward = tf.placeholder(tf.float32)
-        tr_reward_summary = tf.summary.histogram("train_reward", tr_reward)
+        tr_reward_summary = tf.summary.scalar("train_reward", tr_reward)
+
+        # For RL entropy
+        tr_ent = tf.placeholder(tf.float32)
+        tr_ent_summary = tf.summary.scalar("train_entropy", tr_ent)
 
         # For RL reward histogram
         tr_rw_hist = tf.placeholder(tf.float32)
@@ -484,6 +488,10 @@ def main(_):
                                                                           vf=vf,
                                                                           args=args,
                                                                           final_cost=args.use_final_reward)
+
+                    if args.use_baseline:
+                        skip_advantage = skip_disc_rewards
+
                     ##################
                     # Training Phase #
                     ##################
@@ -492,10 +500,12 @@ def main(_):
                      _tr_rl_cost,
                      _,
                      _,
+                     _tr_act_ent,
                      _tr_pred_logit] = sess.run([ml_cost,
                                                  real_rl_cost,
                                                  ml_op,
                                                  rl_op,
+                                                 tg.seq_action_ent,
                                                  tg.seq_label_logits],
                                                 feed_dict={tg.seq_x_data: skip_x_data,
                                                            tg.seq_x_mask: skip_x_mask,
@@ -520,10 +530,10 @@ def main(_):
                     tr_acc_sum += ((_tr_pred_full == seq_y_data) * seq_x_mask).sum()
                     tr_acc_count += seq_x_mask.sum()
 
-                    tr_rl_sum += _tr_rl_cost.sum()*batch_size
-                    tr_rl_count += skip_action_mask.sum()
+                    tr_rl_sum += _tr_rl_cost.sum()
+                    tr_rl_count += 1.0
 
-                    tr_ent_sum += skip_action_ent.sum()
+                    tr_ent_sum += _tr_act_ent.sum()
                     tr_ent_count += skip_action_mask.sum()
 
                     tr_reward_sum += skip_rewards.sum()
@@ -534,17 +544,21 @@ def main(_):
                     ################
                     [_tr_rl_summary,
                      _tr_image_summary,
+                     _tr_ent_summary,
                      _tr_reward_summary,
                      _tr_rw_hist_summary] = sess.run([tr_rl_summary,
                                                       tr_image_summary,
+                                                      tr_ent_summary,
                                                       tr_reward_summary,
                                                       tr_rw_hist_summary],
                                                      feed_dict={tr_rl: (_tr_rl_cost.sum()*batch_size) / skip_action_mask.sum(),
                                                                 tr_image: result_image,
+                                                                tr_ent: (_tr_act_ent.sum()/ skip_action_mask.sum()),
                                                                 tr_reward: (skip_rewards.sum()/skip_action_mask.sum()),
                                                                 tr_rw_hist: skip_rewards})
                     summary_writer.add_summary(_tr_rl_summary, global_step.eval())
                     summary_writer.add_summary(_tr_image_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_ent_summary, global_step.eval())
                     summary_writer.add_summary(_tr_reward_summary, global_step.eval())
                     summary_writer.add_summary(_tr_rw_hist_summary, global_step.eval())
                 else:
@@ -675,6 +689,9 @@ def main(_):
                                                                           args=args,
                                                                           final_cost=args.use_final_reward)
 
+                    if args.use_baseline:
+                        skip_advantage = skip_disc_rewards
+
                     #################
                     # Forward Phase #
                     #################
@@ -709,8 +726,8 @@ def main(_):
                     val_acc_sum += ((_val_pred_full == seq_y_data) * seq_x_mask).sum()
                     val_acc_count += seq_x_mask.sum()
 
-                    val_rl_sum += _val_rl_cost.sum()*batch_size
-                    val_rl_count += skip_action_mask.sum()
+                    val_rl_sum += _val_rl_cost.sum()
+                    val_rl_count += 1.0
 
                     val_ent_sum += _val_action_ent.sum()
                     val_ent_count += skip_action_mask.sum()
