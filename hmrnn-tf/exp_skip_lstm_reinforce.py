@@ -301,7 +301,7 @@ def main(_):
       print('Epoch {} training'.format(_epoch+1))
       
       # For each batch 
-      for batch in islice(train_set.get_epoch_iterator(), 10):
+      for batch in train_set.get_epoch_iterator():
         x, x_mask, _, _, y, _ = batch
         x = np.transpose(x, (1, 0, 2))
         x_mask = np.transpose(x_mask, (1, 0))
@@ -396,7 +396,7 @@ def main(_):
       val_rewards = []
 
       eval_sw.reset()
-      for batch in islice(valid_set.get_epoch_iterator(), 10):
+      for batch in valid_set.get_epoch_iterator():
         x, x_mask, _, _, y, _ = batch
         x = np.transpose(x, (1, 0, 2))
         x_mask = np.transpose(x_mask, (1, 0))
