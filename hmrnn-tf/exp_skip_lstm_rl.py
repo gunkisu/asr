@@ -227,10 +227,9 @@ def build_graph(args):
     seq_rl_cost *= tf.reshape(seq_action_mask, [-1])
 
     # RL cost wo/ baseline
-    seq_real_rl_cost = -tf.log(seq_action_probs+1e-8) * tf.reshape(seq_action_data, [-1, args.n_action])
-    seq_real_rl_cost = tf.reduce_sum(seq_real_rl_cost, axis=-1)
-    seq_real_rl_cost *= tf.reshape(seq_reward, [-1])
-    seq_real_rl_cost *= tf.reshape(seq_action_mask, [-1])
+    # seq_real_rl_cost = -tf.log(seq_action_probs+1e-8) * tf.reshape(seq_action_data, [-1, args.n_action])
+    # seq_real_rl_cost = tf.reduce_sum(seq_real_rl_cost, axis=-1)
+    seq_real_rl_cost = tf.reshape(seq_reward, [-1])*tf.reshape(seq_action_mask, [-1])
 
     # Set training graph
     train_graph = TrainGraph(seq_x_data,
