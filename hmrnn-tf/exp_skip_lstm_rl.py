@@ -563,7 +563,7 @@ def main(_):
                                                           tg.seq_x_mask: seq_x_mask,
                                                           tg.seq_y_data: seq_y_data,
                                                           tg.init_state: initial_states(batch_size, args.n_hidden)})
-                    _tr_pred_full = np.reshape(_tr_pred_full, seq_y_data.shape)
+                    _tr_pred_full = np.reshape(_tr_pred_full.argmax(axis=1), seq_y_data.shape)
 
                     # Update history
                     tr_ce_sum += _tr_ml_cost.sum()*batch_size
@@ -732,7 +732,7 @@ def main(_):
                                                             tg.seq_x_mask: seq_x_mask,
                                                             tg.seq_y_data: seq_y_data,
                                                             tg.init_state: initial_states(batch_size, args.n_hidden)})
-                    _val_pred_full = np.reshape(_val_pred_full, seq_y_data.shape)
+                    _val_pred_full = np.reshape(_val_pred_full.argmax(axis=1), seq_y_data.shape)
 
 
                     # Update history
