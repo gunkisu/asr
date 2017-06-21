@@ -227,10 +227,9 @@ def build_graph(args):
     seq_rl_cost *= tf.reshape(seq_action_mask, [-1])
 
     # RL cost wo/ baseline
-    seq_real_rl_cost = -tf.log(seq_action_probs+1e-8) * tf.reshape(seq_action_data, [-1, args.n_action])
-    seq_real_rl_cost = tf.reduce_sum(seq_real_rl_cost, axis=-1)
-    seq_real_rl_cost *= tf.reshape(seq_reward, [-1])
-    seq_real_rl_cost *= tf.reshape(seq_action_mask, [-1])
+    # seq_real_rl_cost = -tf.log(seq_action_probs+1e-8) * tf.reshape(seq_action_data, [-1, args.n_action])
+    # seq_real_rl_cost = tf.reduce_sum(seq_real_rl_cost, axis=-1)
+    seq_real_rl_cost = tf.reshape(seq_reward, [-1])*tf.reshape(seq_action_mask, [-1])
 
     # Set training graph
     train_graph = TrainGraph(seq_x_data,
@@ -375,6 +374,10 @@ def main(_):
         tr_rl_summary = tf.summary.scalar("train_rl", tr_rl)
 
         # For RL reward histogram
+        tr_reward = tf.placeholder(tf.float32)
+        tr_reward_summary = tf.summary.histogram("train_reward", tr_reward)
+
+        # For RL reward histogram
         tr_rw_hist = tf.placeholder(tf.float32)
         tr_rw_hist_summary = tf.summary.histogram("train_reward_hist", tr_rw_hist)
 
@@ -438,6 +441,9 @@ def main(_):
             disp_sw.reset()
             print('Epoch {} training'.format(_epoch + 1))
 
+            # Set rl skipping flag
+            use_rl_skipping = True if _best_fer < 0.5 else False
+
             # For each batch (update)
             for batch_data in train_set.get_epoch_iterator():
                 ##################
@@ -446,66 +452,111 @@ def main(_):
                 # Get batch data
                 seq_x_data, seq_x_mask, _, _, seq_y_data, _ = batch_data
 
-                # Transpose axis
-                seq_x_data = np.transpose(seq_x_data, (1, 0, 2))
-                seq_x_mask = np.transpose(seq_x_mask, (1, 0))
-                seq_y_data = np.transpose(seq_y_data, (1, 0))
+                # Use skipping
+                if use_rl_skipping:
+                    # Transpose axis
+                    seq_x_data = np.transpose(seq_x_data, (1, 0, 2))
+                    seq_x_mask = np.transpose(seq_x_mask, (1, 0))
+                    seq_y_data = np.transpose(seq_y_data, (1, 0))
 
-                # Number of samples
-                batch_size = seq_x_data.shape[1]
+                    # Number of samples
+                    batch_size = seq_x_data.shape[1]
+                    # Sample actions (episode generation)
+                    [skip_x_data,
+                     skip_y_data,
+                     skip_action_data,
+                     skip_rewards,
+                     skip_action_ent,
+                     skip_x_mask,
+                     skip_action_mask,
+                     result_image] = gen_episodes(x=seq_x_data,
+                                                  x_mask=seq_x_mask,
+                                                  y=seq_y_data,
+                                                  sess=sess,
+                                                  sample_graph=sg,
+                                                  args=args)
 
-                # Sample actions (episode generation)
-                [skip_x_data,
-                 skip_y_data,
-                 skip_action_data,
-                 skip_rewards,
-                 skip_action_ent,
-                 skip_x_mask,
-                 skip_action_mask,
-                 result_image] = gen_episodes(x=seq_x_data,
-                                              x_mask=seq_x_mask,
-                                              y=seq_y_data,
-                                              sess=sess,
-                                              sample_graph=sg,
-                                              args=args)
+                    # Compute baseline and refine reward
+                    skip_advantage, skip_disc_rewards = compute_advantage(new_x=skip_x_data,
+                                                                          new_x_mask=skip_x_mask,
+                                                                          rewards=skip_rewards,
+                                                                          new_reward_mask=skip_action_mask,
+                                                                          vf=vf,
+                                                                          args=args,
+                                                                          final_cost=args.use_final_reward)
+                    ##################
+                    # Training Phase #
+                    ##################
+                    # Update model
+                    [_tr_ml_cost,
+                     _tr_rl_cost,
+                     _,
+                     _,
+                     _tr_pred_logit] = sess.run([ml_cost,
+                                                 real_rl_cost,
+                                                 ml_op,
+                                                 rl_op,
+                                                 tg.seq_label_logits],
+                                                feed_dict={tg.seq_x_data: skip_x_data,
+                                                           tg.seq_x_mask: skip_x_mask,
+                                                           tg.seq_y_data: skip_y_data,
+                                                           tg.init_state: initial_states(batch_size, args.n_hidden),
+                                                           tg.seq_action_data: skip_action_data,
+                                                           tg.seq_action_mask: skip_action_mask,
+                                                           tg.seq_advantage: skip_advantage,
+                                                           tg.seq_reward: skip_disc_rewards})
 
-                # Compute baseline and refine reward
-                skip_advantage, skip_disc_rewards = compute_advantage(new_x=skip_x_data,
-                                                                      new_x_mask=skip_x_mask,
-                                                                      rewards=skip_rewards,
-                                                                      new_reward_mask=skip_action_mask,
-                                                                      vf=vf,
-                                                                      args=args,
-                                                                      final_cost=args.use_final_reward)
+                    # Get full sequence prediction
+                    _tr_pred_full = expand_pred_idx(actions_1hot=skip_action_data,
+                                                    x_mask=seq_x_mask,
+                                                    pred_idx=_tr_pred_logit.argmax(axis=1),
+                                                    n_batch=batch_size,
+                                                    args=args)
 
-                ##################
-                # Training Phase #
-                ##################
-                # Update model
-                [_tr_ml_cost,
-                 _tr_rl_cost,
-                 _,
-                 _,
-                 _tr_pred_logit] = sess.run([ml_cost,
-                                             real_rl_cost,
-                                             ml_op,
-                                             rl_op,
-                                             tg.seq_label_logits],
-                                            feed_dict={tg.seq_x_data: skip_x_data,
-                                                       tg.seq_x_mask: skip_x_mask,
-                                                       tg.seq_y_data: skip_y_data,
-                                                       tg.init_state: initial_states(batch_size, args.n_hidden),
-                                                       tg.seq_action_data: skip_action_data,
-                                                       tg.seq_action_mask: skip_action_mask,
-                                                       tg.seq_advantage: skip_advantage,
-                                                       tg.seq_reward: skip_disc_rewards})
+                    # Update history
+                    tr_rl_sum += _tr_rl_cost.sum()*batch_size
+                    tr_rl_count += skip_action_mask.sum()
 
-                # Get full sequence prediction
-                _tr_pred_full = expand_pred_idx(actions_1hot=skip_action_data,
-                                                x_mask=seq_x_mask,
-                                                pred_idx=_tr_pred_logit.argmax(axis=1),
-                                                n_batch=batch_size,
-                                                args=args)
+                    tr_ent_sum += skip_action_ent.sum()
+                    tr_ent_count += skip_action_mask.sum()
+
+                    tr_reward_sum += skip_rewards.sum()
+                    tr_reward_count += skip_action_mask.sum()
+
+                    ################
+                    # Write result #
+                    ################
+                    [_tr_rl_summary,
+                     _tr_image_summary,
+                     _tr_reward_summary,
+                     _tr_rw_hist_summary] = sess.run([tr_rl_summary,
+                                                      tr_image_summary,
+                                                      tr_reward_summary,
+                                                      tr_rw_hist_summary],
+                                                     feed_dict={tr_rl: (_tr_rl_cost.sum()*batch_size) / skip_action_mask.sum(),
+                                                                tr_image: result_image,
+                                                                tr_reward: (skip_rewards.sum()/skip_action_mask.sum()),
+                                                                tr_rw_hist: skip_rewards})
+                    summary_writer.add_summary(_tr_rl_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_image_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_reward_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_rw_hist_summary, global_step.eval())
+                else:
+                    # Number of samples
+                    batch_size = seq_x_data.shape[0]
+
+                    ##################
+                    # Training Phase #
+                    ##################
+                    [_tr_ml_cost,
+                     _,
+                     _tr_pred_full] = sess.run([ml_cost,
+                                                ml_op,
+                                                tg.seq_label_logits],
+                                               feed_dict={tg.seq_x_data: seq_x_data,
+                                                          tg.seq_x_mask: seq_x_mask,
+                                                          tg.seq_y_data: seq_y_data,
+                                                          tg.init_state: initial_states(batch_size, args.n_hidden)})
 
                 # Update history
                 tr_ce_sum += _tr_ml_cost.sum()*batch_size
@@ -514,54 +565,40 @@ def main(_):
                 tr_acc_sum += ((_tr_pred_full == seq_y_data) * seq_x_mask).sum()
                 tr_acc_count += seq_x_mask.sum()
 
-                tr_rl_sum += _tr_rl_cost.sum()*batch_size
-                tr_rl_count += skip_action_mask.sum()
-
-                tr_ent_sum += skip_action_ent.sum()
-                tr_ent_count += skip_action_mask.sum()
-
-                tr_reward_sum += skip_rewards.sum()
-                tr_reward_count += skip_action_mask.sum()
 
                 ################
                 # Write result #
                 ################
                 [_tr_ce_summary,
-                 _tr_fer_summary,
-                 _tr_rl_summary,
-                 _tr_image_summary,
-                 _tr_rw_hist_summary] = sess.run([tr_ce_summary,
-                                                  tr_fer_summary,
-                                                  tr_rl_summary,
-                                                  tr_image_summary,
-                                                  tr_rw_hist_summary],
-                                                 feed_dict={tr_ce: (_tr_ml_cost.sum()*batch_size) / skip_x_mask.sum(),
-                                                            tr_fer: ((_tr_pred_full == seq_y_data) * seq_x_mask).sum() / seq_x_mask.sum(),
-                                                            tr_rl: (_tr_rl_cost.sum()*batch_size) / skip_action_mask.sum(),
-                                                            tr_image: result_image,
-                                                            tr_rw_hist: skip_rewards})
+                 _tr_fer_summary] = sess.run([tr_ce_summary,
+                                              tr_fer_summary],
+                                             feed_dict={tr_ce: (_tr_ml_cost.sum()*batch_size) / skip_x_mask.sum(),
+                                                        tr_fer: ((_tr_pred_full == seq_y_data) * seq_x_mask).sum() / seq_x_mask.sum()})
                 summary_writer.add_summary(_tr_ce_summary, global_step.eval())
                 summary_writer.add_summary(_tr_fer_summary, global_step.eval())
-                summary_writer.add_summary(_tr_rl_summary, global_step.eval())
-                summary_writer.add_summary(_tr_image_summary, global_step.eval())
-                summary_writer.add_summary(_tr_rw_hist_summary, global_step.eval())
 
                 # Display results
                 if global_step.eval() % args.display_freq == 0:
                     # Get average results
                     avg_tr_ce = tr_ce_sum / tr_ce_count
                     avg_tr_fer = 1. - tr_acc_sum / tr_acc_count
-                    avg_tr_rl = tr_rl_sum / tr_rl_count
-                    avg_tr_ent = tr_ent_sum / tr_ent_count
-                    avg_tr_reward = tr_reward_sum / tr_reward_count
-
-                    print("TRAIN: epoch={} iter={} "
-                          "ml_cost(ce/frame)={:.2f} fer={:.2f} "
-                          "rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} "
-                          "time_taken={:.2f}".format(_epoch, global_step.eval(),
-                                                     avg_tr_ce, avg_tr_fer,
-                                                     avg_tr_rl, avg_tr_reward, avg_tr_ent,
-                                                     disp_sw.elapsed()))
+                    if use_rl_skipping:
+                        avg_tr_rl = tr_rl_sum / tr_rl_count
+                        avg_tr_ent = tr_ent_sum / tr_ent_count
+                        avg_tr_reward = tr_reward_sum / tr_reward_count
+                        print("TRAIN: epoch={} iter={} "
+                              "ml_cost(ce/frame)={:.2f} fer={:.2f} "
+                              "rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} "
+                              "time_taken={:.2f}".format(_epoch, global_step.eval(),
+                                                         avg_tr_ce, avg_tr_fer,
+                                                         avg_tr_rl, avg_tr_reward, avg_tr_ent,
+                                                         disp_sw.elapsed()))
+                    else:
+                        print("TRAIN: epoch={} iter={} "
+                              "ml_cost(ce/frame)={:.2f} fer={:.2f} "
+                              "time_taken={:.2f}".format(_epoch, global_step.eval(),
+                                                         avg_tr_ce, avg_tr_fer,
+                                                         disp_sw.elapsed()))
 
                     # Reset average results
                     tr_ce_sum = 0.; tr_ce_count = 0
@@ -596,64 +633,91 @@ def main(_):
                 # Get batch data
                 seq_x_data, seq_x_mask, _, _, seq_y_data, _ = batch_data
 
-                # Transpose axis
-                seq_x_data = np.transpose(seq_x_data, (1, 0, 2))
-                seq_x_mask = np.transpose(seq_x_mask, (1, 0))
-                seq_y_data = np.transpose(seq_y_data, (1, 0))
+                if use_rl_skipping:
+                    # Transpose axis
+                    seq_x_data = np.transpose(seq_x_data, (1, 0, 2))
+                    seq_x_mask = np.transpose(seq_x_mask, (1, 0))
+                    seq_y_data = np.transpose(seq_y_data, (1, 0))
 
-                # Number of samples
-                batch_size = seq_x_data.shape[1]
+                    # Number of samples
+                    batch_size = seq_x_data.shape[1]
 
-                # Sample actions (episode generation)
-                [skip_x_data,
-                 skip_y_data,
-                 skip_action_data,
-                 skip_rewards,
-                 skip_action_ent,
-                 skip_x_mask,
-                 skip_action_mask,
-                 result_image] = gen_episodes(x=seq_x_data,
-                                              x_mask=seq_x_mask,
-                                              y=seq_y_data,
-                                              sess=sess,
-                                              sample_graph=sg,
-                                              args=args)
+                    # Sample actions (episode generation)
+                    [skip_x_data,
+                     skip_y_data,
+                     skip_action_data,
+                     skip_rewards,
+                     skip_action_ent,
+                     skip_x_mask,
+                     skip_action_mask,
+                     result_image] = gen_episodes(x=seq_x_data,
+                                                  x_mask=seq_x_mask,
+                                                  y=seq_y_data,
+                                                  sess=sess,
+                                                  sample_graph=sg,
+                                                  args=args)
 
-                # Compute baseline and refine reward
-                skip_advantage, skip_disc_rewards = compute_advantage(new_x=skip_x_data,
-                                                                      new_x_mask=skip_x_mask,
-                                                                      rewards=skip_rewards,
-                                                                      new_reward_mask=skip_action_mask,
-                                                                      vf=vf,
-                                                                      args=args,
-                                                                      final_cost=args.use_final_reward)
+                    # Compute baseline and refine reward
+                    skip_advantage, skip_disc_rewards = compute_advantage(new_x=skip_x_data,
+                                                                          new_x_mask=skip_x_mask,
+                                                                          rewards=skip_rewards,
+                                                                          new_reward_mask=skip_action_mask,
+                                                                          vf=vf,
+                                                                          args=args,
+                                                                          final_cost=args.use_final_reward)
 
-                #################
-                # Forward Phase #
-                #################
-                # Update model
-                [_val_ml_cost,
-                 _val_rl_cost,
-                 _val_pred_logit,
-                 _val_action_ent] = sess.run([ml_cost,
-                                              real_rl_cost,
-                                              tg.seq_label_logits,
-                                              tg.seq_action_ent],
-                                             feed_dict={tg.seq_x_data: skip_x_data,
-                                                        tg.seq_x_mask: skip_x_mask,
-                                                        tg.seq_y_data: skip_y_data,
-                                                        tg.init_state: initial_states(batch_size, args.n_hidden),
-                                                        tg.seq_action_data: skip_action_data,
-                                                        tg.seq_action_mask: skip_action_mask,
-                                                        tg.seq_advantage: skip_advantage,
-                                                        tg.seq_reward: skip_disc_rewards})
+                    #################
+                    # Forward Phase #
+                    #################
+                    # Update model
+                    [_val_ml_cost,
+                     _val_rl_cost,
+                     _val_pred_logit,
+                     _val_action_ent] = sess.run([ml_cost,
+                                                  real_rl_cost,
+                                                  tg.seq_label_logits,
+                                                  tg.seq_action_ent],
+                                                 feed_dict={tg.seq_x_data: skip_x_data,
+                                                            tg.seq_x_mask: skip_x_mask,
+                                                            tg.seq_y_data: skip_y_data,
+                                                            tg.init_state: initial_states(batch_size, args.n_hidden),
+                                                            tg.seq_action_data: skip_action_data,
+                                                            tg.seq_action_mask: skip_action_mask,
+                                                            tg.seq_advantage: skip_advantage,
+                                                            tg.seq_reward: skip_disc_rewards})
 
-                # Get full sequence prediction
-                _val_pred_full = expand_pred_idx(actions_1hot=skip_action_data,
-                                                 x_mask=seq_x_mask,
-                                                 pred_idx=_val_pred_logit.argmax(axis=1),
-                                                 n_batch=batch_size,
-                                                 args=args)
+                    # Get full sequence prediction
+                    _val_pred_full = expand_pred_idx(actions_1hot=skip_action_data,
+                                                     x_mask=seq_x_mask,
+                                                     pred_idx=_val_pred_logit.argmax(axis=1),
+                                                     n_batch=batch_size,
+                                                     args=args)
+
+                    # Update history
+                    val_rl_sum += _val_rl_cost.sum()*batch_size
+                    val_rl_count += skip_action_mask.sum()
+
+                    val_ent_sum += _val_action_ent.sum()
+                    val_ent_count += skip_action_mask.sum()
+
+                    val_reward_sum += skip_rewards.sum()
+                    val_reward_count += skip_action_mask.sum()
+                else:
+                    # Number of samples
+                    batch_size = seq_x_data.shape[0]
+
+                    #################
+                    # Forward Phase #
+                    #################
+                    # Update model
+                    [_val_ml_cost,
+                     _val_pred_full] = sess.run([ml_cost,
+                                                 tg.seq_label_logits],
+                                                 feed_dict={tg.seq_x_data: seq_x_data,
+                                                            tg.seq_x_mask: seq_x_mask,
+                                                            tg.seq_y_data: seq_y_data,
+                                                            tg.init_state: initial_states(batch_size, args.n_hidden)})
+
 
                 # Update history
                 val_ce_sum += _val_ml_cost.sum()*batch_size
@@ -662,29 +726,28 @@ def main(_):
                 val_acc_sum += ((_val_pred_full == seq_y_data) * seq_x_mask).sum()
                 val_acc_count += seq_x_mask.sum()
 
-                val_rl_sum += _val_rl_cost.sum()*batch_size
-                val_rl_count += skip_action_mask.sum()
-
-                val_ent_sum += _val_action_ent.sum()
-                val_ent_count += skip_action_mask.sum()
-
-                val_reward_sum += skip_rewards.sum()
-                val_reward_count += skip_action_mask.sum()
-
             # Aggregate over all valid data
             avg_val_ce = val_ce_sum / val_ce_count
             avg_val_fer = 1. - val_acc_sum / val_acc_count
-            avg_val_rl = val_rl_sum / val_rl_count
-            avg_val_ent = val_ent_sum / val_ent_count
-            avg_val_reward = val_reward_sum / val_reward_count
 
-            print("VALID: epoch={} "
-                  "ml_cost(ce/frame)={:.2f} fer={:.2f} "
-                  "rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} "
-                  "time_taken={:.2f}".format(_epoch,
-                                             avg_val_ce, avg_val_fer,
-                                             avg_val_rl, avg_val_reward, avg_val_ent,
-                                             eval_sw.elapsed()))
+            if use_rl_skipping:
+                avg_val_rl = val_rl_sum / val_rl_count
+                avg_val_ent = val_ent_sum / val_ent_count
+                avg_val_reward = val_reward_sum / val_reward_count
+
+                print("VALID: epoch={} "
+                      "ml_cost(ce/frame)={:.2f} fer={:.2f} "
+                      "rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} "
+                      "time_taken={:.2f}".format(_epoch,
+                                                 avg_val_ce, avg_val_fer,
+                                                 avg_val_rl, avg_val_reward, avg_val_ent,
+                                                 eval_sw.elapsed()))
+            else:
+                print("VALID: epoch={} "
+                      "ml_cost(ce/frame)={:.2f} fer={:.2f} "
+                      "time_taken={:.2f}".format(_epoch,
+                                                 avg_val_ce, avg_val_fer,
+                                                 eval_sw.elapsed()))
 
             [_val_ce_summary,
              _val_fer_summary] = sess.run([val_ce_summary,
@@ -696,9 +759,9 @@ def main(_):
 
             insert_item2dict(eval_summary, 'val_ce', avg_val_ce)
             insert_item2dict(eval_summary, 'val_fer', avg_val_fer)
-            insert_item2dict(eval_summary, 'val_rl', avg_val_rl)
-            insert_item2dict(eval_summary, 'val_reward', avg_val_reward)
-            insert_item2dict(eval_summary, 'val_ent', avg_val_ent)
+            # insert_item2dict(eval_summary, 'val_rl', avg_val_rl)
+            # insert_item2dict(eval_summary, 'val_reward', avg_val_reward)
+            # insert_item2dict(eval_summary, 'val_ent', avg_val_ent)
             insert_item2dict(eval_summary, 'time', eval_sw.elapsed())
             save_npz2(file_name, eval_summary)
 
