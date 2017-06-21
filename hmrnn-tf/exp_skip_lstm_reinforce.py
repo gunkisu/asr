@@ -95,9 +95,9 @@ def build_graph(args):
     seq_action_mask = tf.placeholder(tf.float32, shape=(None, None))
     
     # input data (batch_size, feat_size) for sampling
-    step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input))
+    step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
     # previous state (2, batch_size, num_hiddens)
-    prev_states = tf.placeholder(tf.float32, shape=(2, None, args.n_hidden))
+    prev_states = tf.placeholder(tf.float32, shape=(2, None, args.n_hidden), name='prev_states')
 
   with tf.variable_scope('rnn'):
     _rnn = LSTMModule(num_units=args.n_hidden)
@@ -112,14 +112,14 @@ def build_graph(args):
   step_h_state, step_last_state = _rnn(step_x_data, prev_states, one_step=True)
 
   step_label_logits = _label_logit(step_h_state, 'label_logit')
-  step_label_probs = tf.nn.softmax(logits=step_label_logits)
+  step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
 
   if FLAGS.ref_input:
     step_action_logits = _action_logit([step_x_data, step_h_state], 'action_logit')
   else:
     step_action_logits = _action_logit(step_h_state, 'action_logit')
   step_action_probs = tf.nn.softmax(logits=step_action_logits)
-  step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1)
+  step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
   step_action_entropy = categorical_ent(step_action_probs)
 
   # training graph
@@ -180,7 +180,6 @@ def build_graph(args):
                              step_action_entropy)
 
   return train_graph, sample_graph
-
 
 def initial_states(batch_size, n_hidden):
   init_state = np.zeros([2, batch_size, n_hidden], dtype=np.float32)
@@ -313,10 +312,10 @@ def main(_):
         new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
             gen_episodes(x, x_mask, y, sess, sg, args)
 
-        advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+        advantages,_ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
         #advantages = rewards - np.sum(rewards)/np.sum(new_reward_mask)
         _feed_states = initial_states(n_batch, args.n_hidden)
-
+        
         [_tr_ml_cost,
          _tr_rl_cost,
          _,
@@ -406,7 +405,7 @@ def main(_):
 
         new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask, _ = \
             gen_episodes(x, x_mask, y, sess, sg, args)
-        advantages = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+        advantages, _ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
         _feed_states = initial_states(n_batch, args.n_hidden)
 
