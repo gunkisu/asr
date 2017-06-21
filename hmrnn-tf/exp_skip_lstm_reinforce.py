@@ -118,7 +118,7 @@ def build_graph(args):
     step_action_logits = _action_logit([step_x_data, step_h_state], 'action_logit')
   else:
     step_action_logits = _action_logit(step_h_state, 'action_logit')
-  step_action_probs = tf.nn.softmax(logits=step_action_logits)
+  step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
   step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
   step_action_entropy = categorical_ent(step_action_probs)
 
