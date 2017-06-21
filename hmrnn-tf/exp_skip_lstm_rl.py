@@ -374,6 +374,10 @@ def main(_):
         tr_rl_summary = tf.summary.scalar("train_rl", tr_rl)
 
         # For RL reward histogram
+        tr_reward = tf.placeholder(tf.float32)
+        tr_reward_summary = tf.summary.histogram("train_reward", tr_reward)
+
+        # For RL reward histogram
         tr_rw_hist = tf.placeholder(tf.float32)
         tr_rw_hist_summary = tf.summary.histogram("train_reward_hist", tr_rw_hist)
 
@@ -529,20 +533,24 @@ def main(_):
                  _tr_fer_summary,
                  _tr_rl_summary,
                  _tr_image_summary,
+                 _tr_reward_summary,
                  _tr_rw_hist_summary] = sess.run([tr_ce_summary,
                                                   tr_fer_summary,
                                                   tr_rl_summary,
                                                   tr_image_summary,
+                                                  tr_reward_summary,
                                                   tr_rw_hist_summary],
                                                  feed_dict={tr_ce: (_tr_ml_cost.sum()*batch_size) / skip_x_mask.sum(),
                                                             tr_fer: ((_tr_pred_full == seq_y_data) * seq_x_mask).sum() / seq_x_mask.sum(),
                                                             tr_rl: (_tr_rl_cost.sum()*batch_size) / skip_action_mask.sum(),
                                                             tr_image: result_image,
+                                                            tr_reward: (skip_rewards.sum()/skip_action_mask.sum()),
                                                             tr_rw_hist: skip_rewards})
                 summary_writer.add_summary(_tr_ce_summary, global_step.eval())
                 summary_writer.add_summary(_tr_fer_summary, global_step.eval())
                 summary_writer.add_summary(_tr_rl_summary, global_step.eval())
                 summary_writer.add_summary(_tr_image_summary, global_step.eval())
+                summary_writer.add_summary(_tr_reward_summary, global_step.eval())
                 summary_writer.add_summary(_tr_rw_hist_summary, global_step.eval())
 
                 # Display results
