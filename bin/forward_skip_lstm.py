@@ -11,17 +11,18 @@ import tensorflow as tf
 
 from collections import OrderedDict
 from collections import namedtuple
-from skiprnn.mixer import skip_rnn_forward_parallel, expand_pred_idx
+from skiprnn.mixer import skip_rnn_forward_parallel, expand_label_probs
 
 from data.fuel_utils import create_ivector_test_datastream, get_uttid_stream
 from libs.utils import sync_data, skip_frames_fixed, StopWatch
+
+import kaldi_io
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_integer('batch-size', 64, 'Size of mini-batch')
 flags.DEFINE_integer('n-fast-action', 10, 'Number of steps to skip in the fast action mode')
 flags.DEFINE_boolean('fast-action', False, 'If true, operate in the fast action mode')
-flags.DEFINE_boolean('ref-input', False, 'If true, policy refers input')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_boolean('no-copy', True, '')
 flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
@@ -30,6 +31,8 @@ flags.DEFINE_string('dataset', 'test_dev93', '')
 flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 flags.DEFINE_string('wxfilename', 'ark:-', '')
 flags.DEFINE_string('metafile', 'best_model.ckpt-1000.meta', '')
+
+SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples step_action_probs step_last_state step_x_data prev_states')
 
 def initial_states(batch_size, n_hidden):
   init_state = np.zeros([2, batch_size, n_hidden], dtype=np.float32)
@@ -57,9 +60,13 @@ def main(_):
     writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 
     _step_label_probs = sess.graph.get_tensor_by_name('step_label_probs:0')
-    _step_action_samples = sess.graph.get_tensor_by_name('step_action_samples:0')
+    step_action_probs = sess.graph.get_tensor_by_name('step_action_probs:0')
+    step_action_samples = sess.graph.get_tensor_by_name('step_action_samples/Multinomial:0')
     step_x_data = sess.graph.get_tensor_by_name('step_x_data:0')
-    _prev_states = sess.graph.get_tensor_by_name('prev_states:0')
+    prev_states = sess.graph.get_tensor_by_name('prev_states:0')
+    step_last_state = sess.graph.get_tensor_by_name('one_step_stack:0')
+
+    sample_graph = SampleGraph(_step_label_probs, step_action_samples, step_action_probs, step_last_state, step_x_data, prev_states)
 
     writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 
@@ -73,16 +80,14 @@ def main(_):
 
       feat_lens = orig_x_mask.sum(axis=1)
 
-      actions, label_probs, x_mask = skip_rnn_forward_parallel(orig_x,
-                          orig_x_mask,
+      actions, label_probs, x_mask = skip_rnn_forward_parallel(
+                          np.transpose(orig_x, [1,0,2]),
+                          np.transpose(orig_x_mask, [1,0]),
                           sess,
                           sample_graph,
                           args)
 
-      seq_label_probs = expand_label_probs(actions, x_mask, label_probs, n_batch, args)
-
-      seq_label_probs = seq_label_probs.reshape([n_batch, n_seq, -1])
-      seq_label_probs = seq_label_probs.repeat(args.n_skip+1, axis=1)
+      seq_label_probs = expand_label_probs(actions, orig_x_mask, label_probs)
 
       for out_idx, (output, uttid) in enumerate(zip(seq_label_probs, uttid_batch)):
         valid_len = int(feat_lens[out_idx])

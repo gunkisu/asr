@@ -548,6 +548,18 @@ def update_action_counters(action_counters, action_idx, target_indices, args):
     new_ac = [ac-1 for ac in new_ac]
     action_counters[:] = new_ac
 
+def update_action_counters2(action_counters, action_idx, target_indices, n_action, fast_action, n_fast_action):
+    new_ac = list(action_counters)
+    for ai, i in zip(action_idx, target_indices):
+        if fast_action and ai == n_action - 1:
+            new_ac[i] = n_fast_action
+        else:
+            new_ac[i] = ai+1
+
+    # proceed to the next step
+    new_ac = [ac-1 for ac in new_ac]
+    action_counters[:] = new_ac
+
 def gen_mask(update_pos, reward_update_pos, batch_size):
     max_seq_len = max(update_pos)
     max_reward_seq_len = max(reward_update_pos)
@@ -570,7 +582,7 @@ def gen_mask_from(update_pos):
     for i, pos in enumerate(update_pos):
         mask[:pos, i] = 1.
 
-    return mask
+    return max_seq_len, mask
 
 def aggr_skip_rnn_act_parallel(x,
                                x_mask,
@@ -1176,14 +1188,19 @@ def skip_rnn_forward_parallel(x,
                 np.transpose(label_probs, [1,0,2]),
                 np.transpose(mask, [1,0])]
 
+    
+    n_class = sample_graph.step_label_probs.shape[-1].value
+    n_hidden = sample_graph.step_last_state.shape[-1].value
+    n_action = sample_graph.step_action_probs.shape[-1].value
 
     # x shape is [time_step, batch_size, features]
+    
     n_seq, n_batch, n_feat = x.shape
     seq_lens = x_mask.sum(axis=0)
     max_seq_len = int(max(seq_lens))
 
     # shape should be (2, n_batch, n_hidden) when it is used
-    prev_state = np.zeros((n_batch, 2, args.n_hidden))
+    prev_state = np.zeros((n_batch, 2, n_hidden))
 
     # init counter and positions
     action_counters = [0]*n_batch
@@ -1191,8 +1208,8 @@ def skip_rnn_forward_parallel(x,
     sample_done = [] # indices of examples fully processed
 
     new_x = np.zeros([max_seq_len, n_batch, n_feat])
-    label_probs = np.zeros([max_seq_len, n_batch, args.n_class])
-    actions = np.zeros([max_seq_len-1, n_batch, args.n_action]) 
+    label_probs = np.zeros([max_seq_len, n_batch, n_class])
+    actions = np.zeros([max_seq_len-1, n_batch, n_action]) 
 
     # for each step (index j)
     for j, x_step in enumerate(x):
@@ -1246,7 +1263,7 @@ def skip_rnn_forward_parallel(x,
 
             # roll state
             new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
-            action_one_hot = np.eye(args.n_action)[action_idx.flatten()]
+            action_one_hot = np.eye(n_action)[action_idx.flatten()]
 
             # fill read data
             fill(new_x, _x_step, target_indices, update_pos)
@@ -1254,17 +1271,16 @@ def skip_rnn_forward_parallel(x,
             fill(actions, action_one_hot, target_indices, update_pos)
 
             # update counter
-            update_action_counters(action_counters, action_idx.flatten(), target_indices, args)
+            update_action_counters2(action_counters, action_idx.flatten(), target_indices, n_action, args.fast_action, args.n_fast_action)
 
             advance_pos(update_pos, target_indices)
             update_prev_state(prev_state, new_prev_state, target_indices)
 
         else:
-            update_action_counters(action_counters, [], [], args)
+            update_action_counters2(action_counters, [], [], n_action, args.fast_action, args.n_fast_action)
 
-    mask = gen_mask_from(update_pos)
-
-    return transpose_all(actions, label_probs, mask)
+    new_max_seq_len, mask = gen_mask_from(update_pos)
+    return transpose_all(actions[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask)
 
 def sample_from_softmax_batch(step_action_prob):
     action_one_hot = []
@@ -1363,18 +1379,17 @@ def expand_pred_idx(actions_1hot, x_mask, pred_idx, n_batch, args):
 
     return new_pred_idx
 
-def expand_label_probs(actions_1hot, x_mask, label_probs, n_batch, args):
-    new_label_probs = np.zeros_like(x_mask)
+def expand_label_probs(actions_1hot, orig_x_mask, label_probs):
+    new_label_probs = np.zeros([orig_x_mask.shape[0], orig_x_mask.shape[1], label_probs.shape[-1]])
 
     skip_info = np.argmax(actions_1hot, axis=2) + 1 # number of repeats
-    label_probs = label_probs.reshape([n_batch, -1])
 
     # for each example
     for i, (s, p) in enumerate(zip(skip_info, label_probs)):
         # for each step
         start_idx = 0
         for s_step, p_step in itertools.izip_longest(s, p, fillvalue=1):
-            new_label_probs[start_idx:start_idx+s_step, i] = p_step
+            new_label_probs[i,start_idx:start_idx+s_step] = p_step
             start_idx += s_step
 
     return new_label_probs

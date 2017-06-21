@@ -118,7 +118,7 @@ def build_graph(args):
     step_action_logits = _action_logit([step_x_data, step_h_state], 'action_logit')
   else:
     step_action_logits = _action_logit(step_h_state, 'action_logit')
-  step_action_probs = tf.nn.softmax(logits=step_action_logits)
+  step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
   step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
   step_action_entropy = categorical_ent(step_action_probs)
 
@@ -301,7 +301,7 @@ def main(_):
       print('Epoch {} training'.format(_epoch+1))
       
       # For each batch 
-      for batch in train_set.get_epoch_iterator():
+      for batch in islice(train_set.get_epoch_iterator(), 10):
         x, x_mask, _, _, y, _ = batch
         x = np.transpose(x, (1, 0, 2))
         x_mask = np.transpose(x_mask, (1, 0))
@@ -396,7 +396,7 @@ def main(_):
       val_rewards = []
 
       eval_sw.reset()
-      for batch in valid_set.get_epoch_iterator():
+      for batch in islice(valid_set.get_epoch_iterator(), 10):
         x, x_mask, _, _, y, _ = batch
         x = np.transpose(x, (1, 0, 2))
         x_mask = np.transpose(x_mask, (1, 0))
