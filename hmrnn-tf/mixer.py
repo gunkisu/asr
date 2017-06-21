@@ -473,7 +473,7 @@ def fill_ml_aggr_reward(reward_list,
 
         # Get previous likelihood
         likelihood = prev_likelihood_list[idx]
-        pred_idx = likelihood.argmax()
+        pred_idx = true_label[0] #likelihood.argmax()
 
         if likelihood.sum() < 0.99:
             print(likelihood.sum())
@@ -482,14 +482,16 @@ def fill_ml_aggr_reward(reward_list,
         # compute aggr_reward
         aggr_reward = 0.0
         # For each label
-        for l in true_label:
+        for l in true_label[1:]:
             if pred_idx == l:
                 aggr_reward += 1.
             else:
                 break
             # aggr_reward += np.log(likelihood[l])
-
-        aggr_reward = np.square(aggr_reward)
+        action_size = (cur_step_idx-prev_step_idx)
+        aggr_reward = aggr_reward - (action_size-aggr_reward)
+        if aggr_reward > 0.:  aggr_reward = np.square(aggr_reward)
+        else: aggr_reward = -np.square(aggr_reward)
 
         # Save rewards
         reward_list[reward_update_pos[idx], idx] = aggr_reward
