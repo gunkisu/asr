@@ -298,7 +298,7 @@ def main(_):
 
     # Set optimizer
     ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-    rl_opt_func = tf.train.MomentumOptimizer(learning_rate=args.rl_learning_rate)
+    rl_opt_func = tf.train.MomentumOptimizer(learning_rate=args.rl_learning_rate, momentum=0.9)
 
     # Set model ml cost (sum over all and divide it by batch_size)
     ml_cost = tf.reduce_sum(tg.seq_ml_cost)

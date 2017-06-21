@@ -30,13 +30,13 @@ class LSTMModule(object):
     if one_step:
       outputs, states = rnn_cell(inputs=inputs,
                                  state=rnn_tuple_state)
-
+      last_state = tf.stack([states[0], states[1]], axis=0, name='one_step_stack')
     else:
       outputs, states = tf.nn.dynamic_rnn(cell=rnn_cell,
                                           inputs=inputs,
                                           initial_state=rnn_tuple_state)
 #                                          time_major=True)
-    last_state = tf.stack([states[0], states[1]], axis=0)
+      last_state = tf.stack([states[0], states[1]], axis=0, name='dynamic_stack')
     return outputs, last_state
 
 class StackLSTMModule(object):
