@@ -9,7 +9,7 @@ from collections import OrderedDict
 from collections import namedtuple
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import skip_rnn_act_parallel, aggr_skip_rnn_act_parallel, aggr_ml_skip_rnn_act_parallel
+from mixer import skip_rnn_act_parallel, aggr_ml_skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_pred_idx
 from model import LinearCell
@@ -59,7 +59,6 @@ flags.DEFINE_boolean('use-baseline', True, '')
 tg_fields = ['seq_x_data',
              'seq_x_mask',
              'seq_y_data',
-             'init_state',
              'seq_action_data',
              'seq_action_mask',
              'seq_advantage',
@@ -76,8 +75,7 @@ sg_fields = ['step_x_data',
              'step_last_state',
              'step_label_probs',
              'step_action_probs',
-             'step_action_samples',
-             'action_entropy']
+             'step_action_samples']
 
 TrainGraph = namedtuple('TrainGraph', ' '.join(tg_fields))
 SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
@@ -102,11 +100,6 @@ def build_graph(args):
         seq_y_data = tf.placeholder(dtype=tf.int32,
                                     shape=(None, None),
                                     name='seq_y_data')
-
-        # Init state [2, batch_size, n_hidden]
-        init_state = tf.placeholder(dtype=tf.float32,
-                                    shape=(2, None, args.n_hidden),
-                                    name='init_state')
 
         # Action related data [batch_size, seq_len, ...]
         seq_action_data = tf.placeholder(dtype=tf.float32,
@@ -145,11 +138,11 @@ def build_graph(args):
         _label_logit = LinearCell(num_units=args.n_class)
 
     # Actioning Module (FF)
-    with tf.variable_scope('action'):
-        _action_logit0 = LinearCell(num_units=args.n_hidden*2, activation=tf.nn.relu)
+    with tf.variable_scope('action0'):
+        _action_logit0 = LinearCell(num_units=args.n_action, activation=tf.nn.relu)
 
-    with tf.variable_scope('action'):
-        _action_logit1 = LinearCell(num_units=args.n_action)
+    with tf.variable_scope('action1'):
+        _action_logit1 = LinearCell(num_units=args.n_action, activation=None)
 
     ##################
     # Sampling graph #
@@ -170,17 +163,16 @@ def build_graph(args):
     else:
         step_action_input = step_h_state
 
-    step_action_logits = _action_logit1(inputs=_action_logit0(inputs=step_action_input, scope='action_logit0'),
-                                        scope='action_logit1')
+    step_action_logits = _action_logit0(inputs=step_action_input,
+                                        scope='action_logit0')
+    step_action_logits += _action_logit1(inputs=step_action_logits,
+                                         scope='action_logit1')
 
     # Action probs
     step_action_probs = tf.nn.softmax(logits=step_action_logits)
 
     # Action sampling
     step_action_samples = Categorical(logits=step_action_logits).sample()
-
-    # Action probs entropy
-    step_action_entropy = categorical_ent(dist=step_action_probs)
 
     # Set sampling graph
     sample_graph = SampleGraph(step_x_data,
@@ -189,15 +181,14 @@ def build_graph(args):
                                step_last_state,
                                step_label_probs,
                                step_action_probs,
-                               step_action_samples,
-                               step_action_entropy)
+                               step_action_samples)
 
     ##################
     # Training graph #
     ##################
     # Recurrent update
     seq_h_state_3d, seq_last_state = _rnn(inputs=seq_x_data,
-                                          init_state=init_state,
+                                          init_state=tf.zeros(shape=(2, tf.shape(seq_x_data)[0], args.n_hidden)),
                                           one_step=False)
 
     # Label logits/probs
@@ -210,8 +201,11 @@ def build_graph(args):
                             tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])]
     else:
         seq_action_input = tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])
-    seq_action_logits = _action_logit1(inputs=_action_logit0(inputs=seq_action_input, scope='action_logit0'),
-                                       scope='action_logit1')
+
+    seq_action_logits = _action_logit0(inputs=seq_action_input,
+                                       scope='action_logit0')
+    seq_action_logits += _action_logit1(inputs=seq_action_logits,
+                                        scope='action_logit1')
     # Action probs
     seq_action_probs = tf.nn.softmax(logits=seq_action_logits)
 
@@ -219,7 +213,8 @@ def build_graph(args):
     seq_action_ent = categorical_ent(dist=seq_action_probs)*tf.reshape(seq_action_mask, [-1])
 
     # ML cost
-    seq_y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=FLAGS.n_class)
+    seq_y_1hot = tf.one_hot(indices=tf.reshape(seq_y_data, [-1]),
+                            depth=FLAGS.n_class)
     seq_ml_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_label_logits,
                                                           labels=seq_y_1hot)
     seq_ml_cost *= tf.reshape(seq_x_mask, [-1])
@@ -227,8 +222,7 @@ def build_graph(args):
     # RL cost
     seq_rl_cost = -tf.log(seq_action_probs+1e-8) * tf.reshape(seq_action_data, [-1, args.n_action])
     seq_rl_cost = tf.reduce_sum(seq_rl_cost, axis=-1)
-    seq_rl_cost *= tf.reshape(seq_advantage, [-1])
-    seq_rl_cost *= tf.reshape(seq_action_mask, [-1])
+    seq_rl_cost *= tf.reshape(seq_advantage, [-1]) * tf.reshape(seq_action_mask, [-1])
 
     # RL cost wo/ baseline
     seq_real_rl_cost = tf.reshape(seq_reward, [-1])*tf.reshape(seq_action_mask, [-1])
@@ -237,7 +231,6 @@ def build_graph(args):
     train_graph = TrainGraph(seq_x_data,
                              seq_x_mask,
                              seq_y_data,
-                             init_state,
                              seq_action_data,
                              seq_action_mask,
                              seq_advantage,
@@ -249,12 +242,6 @@ def build_graph(args):
                              seq_action_ent)
 
     return train_graph, sample_graph
-
-
-# Init state using zeros
-def initial_states(batch_size, n_hidden):
-    init_state = np.zeros([2, batch_size, n_hidden], dtype=np.float32)
-    return init_state
 
 
 # Main function
@@ -512,7 +499,6 @@ def main(_):
                                                 feed_dict={tg.seq_x_data: skip_x_data,
                                                            tg.seq_x_mask: skip_x_mask,
                                                            tg.seq_y_data: skip_y_data,
-                                                           tg.init_state: initial_states(batch_size, args.n_hidden),
                                                            tg.seq_action_data: skip_action_data,
                                                            tg.seq_action_mask: skip_action_mask,
                                                            tg.seq_advantage: skip_advantage,
@@ -553,9 +539,9 @@ def main(_):
                                                       tr_ent_summary,
                                                       tr_reward_summary,
                                                       tr_rw_hist_summary],
-                                                     feed_dict={tr_rl: (_tr_rl_cost.sum()*batch_size) / skip_action_mask.sum(),
+                                                     feed_dict={tr_rl: _tr_rl_cost.sum(),
                                                                 tr_image: result_image,
-                                                                tr_ent: (_tr_act_ent.sum()/ skip_action_mask.sum()),
+                                                                tr_ent: (_tr_act_ent.sum() / skip_action_mask.sum()),
                                                                 tr_reward: ((skip_rewards*skip_action_mask).sum()/skip_action_mask.sum()),
                                                                 tr_rw_hist: skip_rewards})
                     summary_writer.add_summary(_tr_rl_summary, global_step.eval())
@@ -577,8 +563,7 @@ def main(_):
                                                 tg.seq_label_logits],
                                                feed_dict={tg.seq_x_data: seq_x_data,
                                                           tg.seq_x_mask: seq_x_mask,
-                                                          tg.seq_y_data: seq_y_data,
-                                                          tg.init_state: initial_states(batch_size, args.n_hidden)})
+                                                          tg.seq_y_data: seq_y_data})
                     _tr_pred_full = np.reshape(_tr_pred_full.argmax(axis=1), seq_y_data.shape)
 
                     # Update history
@@ -589,7 +574,6 @@ def main(_):
                     tr_acc_count += seq_x_mask.sum()
 
                     skip_x_mask = seq_x_mask
-
 
                 ################
                 # Write result #
@@ -707,7 +691,6 @@ def main(_):
                                                  feed_dict={tg.seq_x_data: skip_x_data,
                                                             tg.seq_x_mask: skip_x_mask,
                                                             tg.seq_y_data: skip_y_data,
-                                                            tg.init_state: initial_states(batch_size, args.n_hidden),
                                                             tg.seq_action_data: skip_action_data,
                                                             tg.seq_action_mask: skip_action_mask,
                                                             tg.seq_advantage: skip_advantage,
@@ -748,10 +731,8 @@ def main(_):
                                                  tg.seq_label_logits],
                                                  feed_dict={tg.seq_x_data: seq_x_data,
                                                             tg.seq_x_mask: seq_x_mask,
-                                                            tg.seq_y_data: seq_y_data,
-                                                            tg.init_state: initial_states(batch_size, args.n_hidden)})
+                                                            tg.seq_y_data: seq_y_data})
                     _val_pred_full = np.reshape(_val_pred_full.argmax(axis=1), seq_y_data.shape)
-
 
                     # Update history
                     val_ce_sum += _val_ml_cost.sum()*batch_size

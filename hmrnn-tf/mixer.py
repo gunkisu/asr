@@ -1359,7 +1359,7 @@ def discount(x, gamma):
 
 # Shannon entropy for a paramaterized categorical distributions 
 def categorical_ent(dist): 
-    ent = -tf.reduce_sum(dist * tf.log(dist + 1e-8), axis=-1) 
+    ent = -tf.reduce_sum(dist * tf.log(dist + 1e-8), axis=-1)
     return ent
 
 def expand_pred_idx(actions_1hot, x_mask, pred_idx, n_batch, args):
