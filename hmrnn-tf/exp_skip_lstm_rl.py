@@ -137,8 +137,8 @@ def build_graph(args):
         _label_logit = LinearCell(num_units=args.n_class)
 
     # Actioning Module (FF)
-    with tf.variable_scope('action0'):
-        _action_logit0 = LinearCell(num_units=args.n_action, activation=tf.nn.relu)
+    # with tf.variable_scope('action0'):
+    #     _action_logit0 = LinearCell(num_units=args.n_action, activation=tf.nn.relu)
 
     with tf.variable_scope('action1'):
         _action_logit1 = LinearCell(num_units=args.n_action, activation=None)
@@ -162,10 +162,10 @@ def build_graph(args):
     else:
         step_action_input = step_h_state
 
-    step_action_logits = _action_logit0(inputs=step_action_input,
-                                        scope='action_logit0')
-    step_action_logits += _action_logit1(inputs=step_action_logits,
-                                         scope='action_logit1')
+    # step_action_logits = _action_logit0(inputs=step_action_input,
+    #                                     scope='action_logit0')
+    step_action_logits = _action_logit1(inputs=step_action_input,
+                                        scope='action_logit1')
 
     # Action probs
     step_action_probs = tf.nn.softmax(logits=step_action_logits)
@@ -201,10 +201,10 @@ def build_graph(args):
     else:
         seq_action_input = tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])
 
-    seq_action_logits = _action_logit0(inputs=seq_action_input,
-                                       scope='action_logit0')
-    seq_action_logits += _action_logit1(inputs=seq_action_logits,
-                                        scope='action_logit1')
+    # seq_action_logits = _action_logit0(inputs=seq_action_input,
+    #                                    scope='action_logit0')
+    seq_action_logits = _action_logit1(inputs=seq_action_input,
+                                       scope='action_logit1')
     # Action probs
     seq_action_probs = tf.nn.softmax(logits=seq_action_logits)
 
