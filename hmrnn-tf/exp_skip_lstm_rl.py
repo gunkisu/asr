@@ -307,7 +307,7 @@ def main(_):
 
     # Set model rl cost (sum over all and divide it by batch_size, also entropy cost)
     rl_cost = tg.seq_rl_cost - args.ent_weight*tg.seq_action_ent
-    rl_cost = tf.reduce_sum(rl_cost)/tf.reduce_sum(seq_action_mask)
+    rl_cost = tf.reduce_sum(rl_cost)/tf.reduce_sum(tg.seq_action_mask)
 
     # rl_cost /= tf.to_float(tf.shape(tg.seq_x_data)[0])
 
