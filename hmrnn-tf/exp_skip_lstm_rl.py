@@ -169,9 +169,8 @@ def build_graph(args):
         step_action_input = [step_x_data, step_h_state]
     else:
         step_action_input = step_h_state
-    step_action_logits = _action_logit0(inputs=step_action_input,
-                                        scope='action_logit0')
-    step_action_logits = _action_logit1(inputs=step_action_logits,
+
+    step_action_logits = _action_logit1(inputs=_action_logit0(inputs=step_action_input, scope='action_logit0'),
                                         scope='action_logit1')
 
     # Action probs
@@ -211,9 +210,7 @@ def build_graph(args):
                             tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])]
     else:
         seq_action_input = tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])
-    seq_action_logits = _action_logit0(inputs=seq_action_input,
-                                       scope='action_logit0')
-    seq_action_logits = _action_logit1(inputs=seq_action_logits,
+    seq_action_logits = _action_logit1(inputs=_action_logit0(inputs=seq_action_input, scope='action_logit0'),
                                        scope='action_logit1')
     # Action probs
     seq_action_probs = tf.nn.softmax(logits=seq_action_logits)
