@@ -229,6 +229,9 @@ def main(_):
   tg_rl_cost = tf.reduce_mean(tg.rl_cost) + tg.rl_ent_cost*args.ent_weight
   rl_grads = tf.gradients(tg_rl_cost, rl_vars)
   rl_op = rl_opt_func.apply_gradients(zip(rl_grads, rl_vars), global_step=global_step)
+  
+  tf.add_to_collection('fast_action', args.fast_action)
+  tf.add_to_collection('fast_action', args.n_fast_action)
 
   sync_data(args)
   datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
