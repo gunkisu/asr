@@ -21,8 +21,6 @@ import kaldi_io
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_integer('batch-size', 64, 'Size of mini-batch')
-flags.DEFINE_integer('n-fast-action', 10, 'Number of steps to skip in the fast action mode')
-flags.DEFINE_boolean('fast-action', False, 'If true, operate in the fast action mode')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_boolean('no-copy', True, '')
 flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
@@ -65,6 +63,8 @@ def main(_):
     step_x_data = sess.graph.get_tensor_by_name('step_x_data:0')
     prev_states = sess.graph.get_tensor_by_name('prev_states:0')
     step_last_state = sess.graph.get_tensor_by_name('one_step_stack:0')
+    fast_action, n_fast_action = sess.graph.get_collection('fast_action')
+    args.fast_action = fast_action; args.n_fast_action = n_fast_action
 
     sample_graph = SampleGraph(_step_label_probs, step_action_samples, step_action_probs, step_last_state, step_x_data, prev_states)
 
