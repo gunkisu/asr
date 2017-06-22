@@ -834,7 +834,6 @@ def aggr_ml_skip_rnn_act_parallel(x,
     new_y = np.zeros([max_seq_len, n_batch])
     actions = np.zeros([max_seq_len-1, n_batch, args.n_action])
     rewards = np.zeros([max_seq_len-1, n_batch])
-    action_entropies = np.zeros([max_seq_len-1, n_batch])
 
     # recording
     full_action_samples = np.zeros([max_seq_len, n_batch, args.n_action])
@@ -899,12 +898,10 @@ def aggr_ml_skip_rnn_act_parallel(x,
             [action_idx,
              step_action_prob_j,
              step_label_likelihood_j,
-             new_prev_state,
-             action_entropy] = sess.run([sample_graph.step_action_samples,
+             new_prev_state] = sess.run([sample_graph.step_action_samples,
                                          sample_graph.step_action_probs,
                                          sample_graph.step_label_probs,
-                                         sample_graph.step_last_state,
-                                         sample_graph.action_entropy],
+                                         sample_graph.step_last_state],
                                         feed_dict={sample_graph.step_x_data: _x_step,
                                                    sample_graph.prev_states: np.transpose(_prev_state, [1, 0, 2])})
 
@@ -915,7 +912,6 @@ def aggr_ml_skip_rnn_act_parallel(x,
             # fill read data
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
-            fill(action_entropies, action_entropy, target_indices, update_pos)
             fill(actions, action_one_hot, target_indices, update_pos)
 
             # update counter

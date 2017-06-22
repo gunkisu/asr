@@ -39,7 +39,6 @@ flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
 flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
 flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
 flags.DEFINE_boolean('parallel', True, 'If true, do parallel sampling')
-flags.DEFINE_boolean('aggr-reward', True, 'If true, use reward from FER within skimm')
 flags.DEFINE_boolean('fast-action', False, 'If true, operate in the fast action mode')
 flags.DEFINE_boolean('ref-input', False, 'If true, policy refers input')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
@@ -394,10 +393,7 @@ def main(_):
         val_fer_summary = tf.summary.scalar("valid_fer", val_fer)
 
     # Set module
-    if args.aggr_reward:
-      gen_episodes = aggr_ml_skip_rnn_act_parallel
-    else:
-      gen_episodes = skip_rnn_act_parallel
+    gen_episodes = aggr_ml_skip_rnn_act_parallel
 
     # Init session
     with tf.Session() as sess:
