@@ -803,14 +803,12 @@ def aggr_ml_skip_rnn_act_parallel(x,
                       new_y,
                       actions,
                       rewards,
-                      action_entropies,
                       new_x_mask,
                       new_reward_mask):
         return [np.transpose(new_x, [1,0,2]),
                 np.transpose(new_y, [1,0]),
                 np.transpose(actions, [1,0,2]),
                 np.transpose(rewards, [1,0]),
-                np.transpose(action_entropies, [1,0]),
                 np.transpose(new_x_mask, [1,0]),
                 np.transpose(new_reward_mask, [1,0])]
 
@@ -988,7 +986,6 @@ def aggr_ml_skip_rnn_act_parallel(x,
                          new_y[:max_seq_len],
                          actions[:max_seq_len-1],
                          rewards[:max_reward_seq_len],
-                         action_entropies[:max_seq_len-1],
                          mask,
                          reward_mask) + [output_image,]
 

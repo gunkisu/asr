@@ -298,7 +298,7 @@ def main(_):
 
     # Set optimizer
     ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-    rl_opt_func = tf.train.MomentumOptimizer(learning_rate=args.rl_learning_rate, momentum=0.9)
+    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.rl_learning_rate)
 
     # Set model ml cost (sum over all and divide it by batch_size)
     ml_cost = tf.reduce_sum(tg.seq_ml_cost)
@@ -307,9 +307,8 @@ def main(_):
 
     # Set model rl cost (sum over all and divide it by batch_size, also entropy cost)
     rl_cost = tg.seq_rl_cost - args.ent_weight*tg.seq_action_ent
-    rl_cost = tf.reduce_sum(rl_cost)/tf.reduce_sum(tg.seq_action_mask)
-
-    # rl_cost /= tf.to_float(tf.shape(tg.seq_x_data)[0])
+    rl_cost = tf.reduce_sum(rl_cost)
+    rl_cost /= tf.to_float(tf.shape(tg.seq_x_data)[0])
 
     # Set model rl cost (sum over all and divide it by batch_size, also entropy cost)
     real_rl_cost = tf.reduce_sum(tg.seq_real_rl_cost)
@@ -471,7 +470,6 @@ def main(_):
                      skip_y_data,
                      skip_action_data,
                      skip_rewards,
-                     skip_action_ent,
                      skip_x_mask,
                      skip_action_mask,
                      result_image] = gen_episodes(x=seq_x_data,
@@ -537,7 +535,7 @@ def main(_):
                     tr_ent_sum += _tr_act_ent.sum()
                     tr_ent_count += skip_action_mask.sum()
 
-                    tr_reward_sum += skip_rewards.sum()
+                    tr_reward_sum += (skip_rewards*skip_action_mask).sum()
                     tr_reward_count += skip_action_mask.sum()
 
                     ################
@@ -555,7 +553,7 @@ def main(_):
                                                      feed_dict={tr_rl: (_tr_rl_cost.sum()*batch_size) / skip_action_mask.sum(),
                                                                 tr_image: result_image,
                                                                 tr_ent: (_tr_act_ent.sum()/ skip_action_mask.sum()),
-                                                                tr_reward: (skip_rewards.sum()/skip_action_mask.sum()),
+                                                                tr_reward: ((skip_rewards*skip_action_mask).sum()/skip_action_mask.sum()),
                                                                 tr_rw_hist: skip_rewards})
                     summary_writer.add_summary(_tr_rl_summary, global_step.eval())
                     summary_writer.add_summary(_tr_image_summary, global_step.eval())
@@ -671,7 +669,6 @@ def main(_):
                      skip_y_data,
                      skip_action_data,
                      skip_rewards,
-                     skip_action_ent,
                      skip_x_mask,
                      skip_action_mask,
                      result_image] = gen_episodes(x=seq_x_data,
@@ -733,7 +730,7 @@ def main(_):
                     val_ent_sum += _val_action_ent.sum()
                     val_ent_count += skip_action_mask.sum()
 
-                    val_reward_sum += skip_rewards.sum()
+                    val_reward_sum += (skip_rewards*skip_action_mask).sum()
                     val_reward_count += skip_action_mask.sum()
                 else:
                     # Number of samples
