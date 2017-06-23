@@ -526,7 +526,7 @@ def fill_ml_aggr_reward(reward_list,
         # else: aggr_reward = -np.square(aggr_reward)
 
         # Save rewards
-        reward_list[reward_update_pos[idx], idx] = aggr_reward/len(true_label)
+        reward_list[reward_update_pos[idx], idx] = aggr_reward
         reward_target_indices.append(idx)
 
     return reward_target_indices
@@ -800,19 +800,6 @@ def aggr_ml_skip_rnn_act_parallel(x,
                                   sess,
                                   sample_graph,
                                   args):
-    def transpose_all(new_x,
-                      new_y,
-                      actions,
-                      rewards,
-                      new_x_mask,
-                      new_reward_mask):
-        return [np.transpose(new_x, [1,0,2]),
-                np.transpose(new_y, [1,0]),
-                np.transpose(actions, [1,0,2]),
-                np.transpose(rewards, [1,0]),
-                np.transpose(new_x_mask, [1,0]),
-                np.transpose(new_reward_mask, [1,0])]
-
     """Sampling episodes using Skip-RNN"""
 
     # x shape is [time_step, batch_size, features]
@@ -979,10 +966,23 @@ def aggr_ml_skip_rnn_act_parallel(x,
                                                    np.zeros_like(full_action_probs),
                                                    full_action_probs], axis=-1)],
                                   axis=1)
+    def transpose_all(new_x,
+                      new_y,
+                      actions,
+                      rewards,
+                      new_x_mask,
+                      new_reward_mask):
+        return [np.transpose(new_x, [1, 0, 2]),
+                np.transpose(new_y, [1, 0]),
+                np.transpose(actions, [1, 0, 2]),
+                np.transpose(rewards, [1, 0]),
+                np.transpose(new_x_mask, [1, 0]),
+                np.transpose(new_reward_mask, [1, 0])]
+
     return transpose_all(new_x[:max_seq_len],
                          new_y[:max_seq_len],
                          actions[:max_seq_len-1],
-                         rewards[:max_reward_seq_len],
+                         rewards[:max_seq_len-1],
                          mask,
                          reward_mask) + [output_image,]
 

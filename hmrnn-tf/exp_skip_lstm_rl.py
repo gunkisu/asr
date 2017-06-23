@@ -9,7 +9,7 @@ from collections import OrderedDict
 from collections import namedtuple
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import skip_rnn_act_parallel, aggr_ml_skip_rnn_act_parallel
+from mixer import aggr_ml_skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_pred_idx
 from model import LinearCell
@@ -17,8 +17,6 @@ from model import LSTMModule
 
 from data.fuel_utils import create_ivector_datastream
 from libs.utils import sync_data, StopWatch
-
-from tensorflow.contrib.distributions import Categorical
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -134,14 +132,11 @@ def build_graph(args):
 
     # Labelling Module (FF)
     with tf.variable_scope('label'):
-        _label_logit = LinearCell(num_units=args.n_class)
+        _label_logit = LinearCell(num_units=args.n_class, activation=None)
 
     # Actioning Module (FF)
-    # with tf.variable_scope('action0'):
-    #     _action_logit0 = LinearCell(num_units=args.n_action, activation=tf.nn.relu)
-
-    with tf.variable_scope('action1'):
-        _action_logit1 = LinearCell(num_units=args.n_action, activation=None)
+    with tf.variable_scope('action'):
+        _action_logit = LinearCell(num_units=args.n_action, activation=None)
 
     ##################
     # Sampling graph #
@@ -161,17 +156,14 @@ def build_graph(args):
         step_action_input = [step_x_data, step_h_state]
     else:
         step_action_input = step_h_state
-
-    # step_action_logits = _action_logit0(inputs=step_action_input,
-    #                                     scope='action_logit0')
-    step_action_logits = _action_logit1(inputs=step_action_input,
-                                        scope='action_logit1')
+    step_action_logits = _action_logit(inputs=step_action_input,
+                                       scope='action_logit')
 
     # Action probs
     step_action_probs = tf.nn.softmax(logits=step_action_logits)
 
     # Action sampling
-    step_action_samples = Categorical(logits=step_action_logits).sample()
+    step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1)
 
     # Set sampling graph
     sample_graph = SampleGraph(step_x_data,
@@ -186,8 +178,9 @@ def build_graph(args):
     # Training graph #
     ##################
     # Recurrent update
+    init_state = tf.zeros(shape=(2, tf.shape(seq_x_data)[0], args.n_hidden))
     seq_h_state_3d, seq_last_state = _rnn(inputs=seq_x_data,
-                                          init_state=tf.zeros(shape=(2, tf.shape(seq_x_data)[0], args.n_hidden)),
+                                          init_state=init_state,
                                           one_step=False)
 
     # Label logits/probs
@@ -200,25 +193,22 @@ def build_graph(args):
                             tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])]
     else:
         seq_action_input = tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])
-
-    # seq_action_logits = _action_logit0(inputs=seq_action_input,
-    #                                    scope='action_logit0')
-    seq_action_logits = _action_logit1(inputs=seq_action_input,
-                                       scope='action_logit1')
+    seq_action_logits = _action_logit(inputs=seq_action_input,
+                                      scope='action_logit')
     # Action probs
     seq_action_probs = tf.nn.softmax(logits=seq_action_logits)
 
     # Action entropy
     seq_action_ent = categorical_ent(dist=seq_action_probs)*tf.reshape(seq_action_mask, [-1])
 
-    # ML cost
+    # ML cost (logP(label))
     seq_y_1hot = tf.one_hot(indices=tf.reshape(seq_y_data, [-1]),
                             depth=FLAGS.n_class)
     seq_ml_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_label_logits,
                                                           labels=seq_y_1hot)
     seq_ml_cost *= tf.reshape(seq_x_mask, [-1])
 
-    # RL cost
+    # RL cost (logP(action)*reward)
     seq_rl_cost = -tf.log(seq_action_probs+1e-8) * tf.reshape(seq_action_data, [-1, args.n_action])
     seq_rl_cost = tf.reduce_sum(seq_rl_cost, axis=-1)
     seq_rl_cost *= tf.reshape(seq_advantage, [-1]) * tf.reshape(seq_action_mask, [-1])
@@ -474,7 +464,7 @@ def main(_):
                                                                           args=args,
                                                                           final_cost=args.use_final_reward)
 
-                    if args.use_baseline:
+                    if args.use_baseline is False:
                         skip_advantage = skip_disc_rewards
 
                     ##################
@@ -670,7 +660,7 @@ def main(_):
                                                                           args=args,
                                                                           final_cost=args.use_final_reward)
 
-                    if args.use_baseline:
+                    if args.use_baseline is False:
                         skip_advantage = skip_disc_rewards
 
                     #################
