@@ -504,7 +504,7 @@ def fill_ml_aggr_reward(reward_list,
 
         # Get previous likelihood
         likelihood = prev_likelihood_list[idx]
-        pred_idx = true_label[0] #likelihood.argmax()
+        # pred_idx = likelihood.argmax() # true_label[0]
 
         if likelihood.sum() < 0.99:
             print(likelihood.sum())
@@ -513,19 +513,20 @@ def fill_ml_aggr_reward(reward_list,
         # compute aggr_reward
         aggr_reward = 0.0
         # For each label
-        for l in true_label[1:]:
-            if pred_idx == l:
-                aggr_reward += 1.
-            else:
-                break
-            # aggr_reward += np.log(likelihood[l])
-        action_size = (cur_step_idx-prev_step_idx)
-        aggr_reward = aggr_reward - (action_size-aggr_reward)
-        if aggr_reward > 0.:  aggr_reward = np.square(aggr_reward)
-        else: aggr_reward = -np.square(aggr_reward)
+        # for l in true_label[1:]:
+        for l in true_label:
+            # if pred_idx == l:
+            #     aggr_reward += 1.
+            # else:
+            #     break
+            aggr_reward += np.log(likelihood[l] + 1e-8)
+        # action_size = (cur_step_idx-prev_step_idx)
+        # aggr_reward = aggr_reward - (action_size-aggr_reward)
+        # if aggr_reward > 0.:  aggr_reward = np.square(aggr_reward)
+        # else: aggr_reward = -np.square(aggr_reward)
 
         # Save rewards
-        reward_list[reward_update_pos[idx], idx] = aggr_reward
+        reward_list[reward_update_pos[idx], idx] = aggr_reward/len(true_label)
         reward_target_indices.append(idx)
 
     return reward_target_indices
