@@ -237,9 +237,11 @@ def build_graph(args):
 def expand_pred_idx(seq_skip_1hot,
                     seq_skip_mask,
                     seq_prd_idx,
-                    expand_shape):
+                    seq_x_mask):
     # Init output
-    expand_output = np.zeros(shape=expand_shape)
+    expand_output = np.zeros_like(seq_x_mask)
+
+    sample_seq_len = seq_x_mask.sum(axis=1)
 
     # Get Step size
     seq_skip_step = np.argmax(seq_skip_1hot, axis=2) + 1
@@ -254,7 +256,10 @@ def expand_pred_idx(seq_skip_1hot,
                 end_idx = start_idx + s
             else:
                 end_idx = start_idx + 1
-            assert end_idx<expand_output.shape[1]
+
+            if sample_seq_len[i] < end_idx:
+                end_idx = sample_seq_len[i]
+
             expand_output[i, start_idx:end_idx] = p
             start_idx = end_idx
 
