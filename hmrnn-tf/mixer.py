@@ -1066,9 +1066,11 @@ def improve_skip_rnn_act_parallel(seq_x_data,
             [action_idx,
              action_prob,
              label_prob,
+             h_state,
              update_state] = sess.run([sample_graph.step_action_samples,
                                        sample_graph.step_action_probs,
                                        sample_graph.step_label_probs,
+                                       sample_graph.step_h_state,
                                        sample_graph.step_last_state],
                                       feed_dict={sample_graph.step_x_data: read_x_data,
                                                  sample_graph.prev_states: np.transpose(read_states, [1, 0, 2])})
@@ -1083,7 +1085,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                 skip_x_data[t, idx] = read_x_data[i]
                 skip_x_mask[t, idx] = 1.0
                 skip_y_data[t, idx] = read_y_data[i]
-                skip_h_data[t, idx] = update_state[i]
+                skip_h_data[t, idx] = h_state[i]
 
                 # Update previous state
                 prev_states[idx] = update_state[i]
