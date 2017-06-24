@@ -10,7 +10,7 @@ from collections import namedtuple
 from mixer import insert_item2dict
 from mixer import save_npz2
 from mixer import improve_skip_rnn_act_parallel
-from mixer import LinearVF, compute_advantage
+from mixer import LinearVF, discount
 from mixer import categorical_ent
 from model import LinearCell
 from model import LSTMModule
@@ -259,6 +259,56 @@ def expand_pred_idx(seq_skip_1hot,
             start_idx = end_idx
 
     return expand_output
+
+def compute_advantage(seq_h_data,
+                      seq_r_data,
+                      seq_r_mask,
+                      vf,
+                      args,
+                      final_cost=False):
+    discounted_rewards = []
+
+    # For each sample data
+    for reward, mask in zip(seq_r_data, seq_r_mask):
+        # Collect rewards
+        reward_val = []
+        reward_pos = []
+        for i, r in enumerate(reward):
+            if mask:
+                reward_val.append(r)
+                reward_pos.append(i)
+
+        # Compute discounted reward
+        discounted_reward_val = discount(np.array(reward_val), args.discount_gamma)
+
+        # If using only final reward
+        if final_cost:
+            discounted_reward_val = np.ones_like(discounted_reward_val)*discounted_reward_val[0]
+
+        # Put reward value to right position
+        reward_val = np.ones_like(reward)
+        for i, r in zip(reward_pos, discounted_reward_val):
+            reward_val[i] = r
+        discounted_rewards.append(reward_val)
+    discounted_rewards = np.array(discounted_rewards)
+    # Compute baseline
+    seq_h_data_1d = seq_h_data.reshape([-1, seq_h_data.shape[2]])
+    baseline_1d = vf.predict(seq_h_data_1d)
+    baseline_2d = baseline_1d.reshape([seq_h_data.shape[0], -1]) * seq_r_mask
+
+    # Compute modified reward based on baseline
+    advantages = discounted_rewards - baseline_2d
+    mean_advantages = np.mean(advantages*seq_r_mask)
+    std_advantages = np.std(advantages*seq_r_mask)
+    advantages = ((advantages - mean_advantages) / (std_advantages+1e-8)) * seq_r_mask
+
+    valid_idx = np.where(seq_r_mask==1.)
+    valid_h = seq_h_data[valid_idx]
+    valid_r = discounted_rewards[valid_idx]
+
+    vf.fit(valid_h, valid_r)
+
+    return advantages, discounted_rewards
 
 # Main function
 def main(_):
