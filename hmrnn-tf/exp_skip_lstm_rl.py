@@ -9,7 +9,7 @@ from collections import OrderedDict
 from collections import namedtuple
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import aggr_ml_skip_rnn_act_parallel
+from mixer import improve_skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_pred_idx
 from model import LinearCell
@@ -31,13 +31,14 @@ flags.DEFINE_integer('n-input', 123, 'Number of RNN hidden units')
 flags.DEFINE_integer('n-hidden', 1024, 'Number of RNN hidden units')
 flags.DEFINE_integer('n-class', 3436, 'Number of target symbols')
 flags.DEFINE_integer('n-action', 3, 'Number of actions (max skim size)')
-flags.DEFINE_integer('n-fast-action', 10, 'Number of steps to skip in the fast action mode')
+flags.DEFINE_integer('min-read', 3, 'Number of min read after skip done')
+# flags.DEFINE_integer('n-fast-action', 10, 'Number of steps to skip in the fast action mode')
 flags.DEFINE_integer('base-seed', 20170309, 'Base random seed')
 flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
 flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
 flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
-flags.DEFINE_boolean('parallel', True, 'If true, do parallel sampling')
-flags.DEFINE_boolean('fast-action', False, 'If true, operate in the fast action mode')
+# flags.DEFINE_boolean('parallel', True, 'If true, do parallel sampling')
+# flags.DEFINE_boolean('fast-action', False, 'If true, operate in the fast action mode')
 flags.DEFINE_boolean('ref-input', False, 'If true, policy refers input')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
@@ -189,10 +190,10 @@ def build_graph(args):
 
     # Action logits
     if FLAGS.ref_input:
-        seq_action_input = [tf.reshape(seq_x_data[:, :-1, :], [-1, args.n_input]),
-                            tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])]
+        seq_action_input = [tf.reshape(seq_x_data, [-1, args.n_input]),
+                            tf.reshape(seq_h_state_3d, [-1, args.n_hidden])]
     else:
-        seq_action_input = tf.reshape(seq_h_state_3d[:, :-1, :], [-1, args.n_hidden])
+        seq_action_input = tf.reshape(seq_h_state_3d, [-1, args.n_hidden])
     seq_action_logits = _action_logit(inputs=seq_action_input,
                                       scope='action_logit')
     # Action probs
@@ -383,7 +384,7 @@ def main(_):
         val_fer_summary = tf.summary.scalar("valid_fer", val_fer)
 
     # Set module
-    gen_episodes = aggr_ml_skip_rnn_act_parallel
+    gen_episodes = improve_skip_rnn_act_parallel
 
     # Init session
     with tf.Session() as sess:
@@ -443,14 +444,14 @@ def main(_):
                     batch_size = seq_x_data.shape[1]
                     # Sample actions (episode generation)
                     [skip_x_data,
+                     skip_x_mask,
                      skip_y_data,
                      skip_action_data,
-                     skip_rewards,
-                     skip_x_mask,
                      skip_action_mask,
-                     result_image] = gen_episodes(x=seq_x_data,
-                                                  x_mask=seq_x_mask,
-                                                  y=seq_y_data,
+                     skip_rewards,
+                     result_image] = gen_episodes(seq_x_data=seq_x_data,
+                                                  seq_x_mask=seq_x_mask,
+                                                  seq_y_data=seq_y_data,
                                                   sess=sess,
                                                   sample_graph=sg,
                                                   args=args)
@@ -639,14 +640,14 @@ def main(_):
 
                     # Sample actions (episode generation)
                     [skip_x_data,
+                     skip_x_mask,
                      skip_y_data,
                      skip_action_data,
-                     skip_rewards,
-                     skip_x_mask,
                      skip_action_mask,
-                     result_image] = gen_episodes(x=seq_x_data,
-                                                  x_mask=seq_x_mask,
-                                                  y=seq_y_data,
+                     skip_rewards,
+                     result_image] = gen_episodes(seq_x_data=seq_x_data,
+                                                  seq_x_mask=seq_x_mask,
+                                                  seq_y_data=seq_y_data,
                                                   sess=sess,
                                                   sample_graph=sg,
                                                   args=args)

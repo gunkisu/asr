@@ -986,6 +986,243 @@ def aggr_ml_skip_rnn_act_parallel(x,
                          mask,
                          reward_mask) + [output_image,]
 
+def improve_skip_rnn_act_parallel(seq_x_data,
+                                  seq_x_mask,
+                                  seq_y_data,
+                                  sess,
+                                  sample_graph,
+                                  args):
+    # Get input sequence size
+    max_seq_len, batch_size, feat_size = seq_x_data.shape
+
+    # Get sample wise sequence len
+    sample_seq_len = seq_x_mask.sum(axis=0)
+
+    # Init previous state
+    prev_states = np.zeros(shape=(batch_size, 2, args.n_hidden))
+
+    # Init read counter
+    read_cnt = [args.min_read] * batch_size
+
+    # Init skip counter
+    skip_cnt = [0] * batch_size
+
+    # Init sample update position
+    update_pos = [0] * batch_size
+
+    # Init last action step
+    last_action_pos = [-1] * batch_size
+    last_action_org_pos = [-1] * batch_size
+
+    # Init previous action label prob
+    prev_action_label_prb = np.zeros(shape=(batch_size, args.n_class))
+
+    # Init skipped sequence
+    skip_x_data = np.zeros(shape=(max_seq_len, batch_size, feat_size))
+    skip_x_mask = np.zeros(shape=(max_seq_len, batch_size))
+    skip_y_data = np.zeros(shape=(max_seq_len, batch_size))
+    skip_a_data = np.zeros(shape=(max_seq_len, batch_size, args.n_action))
+    skip_a_mask = np.zeros(shape=(max_seq_len, batch_size))
+    skip_r_data = np.zeros(shape=(max_seq_len, batch_size))
+
+    # Init for logging
+    log_read_flag = np.zeros(shape=(max_seq_len, batch_size))
+    log_skip_flag = np.zeros(shape=(max_seq_len, batch_size))
+    log_action_flag = np.zeros(shape=(max_seq_len, batch_size))
+    log_action_idx = np.zeros(shape=(max_seq_len, batch_size, args.n_action))
+    log_action_prb = np.zeros(shape=(max_seq_len, batch_size, args.n_action))
+
+    # For each step (time step j)
+    for j, (step_x_data, step_x_mask, step_y_data) in enumerate(itertools.izip(seq_x_data, seq_x_mask, seq_y_data)):
+        read_data_idx = []
+        skip_data_idx = []
+
+        # For each sample
+        for i in range(batch_size):
+            # If step is available
+            if step_x_mask[i] == 0:
+                continue
+
+            # Get sample idx to read
+            if read_cnt[i] > 0:
+                assert skip_cnt[i] == 0
+                read_data_idx.append(i)
+
+            # Get sample idx to skip
+            else:
+                assert read_cnt[i] == 0
+                skip_data_idx.append(i)
+
+        # To read (update and sample)
+        if len(read_data_idx) > 0:
+            # Get data to read
+            read_x_data = np.asarray([step_x_data[i] for i in read_data_idx])
+            read_y_data = np.asarray([step_y_data[i] for i in read_data_idx])
+            read_states = np.asarray([prev_states[i] for i in read_data_idx])
+
+            # Update states and sample action
+            [action_idx,
+             action_prob,
+             label_prob,
+             update_state] = sess.run([sample_graph.step_action_samples,
+                                       sample_graph.step_action_probs,
+                                       sample_graph.step_label_probs,
+                                       sample_graph.step_last_state],
+                                      feed_dict={sample_graph.step_x_data: read_x_data,
+                                                 sample_graph.prev_states: np.transpose(read_states, [1, 0, 2])})
+            update_state = np.transpose(update_state, (1, 0, 2))
+
+            # For each read data
+            for i, idx in enumerate(read_data_idx):
+                # Get position
+                t = update_pos[idx]
+
+                # Put into new sequence
+                skip_x_data[t, idx] = read_x_data[i]
+                skip_x_mask[t, idx] = 1.0
+                skip_y_data[t, idx] = read_y_data[i]
+
+                # Update previous state
+                prev_states[idx] = update_state[i]
+
+                # If action is sampled
+                if read_cnt[idx] == 1:
+                    # Update action data
+                    skip_a_data[t, idx, action_idx[i]] = 1.0
+                    skip_a_mask[t, idx] = 1.0
+
+                    # Update skip cnt
+                    skip_cnt[idx] = action_idx[i] + 1
+
+                    # Update sample position
+                    last_action_pos[idx] = t
+                    last_action_org_pos[idx] = j
+
+                    # Update label prob
+                    prev_action_label_prb[idx] = label_prob[i]
+
+                    # For log
+                    log_action_idx[j, idx, action_idx[i]] = 1.0
+                    log_action_prb[j, idx] = action_prob[i]
+                    log_action_flag[j, idx] = 1.0
+
+                # Reduce read counter
+                read_cnt[idx] -= 1
+
+                # Move position
+                update_pos[idx] += 1
+
+                # For read flag
+                log_read_flag[j, idx] = 1.0
+
+        # To skip (compute reward and reset)
+        if len(skip_data_idx) > 0:
+
+            # For each data skipped
+            for idx in skip_data_idx:
+
+                # If skip is the last one or the sequence is the last, and need to compute reward
+                if skip_cnt[idx] == 1 or sample_seq_len[idx]-1 == j:
+                    # Get action position
+                    action_start_pos = last_action_org_pos[idx]
+                    action_end_pos = j
+
+                    # action size
+                    skip_size = action_end_pos - action_start_pos
+
+                    prd_label = seq_y_data[action_start_pos, idx]
+
+                    match_cnt = 0.0
+                    for l in seq_y_data[action_start_pos+1:(action_end_pos+1)]:
+                        if l == prd_label:
+                            match_cnt += 1
+                        else:
+                            break
+
+                    wrong_cnt = skip_size-match_cnt
+
+                    if match_cnt>wrong_cnt:
+                        reward = match_cnt * match_cnt
+                    else:
+                        reward = - (wrong_cnt * wrong_cnt)
+
+                    # Save reward
+                    skip_r_data[last_action_pos[idx], idx] = reward
+
+                    # Set read
+                    read_cnt[idx] = args.min_read
+
+                # Reduce skip counter
+                skip_cnt[idx] -= 1
+
+                # For skip flag
+                log_skip_flag[j, idx] = 1.0
+
+    # Make visual image
+    log_action_idx = np.transpose(log_action_idx, [1, 2, 0])
+    log_action_idx = np.expand_dims(log_action_idx, axis=-1)
+    log_action_idx = np.repeat(log_action_idx, repeats=5, axis=1)
+    log_action_idx = np.repeat(log_action_idx, repeats=5, axis=2)
+
+    log_action_prb = np.transpose(log_action_prb, [1, 2, 0])
+    log_action_prb = np.expand_dims(log_action_prb, axis=-1)
+    log_action_prb = np.repeat(log_action_prb, repeats=5, axis=1)
+    log_action_prb = np.repeat(log_action_prb, repeats=5, axis=2)
+
+    log_label_data = np.expand_dims(seq_y_data, axis=-1)
+    log_label_data = np.transpose(log_label_data, [1, 2, 0])
+    log_label_data = np.expand_dims(log_label_data, axis=-1)
+    log_label_data = np.repeat(log_label_data, repeats=5, axis=1)
+    log_label_data = np.repeat(log_label_data, repeats=5, axis=2).astype(np.float32)
+    log_label_data /= float(args.n_class)
+
+    log_read_flag = np.expand_dims(log_read_flag, axis=-1)
+    log_read_flag = np.transpose(log_read_flag, [1, 2, 0])
+    log_read_flag = np.expand_dims(log_read_flag, axis=-1)
+    log_read_flag = np.repeat(log_read_flag, repeats=5, axis=1)
+    log_read_flag = np.repeat(log_read_flag, repeats=5, axis=2).astype(np.float32)
+
+    log_skip_flag = np.expand_dims(log_skip_flag, axis=-1)
+    log_skip_flag = np.transpose(log_skip_flag, [1, 2, 0])
+    log_skip_flag = np.expand_dims(log_skip_flag, axis=-1)
+    log_skip_flag = np.repeat(log_skip_flag, repeats=5, axis=1)
+    log_skip_flag = np.repeat(log_skip_flag, repeats=5, axis=2).astype(np.float32)
+
+    log_action_flag = np.expand_dims(log_action_flag, axis=-1)
+    log_action_flag = np.transpose(log_action_flag, [1, 2, 0])
+    log_action_flag = np.expand_dims(log_action_flag, axis=-1)
+    log_action_flag = np.repeat(log_action_flag, repeats=5, axis=1)
+    log_action_flag = np.repeat(log_action_flag, repeats=5, axis=2).astype(np.float32)
+
+    # stack
+    output_image = np.concatenate([np.concatenate([log_label_data,
+                                                   np.zeros_like(log_label_data),
+                                                   np.zeros_like(log_label_data)], axis=-1),
+                                   np.concatenate([log_read_flag,
+                                                   log_read_flag,
+                                                   log_read_flag], axis=-1),
+                                   np.concatenate([log_skip_flag,
+                                                   log_skip_flag,
+                                                   log_skip_flag], axis=-1),
+                                   np.concatenate([log_action_flag,
+                                                   log_action_flag,
+                                                   log_action_flag], axis=-1),
+                                   np.concatenate([np.zeros_like(log_action_idx),
+                                                   log_action_idx,
+                                                   np.zeros_like(log_action_idx)], axis=-1),
+                                   np.concatenate([np.zeros_like(log_action_prb),
+                                                   np.zeros_like(log_action_prb),
+                                                   log_action_prb], axis=-1)],
+                                  axis=1)
+    max_seq_len = max(skip_x_mask.sum(axis=0))
+
+    return [skip_x_data[:max_seq_len].transpose([1, 0, 2]),
+            skip_x_mask[:max_seq_len].transpose([1, 0]),
+            skip_y_data[:max_seq_len].transpose([1, 0]),
+            skip_a_data[:max_seq_len].transpose([1, 0, 2]),
+            skip_a_mask[:max_seq_len].transpose([1, 0]),
+            skip_r_data[:max_seq_len].transpose([1, 0]),
+            output_image]
 
 def skip_rnn_act_parallel(x,
                           x_mask,
