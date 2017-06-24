@@ -266,11 +266,6 @@ def expand_pred_idx(seq_skip_1hot,
 
             expand_output[i, start_idx:end_idx] = p
             start_idx = end_idx
-    print(seq_skip_step[0])
-    print(seq_skip_mask[0])
-    print(seq_prd_idx[0])
-    print(expand_output[0])
-    raw_input()
 
     return expand_output
 
@@ -531,11 +526,14 @@ def main(_):
                                                            tg.seq_advantage: skip_advantage,
                                                            tg.seq_reward: skip_disc_rewards})
 
+                    seq_x_mask = np.transpose(seq_x_mask, (1, 0))
+                    seq_y_data = np.transpose(seq_y_data, (1, 0))
+
                     # Get full sequence prediction
                     _tr_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
                                                     seq_skip_mask=skip_action_mask,
                                                     seq_prd_idx=_tr_pred_logit.reshape([batch_size, -1, args.n_class]).argmax(axis=2),
-                                                    seq_x_mask=np.transpose(seq_x_mask, (1, 0)))
+                                                    seq_x_mask=seq_x_mask)
 
                     # Update history
                     tr_ce_sum += _tr_ml_cost.sum() * batch_size
@@ -722,11 +720,14 @@ def main(_):
                                                             tg.seq_advantage: skip_advantage,
                                                             tg.seq_reward: skip_disc_rewards})
 
+                    seq_x_mask = np.transpose(seq_x_mask, (1, 0))
+                    seq_y_data = np.transpose(seq_y_data, (1, 0))
+
                     # Get full sequence prediction
                     _val_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
                                                      seq_skip_mask=skip_action_mask,
                                                      seq_prd_idx=_val_pred_logit.reshape([batch_size, -1, args.n_class]).argmax(axis=2),
-                                                     seq_x_mask=np.transpose(seq_x_mask, (1, 0)))
+                                                     seq_x_mask=seq_x_mask)
 
                     # Update history
                     val_ce_sum += _val_ml_cost.sum() * batch_size
