@@ -204,7 +204,7 @@ def build_graph(args):
 
     # ML cost (logP(label))
     seq_y_1hot = tf.one_hot(indices=tf.reshape(seq_y_data, [-1]),
-                            depth=FLAGS.n_class)
+                            depth=args.n_class)
     seq_ml_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_label_logits,
                                                           labels=seq_y_1hot)
     seq_ml_cost *= tf.reshape(seq_x_mask, [-1])
@@ -519,7 +519,7 @@ def main(_):
                     # Get full sequence prediction
                     _tr_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
                                                     seq_skip_mask=skip_action_mask,
-                                                    seq_prd_idx=_tr_pred_logit.argmax(axis=2),
+                                                    seq_prd_idx=_tr_pred_logit.reshape([batch_size, -1, args.n_class]).argmax(axis=2),
                                                     expand_shape=seq_y_data.shape)
 
                     # Update history
@@ -710,7 +710,7 @@ def main(_):
                     # Get full sequence prediction
                     _val_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
                                                      seq_skip_mask=skip_action_mask,
-                                                     seq_prd_idx=_val_pred_logit.argmax(axis=2),
+                                                     seq_prd_idx=_val_pred_logit.reshape([batch_size, -1, args.n_class]).argmax(axis=2),
                                                      expand_shape=seq_y_data.shape)
 
                     # Update history
