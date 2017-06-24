@@ -11,7 +11,7 @@ from mixer import insert_item2dict
 from mixer import save_npz2
 from mixer import improve_skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
-from mixer import categorical_ent, expand_pred_idx
+from mixer import categorical_ent
 from model import LinearCell
 from model import LSTMModule
 
@@ -233,6 +233,31 @@ def build_graph(args):
 
     return train_graph, sample_graph
 
+
+def expand_pred_idx(seq_skip_1hot,
+                    seq_skip_mask,
+                    seq_prd_idx,
+                    expand_shape):
+    # Init output
+    expand_output = np.zeros(shape=expand_shape)
+
+    # Get Step size
+    seq_skip_step = np.argmax(seq_skip_1hot, axis=2) + 1
+
+    # For each data
+    for i, (skip_step, skip_mask, prd_idx) in enumerate(zip(seq_skip_step, seq_skip_mask, seq_prd_idx)):
+
+        # For each step
+        start_idx = 0
+        for s, m, p in zip(skip_step, skip_mask, prd_idx):
+            if m:
+                end_idx = start_idx + m
+            else:
+                end_idx = start_idx + 1
+            expand_output[i, start_idx:end_idx] = p
+            start_idx = end_idx
+
+    return expand_output
 
 # Main function
 def main(_):
@@ -492,11 +517,10 @@ def main(_):
                                                            tg.seq_reward: skip_disc_rewards})
 
                     # Get full sequence prediction
-                    _tr_pred_full = expand_pred_idx(actions_1hot=skip_action_data,
-                                                    x_mask=seq_x_mask,
-                                                    pred_idx=_tr_pred_logit.argmax(axis=1),
-                                                    n_batch=batch_size,
-                                                    args=args)
+                    _tr_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
+                                                    seq_skip_mask=skip_action_mask,
+                                                    seq_prd_idx=_tr_pred_logit.argmax(axis=1),
+                                                    expand_shape=seq_y_data.shape)
 
                     # Update history
                     tr_ce_sum += _tr_ml_cost.sum() * batch_size
@@ -684,11 +708,10 @@ def main(_):
                                                             tg.seq_reward: skip_disc_rewards})
 
                     # Get full sequence prediction
-                    _val_pred_full = expand_pred_idx(actions_1hot=skip_action_data,
-                                                     x_mask=seq_x_mask,
-                                                     pred_idx=_val_pred_logit.argmax(axis=1),
-                                                     n_batch=batch_size,
-                                                     args=args)
+                    _val_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
+                                                     seq_skip_mask=skip_action_mask,
+                                                     seq_prd_idx=_val_pred_logit.argmax(axis=1),
+                                                     expand_shape=seq_y_data.shape)
 
                     # Update history
                     val_ce_sum += _val_ml_cost.sum() * batch_size
