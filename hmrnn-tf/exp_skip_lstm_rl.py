@@ -250,7 +250,7 @@ def expand_pred_idx(seq_skip_1hot,
         # For each step
         start_idx = 0
         for j, (s, m, p) in enumerate(zip(skip_step, skip_mask, prd_idx)):
-            if m:
+            if m == 1.:
                 end_idx = start_idx + s
             else:
                 end_idx = start_idx + 1
@@ -523,7 +523,7 @@ def main(_):
                     # Get full sequence prediction
                     _tr_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
                                                     seq_skip_mask=skip_action_mask,
-                                                    seq_prd_idx=_tr_pred_logit.reshape([batch_size, -1, args.n_class]).argmax(axis=2),
+                                                    seq_prd_idx=_tr_pred_logit.argmax(axis=-1).reshape([batch_size, -1]),
                                                     seq_x_mask=seq_x_mask)
 
                     # Update history
@@ -717,7 +717,7 @@ def main(_):
                     # Get full sequence prediction
                     _val_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
                                                      seq_skip_mask=skip_action_mask,
-                                                     seq_prd_idx=_val_pred_logit.reshape([batch_size, -1, args.n_class]).argmax(axis=2),
+                                                     seq_prd_idx=_val_pred_logit.argmax(axis=-1).reshape([batch_size, -1]),
                                                      seq_x_mask=seq_x_mask)
 
                     # Update history
