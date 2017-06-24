@@ -254,6 +254,7 @@ def expand_pred_idx(seq_skip_1hot,
                 end_idx = start_idx + s
             else:
                 end_idx = start_idx + 1
+            assert end_idx<expand_output.shape[1]
             expand_output[i, start_idx:end_idx] = p
             start_idx = end_idx
 
