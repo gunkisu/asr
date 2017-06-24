@@ -1106,7 +1106,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                 log_read_flag[j, idx] = 1.0
 
                 # If read_cnt meets the end, action is sampled
-                if read_cnt[idx] == 0:
+                if read_cnt[idx] == 0 and sample_seq_len[idx] > j:
                     # Update action data
                     skip_a_data[t, idx, action_idx[i]] = 1.0
                     skip_a_mask[t, idx] = 1.0
