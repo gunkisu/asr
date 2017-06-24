@@ -1034,6 +1034,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 
     # For each step (time step j)
     for j, (step_x_data, step_x_mask, step_y_data) in enumerate(itertools.izip(seq_x_data, seq_x_mask, seq_y_data)):
+        # Init read/skip list
         read_data_idx = []
         skip_data_idx = []
 
@@ -1139,15 +1140,15 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                         else:
                             break
 
-                    wrong_cnt = skip_size-match_cnt
+                    # wrong_cnt = skip_size-match_cnt
 
-                    if match_cnt>wrong_cnt:
-                        reward = match_cnt * match_cnt
-                    else:
-                        reward = - (wrong_cnt * wrong_cnt)
+                    # if match_cnt>wrong_cnt:
+                    #     reward = match_cnt * match_cnt
+                    # else:
+                    #     reward = - (wrong_cnt * wrong_cnt)
 
                     # Save reward
-                    skip_r_data[last_action_pos[idx], idx] = reward
+                    skip_r_data[last_action_pos[idx], idx] = match_cnt*match_cnt
 
                     # Set read
                     read_cnt[idx] = args.min_read
