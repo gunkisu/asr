@@ -262,7 +262,7 @@ def expand_pred_idx(seq_skip_1hot,
                 end_idx = start_idx + 1
 
             if sample_seq_len[i] < end_idx:
-                end_idx = sample_seq_len[i]
+                end_idx = int(sample_seq_len[i])
 
             expand_output[i, start_idx:end_idx] = p
             start_idx = end_idx
