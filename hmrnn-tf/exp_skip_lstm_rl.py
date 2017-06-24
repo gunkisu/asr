@@ -519,7 +519,7 @@ def main(_):
                     # Get full sequence prediction
                     _tr_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
                                                     seq_skip_mask=skip_action_mask,
-                                                    seq_prd_idx=_tr_pred_logit.argmax(axis=1),
+                                                    seq_prd_idx=_tr_pred_logit.argmax(axis=2),
                                                     expand_shape=seq_y_data.shape)
 
                     # Update history
@@ -710,7 +710,7 @@ def main(_):
                     # Get full sequence prediction
                     _val_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
                                                      seq_skip_mask=skip_action_mask,
-                                                     seq_prd_idx=_val_pred_logit.argmax(axis=1),
+                                                     seq_prd_idx=_val_pred_logit.argmax(axis=2),
                                                      expand_shape=seq_y_data.shape)
 
                     # Update history
