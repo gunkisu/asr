@@ -1176,6 +1176,10 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 
                     # Set read
                     read_cnt[idx] = args.min_read
+                if sample_seq_len[idx]-1 == j:
+                    skip_a_data[last_action_pos[idx], idx] = np.zeros([args.n_action])
+                    skip_a_data[last_action_pos[idx], idx, j-last_action_org_pos[idx]] = 1.0
+
 
     # Make visual image
     log_action_idx = np.transpose(log_action_idx, [1, 2, 0])
