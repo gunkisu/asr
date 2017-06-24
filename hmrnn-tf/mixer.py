@@ -1097,7 +1097,11 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                     skip_a_mask[t, idx] = 1.0
 
                     # Update skip cnt
-                    skip_cnt[idx] = action_idx[i] + 1
+                    skip_cnt[idx] = action_idx[i]
+
+                    # Which not skips really
+                    if action_idx[i] == 0:
+                        skip_data_idx.append(idx)
 
                     # Update sample position
                     last_action_pos[idx] = t
