@@ -258,9 +258,9 @@ def expand_pred_idx(seq_skip_1hot,
             expand_output[i, start_idx:end_idx] = p
             start_idx = end_idx
 
-        print(seq_skip_step[:10])
-        print(seq_skip_mask[:10])
-        print(seq_prd_idx[:10])
+        print(skip_step[:10])
+        print(skip_mask[:10])
+        print(prd_idx[:10])
         print(expand_output[i, :20])
         raw_input()
 
