@@ -262,6 +262,7 @@ def expand_pred_idx(seq_skip_1hot,
         print(skip_mask[:10])
         print(prd_idx[:10])
         print(expand_output[i, :20])
+        print(seq_x_mask[i, :20])
         raw_input()
 
     return expand_output
@@ -530,7 +531,7 @@ def main(_):
                     _tr_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
                                                     seq_skip_mask=skip_action_mask,
                                                     seq_prd_idx=_tr_pred_logit.argmax(axis=-1).reshape([batch_size, -1]),
-                                                    seq_x_mask=seq_x_mask)
+                                                    seq_x_mask=seq_y_data)
 
                     # Update history
                     tr_ce_sum += _tr_ml_cost.sum() * batch_size
@@ -724,7 +725,7 @@ def main(_):
                     _val_pred_full = expand_pred_idx(seq_skip_1hot=skip_action_data,
                                                      seq_skip_mask=skip_action_mask,
                                                      seq_prd_idx=_val_pred_logit.argmax(axis=-1).reshape([batch_size, -1]),
-                                                     seq_x_mask=seq_x_mask)
+                                                     seq_x_mask=seq_y_data)
 
                     # Update history
                     val_ce_sum += _val_ml_cost.sum() * batch_size
