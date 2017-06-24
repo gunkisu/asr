@@ -520,6 +520,7 @@ def main(_):
                     batch_size = seq_x_data.shape[1]
                     # Sample actions (episode generation)
                     [skip_x_data,
+                     skip_h_data,
                      skip_x_mask,
                      skip_y_data,
                      skip_action_data,
@@ -533,10 +534,9 @@ def main(_):
                                                   args=args)
 
                     # Compute baseline and refine reward
-                    skip_advantage, skip_disc_rewards = compute_advantage(new_x=skip_x_data,
-                                                                          new_x_mask=skip_x_mask,
-                                                                          rewards=skip_rewards,
-                                                                          new_reward_mask=skip_action_mask,
+                    skip_advantage, skip_disc_rewards = compute_advantage(seq_h_data=skip_h_data,
+                                                                          seq_r_data=skip_rewards,
+                                                                          seq_r_mask=skip_action_mask,
                                                                           vf=vf,
                                                                           args=args,
                                                                           final_cost=args.use_final_reward)
@@ -718,6 +718,7 @@ def main(_):
 
                     # Sample actions (episode generation)
                     [skip_x_data,
+                     skip_h_data,
                      skip_x_mask,
                      skip_y_data,
                      skip_action_data,
@@ -731,10 +732,9 @@ def main(_):
                                                   args=args)
 
                     # Compute baseline and refine reward
-                    skip_advantage, skip_disc_rewards = compute_advantage(new_x=skip_x_data,
-                                                                          new_x_mask=skip_x_mask,
-                                                                          rewards=skip_rewards,
-                                                                          new_reward_mask=skip_action_mask,
+                    skip_advantage, skip_disc_rewards = compute_advantage(seq_h_data=skip_h_data,
+                                                                          seq_r_data=skip_rewards,
+                                                                          seq_r_mask=skip_action_mask,
                                                                           vf=vf,
                                                                           args=args,
                                                                           final_cost=args.use_final_reward)

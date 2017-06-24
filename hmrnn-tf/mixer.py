@@ -1020,6 +1020,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
     # Init skipped sequence
     skip_x_data = np.zeros(shape=(max_seq_len, batch_size, feat_size))
     skip_x_mask = np.zeros(shape=(max_seq_len, batch_size))
+    skip_h_data = np.zeros(shape=(max_seq_len, batch_size, args.n_hidden))
     skip_y_data = np.zeros(shape=(max_seq_len, batch_size))
     skip_a_data = np.zeros(shape=(max_seq_len, batch_size, args.n_action))
     skip_a_mask = np.zeros(shape=(max_seq_len, batch_size))
@@ -1082,6 +1083,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                 skip_x_data[t, idx] = read_x_data[i]
                 skip_x_mask[t, idx] = 1.0
                 skip_y_data[t, idx] = read_y_data[i]
+                skip_h_data[t, idx] = update_state[i]
 
                 # Update previous state
                 prev_states[idx] = update_state[i]
@@ -1218,6 +1220,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
     max_seq_len = int(max(skip_x_mask.sum(axis=0)))
 
     return [skip_x_data[:max_seq_len].transpose([1, 0, 2]),
+            skip_h_data[:max_seq_len].transpose([1, 0, 2]),
             skip_x_mask[:max_seq_len].transpose([1, 0]),
             skip_y_data[:max_seq_len].transpose([1, 0]),
             skip_a_data[:max_seq_len].transpose([1, 0, 2]),
