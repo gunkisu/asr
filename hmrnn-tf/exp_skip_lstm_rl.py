@@ -241,8 +241,6 @@ def expand_pred_idx(seq_skip_1hot,
     # Init output
     expand_output = np.zeros_like(seq_x_mask)
 
-    sample_seq_len = seq_x_mask.sum(axis=1)
-
     # Get Step size
     seq_skip_step = np.argmax(seq_skip_1hot, axis=2) + 1
 
@@ -252,17 +250,10 @@ def expand_pred_idx(seq_skip_1hot,
         # For each step
         start_idx = 0
         for j, (s, m, p) in enumerate(zip(skip_step, skip_mask, prd_idx)):
-
-            if sample_seq_len[i] <= start_idx:
-                break
-
             if m:
                 end_idx = start_idx + s
             else:
                 end_idx = start_idx + 1
-
-            if sample_seq_len[i] < end_idx:
-                end_idx = int(sample_seq_len[i])
 
             expand_output[i, start_idx:end_idx] = p
             start_idx = end_idx
