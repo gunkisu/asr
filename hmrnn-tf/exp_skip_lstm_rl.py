@@ -251,7 +251,7 @@ def expand_pred_idx(seq_skip_1hot,
         start_idx = 0
         for j, (s, m, p) in enumerate(zip(skip_step, skip_mask, prd_idx)):
             if m == 1.:
-                end_idx = start_idx + s
+                end_idx = start_idx + s + 1
             else:
                 end_idx = start_idx + 1
 
