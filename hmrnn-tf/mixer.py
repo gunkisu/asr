@@ -1133,7 +1133,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                     prd_label = seq_y_data[action_start_pos, idx]
 
                     match_cnt = 0.0
-                    for l in seq_y_data[action_start_pos+1:(action_end_pos+1)]:
+                    for l in seq_y_data[action_start_pos+1:(action_end_pos+1), idx]:
                         if l == prd_label:
                             match_cnt += 1
                         else:
@@ -1214,7 +1214,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                                                    np.zeros_like(log_action_prb),
                                                    log_action_prb], axis=-1)],
                                   axis=1)
-    max_seq_len = max(skip_x_mask.sum(axis=0))
+    max_seq_len = int(max(skip_x_mask.sum(axis=0)))
 
     return [skip_x_data[:max_seq_len].transpose([1, 0, 2]),
             skip_x_mask[:max_seq_len].transpose([1, 0]),
