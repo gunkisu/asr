@@ -273,8 +273,8 @@ def compute_advantage(seq_h_data,
         # Collect rewards
         reward_val = []
         reward_pos = []
-        for i, r in enumerate(reward):
-            if mask:
+        for i, (r, m) in enumerate(zip(reward, mask)):
+            if m:
                 reward_val.append(r)
                 reward_pos.append(i)
 
