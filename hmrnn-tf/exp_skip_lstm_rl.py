@@ -298,9 +298,9 @@ def compute_advantage(seq_h_data,
 
     # Compute modified reward based on baseline
     advantages = discounted_rewards - baseline_2d
-    mean_advantages = np.mean(advantages*seq_r_mask)
-    std_advantages = np.std(advantages*seq_r_mask)
-    advantages = ((advantages - mean_advantages) / (std_advantages+1e-8)) * seq_r_mask
+    # mean_advantages = np.mean(advantages*seq_r_mask)
+    # std_advantages = np.std(advantages*seq_r_mask)
+    # advantages = ((advantages - mean_advantages) / (std_advantages+1e-8)) * seq_r_mask
 
     valid_idx = np.where(seq_r_mask==1.)
     valid_h = seq_h_data[valid_idx]
@@ -309,6 +309,7 @@ def compute_advantage(seq_h_data,
     vf.fit(valid_h, valid_r)
 
     return advantages, discounted_rewards
+
 
 # Main function
 def main(_):
