@@ -1033,12 +1033,6 @@ def improve_skip_rnn_act_parallel(seq_x_data,
     log_action_idx = np.zeros(shape=(max_seq_len, batch_size, args.n_action))
     log_action_prb = np.zeros(shape=(max_seq_len, batch_size, args.n_action))
 
-    # 1) read it (read_cnt > 0) => read_cnt=2
-    # 2) read it (read_cnt > 0) => read_cnt=1
-    # 3) read it (read_cnt > 0) => read_cnt=0 => sample action => read_cnt=0 and skip_cnt=2
-    # 4) skip it (skip_cnt > 0) => skip_cnt=1
-    # 5) skip it (skip_cnt > 0) => skip_cnt=0 => init read_cnt => read_cnt=3 and skip_cnt=0
-
     # For each step (time step j)
     for j, (step_x_data, step_x_mask, step_y_data) in enumerate(itertools.izip(seq_x_data, seq_x_mask, seq_y_data)):
         # Init read/skip list
@@ -1166,10 +1160,12 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 
                     wrong_cnt = skip_size-match_cnt
 
-                    if match_cnt>wrong_cnt:
-                        reward = match_cnt * match_cnt
+                    reward = match_cnt-wrong_cnt
+
+                    if reward:
+                        reward = reward * reward
                     else:
-                        reward = - (wrong_cnt * wrong_cnt)
+                        reward = - (reward * reward)
 
                     # Save reward
                     skip_r_data[last_action_pos[idx], idx] = reward
