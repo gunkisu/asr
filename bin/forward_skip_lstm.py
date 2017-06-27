@@ -11,7 +11,7 @@ import tensorflow as tf
 
 from collections import OrderedDict
 from collections import namedtuple
-from skiprnn.mixer import skip_rnn_forward_parallel, expand_label_probs
+from skiprnn.mixer import skip_rnn_forward_parallel, expand_output
 
 from data.fuel_utils import create_ivector_test_datastream, get_uttid_stream
 from libs.utils import sync_data, skip_frames_fixed, StopWatch
@@ -26,7 +26,6 @@ flags.DEFINE_boolean('no-copy', True, '')
 flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
 flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
 flags.DEFINE_string('dataset', 'test_dev93', '')
-flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 flags.DEFINE_string('wxfilename', 'ark:-', '')
 flags.DEFINE_string('metafile', 'best_model.ckpt-1000.meta', '')
 
@@ -35,9 +34,6 @@ SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples st
 def initial_states(batch_size, n_hidden):
   init_state = np.zeros([2, batch_size, n_hidden], dtype=np.float32)
   return init_state
-
-def run_skip_rnn(x, x_mask, sess, sg, args):
-  pass
 
 def main(_):
   print(' '.join(sys.argv), file=sys.stderr)
@@ -64,7 +60,6 @@ def main(_):
     prev_states = sess.graph.get_tensor_by_name('prev_states:0')
     step_last_state = sess.graph.get_tensor_by_name('one_step_stack:0')
     fast_action, n_fast_action = sess.graph.get_collection('fast_action')
-    args.fast_action = fast_action; args.n_fast_action = n_fast_action
 
     sample_graph = SampleGraph(_step_label_probs, step_action_samples, step_action_probs, step_last_state, step_x_data, prev_states)
 
@@ -78,19 +73,15 @@ def main(_):
       orig_x, orig_x_mask, _, _ = batch
       uttid_batch, = uttid_batch
 
-      feat_lens = orig_x_mask.sum(axis=1)
+      feat_lens = orig_x_mask.sum(axis=1, dtype=np.int32)
 
-      actions, label_probs, x_mask = skip_rnn_forward_parallel(
-                          np.transpose(orig_x, [1,0,2]),
-                          np.transpose(orig_x_mask, [1,0]),
-                          sess,
-                          sample_graph,
-                          args)
+      actions_1hot, label_probs, new_mask = skip_rnn_forward_parallel(
+        orig_x, orig_x_mask, sess, sample_graph, fast_action, n_fast_action)
 
-      seq_label_probs = expand_label_probs(actions, orig_x_mask, label_probs)
+      seq_label_probs = expand_output(actions_1hot, orig_x_mask, new_mask, label_probs)
 
       for out_idx, (output, uttid) in enumerate(zip(seq_label_probs, uttid_batch)):
-        valid_len = int(feat_lens[out_idx])
+        valid_len = feat_lens[out_idx]
         uttid = uttid.encode('ascii')
         writer.write(uttid, np.log(output[:valid_len] + 1e-8))
 

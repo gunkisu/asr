@@ -16,7 +16,7 @@ from mixer import insert_item2dict
 from mixer import save_npz2
 from mixer import skip_rnn_act, skip_rnn_act_parallel, aggr_skip_rnn_act_parallel
 from mixer import LinearVF, compute_advantage
-from mixer import categorical_ent, expand_pred_idx
+from mixer import categorical_ent, expand_output
 from model import LinearCell
 from model import LSTMModule
 
@@ -306,40 +306,30 @@ def main(_):
       # For each batch 
       for batch in train_set.get_epoch_iterator():
         x, x_mask, _, _, y, _ = batch
-        x = np.transpose(x, (1, 0, 2))
-        x_mask = np.transpose(x_mask, (1, 0))
-        y = np.transpose(y, (1, 0))
-        _, n_batch, _ = x.shape
+        n_batch = x.shape[0]
         _n_exp += n_batch
 
-        new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
-            gen_episodes(x, x_mask, y, sess, sg, args)
-
+        # TODO: gen_episodes needs to transpose input matrices inside of it 
+        new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
+            gen_episodes(np.transpose(x, [1,0,2]), np.transpose(x_mask, [1,0]), np.transpose(y, [1,0]), sess, sg, args)
+        
         advantages,_ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
-        #advantages = rewards - np.sum(rewards)/np.sum(new_reward_mask)
         _feed_states = initial_states(n_batch, args.n_hidden)
         
-        [_tr_ml_cost,
-         _tr_rl_cost,
-         _,
-         _,
-         pred_idx] = sess.run([tg.ml_cost,
-                               tg.rl_cost,
-                               ml_op,
-                               rl_op,
-                               tg.pred_idx],
-                              feed_dict={tg.seq_x_data: new_x,
-                                         tg.seq_x_mask: new_x_mask,
-                                         tg.seq_y_data: new_y,
-                                         tg.init_state: _feed_states,
-                                         tg.seq_action: actions,
-                                         tg.seq_advantage: advantages,
-                                         tg.seq_action_mask: new_reward_mask})
+        _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \
+            sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op, tg.pred_idx],
+                      feed_dict={tg.seq_x_data: new_x,
+                                 tg.seq_x_mask: new_x_mask,
+                                 tg.seq_y_data: new_y,
+                                 tg.init_state: _feed_states,
+                                 tg.seq_action: actions_1hot,
+                                 tg.seq_advantage: advantages,
+                                 tg.seq_action_mask: new_reward_mask})
 
         tr_ce_sum += _tr_ml_cost.sum()
         tr_ce_count += new_x_mask.sum()
 
-        pred_idx = expand_pred_idx(actions, x_mask, pred_idx, n_batch, args)
+        pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx.reshape([n_batch, -1]))
         tr_acc_sum += ((pred_idx == y) * x_mask).sum()
         tr_acc_count += x_mask.sum()
 
@@ -401,27 +391,27 @@ def main(_):
       eval_sw.reset()
       for batch in valid_set.get_epoch_iterator():
         x, x_mask, _, _, y, _ = batch
-        x = np.transpose(x, (1, 0, 2))
-        x_mask = np.transpose(x_mask, (1, 0))
-        y = np.transpose(y, (1, 0))
-        _, n_batch, _ = x.shape
+        n_batch = x.shape[0]
 
-        new_x, new_y, actions, rewards, action_entropies, new_x_mask, new_reward_mask, _ = \
-            gen_episodes(x, x_mask, y, sess, sg, args)
+        new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, _ = \
+            gen_episodes(np.transpose(x, [1,0,2]), np.transpose(x_mask, [1,0]), np.transpose(y, [1,0]), sess, sg, args)
         advantages, _ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
         _feed_states = initial_states(n_batch, args.n_hidden)
 
         _val_ml_cost, _val_rl_cost, pred_idx = sess.run([tg.ml_cost, tg.rl_cost, tg.pred_idx],
-                feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask,
-                      tg.seq_y_data: new_y, tg.init_state: _feed_states,
-                      tg.seq_action: actions, tg.seq_advantage: advantages, 
+                feed_dict={tg.seq_x_data: new_x, 
+                      tg.seq_x_mask: new_x_mask,
+                      tg.seq_y_data: new_y, 
+                      tg.init_state: _feed_states,
+                      tg.seq_action: actions_1hot, 
+                      tg.seq_advantage: advantages, 
                       tg.seq_action_mask: new_reward_mask})
         
         val_ce_sum += _val_ml_cost.sum()
         val_ce_count += new_x_mask.sum()
 
-        pred_idx = expand_pred_idx(actions, x_mask, pred_idx, n_batch, args)
+        pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx.reshape([n_batch, -1]))
         val_acc_sum += ((pred_idx == y) * x_mask).sum()
         val_acc_count += x_mask.sum()
 
