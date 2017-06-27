@@ -260,6 +260,7 @@ def expand_pred_idx(seq_skip_1hot,
 
     return expand_output
 
+
 def compute_advantage(seq_h_data,
                       seq_r_data,
                       seq_r_mask,

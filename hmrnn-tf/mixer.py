@@ -1160,12 +1160,10 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 
                     wrong_cnt = skip_size-match_cnt
 
-                    reward = match_cnt-wrong_cnt
-
-                    if reward:
-                        reward = reward * reward
+                    if wrong_cnt == 0:
+                        reward = 1.
                     else:
-                        reward = - (reward * reward)
+                        reward = 0.
 
                     # Save reward
                     skip_r_data[last_action_pos[idx], idx] = reward
