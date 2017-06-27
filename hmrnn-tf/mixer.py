@@ -1616,36 +1616,30 @@ def categorical_ent(dist):
     ent = -tf.reduce_sum(dist * tf.log(dist + 1e-8), axis=-1)
     return ent
 
-def expand_pred_idx(actions_1hot, x_mask, pred_idx, n_batch, args):
-    new_pred_idx = np.zeros_like(x_mask)
+def expand_output(actions_1hot, mask, new_mask, output):
+    # Does not support fast action yet
+    shape = list(mask.shape)
+    if len(output.shape) > 2:
+        shape.append(output.shape[-1])
+
+    new_output = np.zeros(shape)
 
     skip_info = np.argmax(actions_1hot, axis=2) + 1 # number of repeats
-    pred_idx = pred_idx.reshape([n_batch, -1])
+    seq_lens = new_mask.sum(axis=1, dtype=np.int32)
 
     # for each example
-    for i, (s, p) in enumerate(zip(skip_info, pred_idx)):
+    for i, (s, p, slen) in enumerate(zip(skip_info, output, seq_lens)):
         # for each step
         start_idx = 0
-        for s_step, p_step in itertools.izip_longest(s, p, fillvalue=1):
-            new_pred_idx[start_idx:start_idx+s_step, i] = p_step
+
+        for s_step, p_step in itertools.izip(s[:slen-1], p[:slen-1]):
+            end_idx = min(start_idx+s_step, slen-1)
+            new_output[i,start_idx:end_idx] = p_step
             start_idx += s_step
+        
+        new_output[i,slen-1] = p[slen-1]
 
-    return new_pred_idx
-
-def expand_label_probs(actions_1hot, orig_x_mask, label_probs):
-    new_label_probs = np.zeros([orig_x_mask.shape[0], orig_x_mask.shape[1], label_probs.shape[-1]])
-
-    skip_info = np.argmax(actions_1hot, axis=2) + 1 # number of repeats
-
-    # for each example
-    for i, (s, p) in enumerate(zip(skip_info, label_probs)):
-        # for each step
-        start_idx = 0
-        for s_step, p_step in itertools.izip_longest(s, p, fillvalue=1):
-            new_label_probs[i,start_idx:start_idx+s_step] = p_step
-            start_idx += s_step
-
-    return new_label_probs
+    return new_output
 
 def interpolate_feat(input_data, num_skips, axis=1, use_bidir=True):
     # Fill skipped ones by repeating (forward)
