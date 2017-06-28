@@ -20,6 +20,17 @@ def gen_mask(x, max_seq_len):
     x_mask = np.ones((x.shape[0], x.shape[1])).astype(np.float32)
   return x, x_mask
 
+def transpose_all(iterable):
+    transposed = []
+
+    for i in iterable:
+        if len(i.shape) > 2:
+            trans_i = np.transpose(i, [1,0,2])
+        else:
+            trans_i = np.transpose(i, [1,0])
+        transposed.append(trans_i)
+    
+    return transposed
 
 def insert_item2dict(ref_dict, key, value):
   try:
@@ -1431,12 +1442,9 @@ def skip_rnn_act_parallel(x,
                          mask,
                          reward_mask) + [output_image,]
 
-def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, fast_action, n_fast_action):
-    def transpose_all(actions, label_probs, mask):
-        return [np.transpose(actions, [1,0,2]),
-                np.transpose(label_probs, [1,0,2]),
-                np.transpose(mask, [1,0])]
 
+
+def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, fast_action, n_fast_action):
     sg = sample_graph
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
@@ -1461,62 +1469,52 @@ def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, fast_action, n_fast
 
     new_x = np.zeros([max_seq_len, n_batch, n_feat])
     label_probs = np.zeros([max_seq_len, n_batch, n_class])
-    actions = np.zeros([max_seq_len-1, n_batch, n_action]) 
+    actions_1hot = np.zeros([max_seq_len-1, n_batch, n_action]) 
 
     # for each step (index j)
     for j, x_step in enumerate(x):
-        # Get final step data
         _x_step, _prev_state, target_indices = \
             filter_last_forward(x_step, prev_state, j, seq_lens, sample_done)
 
         if len(_x_step):
-            # Read and update state
             step_label_likelihood_j, new_prev_state = \
                 sess.run([sg.step_label_probs, sg.step_last_state], 
                     feed_dict={sg.step_x_data: _x_step, sg.prev_states: np.transpose(_prev_state, [1, 0, 2])})
-
-            # Roll state
             new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
 
-            # Fill read data to new sequence
             fill(new_x, _x_step, target_indices, update_pos)
             fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
+            update_prev_state(prev_state, new_prev_state, target_indices)
          
             advance_pos(update_pos, target_indices)
-            update_prev_state(prev_state, new_prev_state, target_indices)
             sample_done.extend(target_indices)
 
-        # Based on action, get related samples
         _x_step, _prev_state, target_indices = \
             filter_action_end_forward(x_step, prev_state, j, action_counters, sample_done)
 
         if len(_x_step):
-            # Given input, update state and also action sample
             action_idx, step_label_likelihood_j, new_prev_state = \
                 sess.run([sg.step_action_samples, sg.step_label_probs, sg.step_last_state],
                     feed_dict={sg.step_x_data: _x_step, sg.prev_states: np.transpose(_prev_state, [1, 0, 2])})
-
-            # roll state
             new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
-            action_one_hot = np.eye(n_action)[action_idx.flatten()]
-
-            # fill read data
+            
             fill(new_x, _x_step, target_indices, update_pos)
             fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
-            fill(actions, action_one_hot, target_indices, update_pos)
 
-            # update counter
+            action_one_hot = np.eye(n_action)[action_idx.flatten()]
+            fill(actions_1hot, action_one_hot, target_indices, update_pos)
+
+            update_prev_state(prev_state, new_prev_state, target_indices)
+
             update_action_counters2(action_counters, action_idx.flatten(), 
                 target_indices, n_action, fast_action, n_fast_action)
 
             advance_pos(update_pos, target_indices)
-            update_prev_state(prev_state, new_prev_state, target_indices)
-
         else:
             update_action_counters2(action_counters, [], [], n_action, fast_action, n_fast_action)
 
     new_max_seq_len, mask = gen_mask_from(update_pos)
-    return transpose_all(actions[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask)
+    return transpose_all([actions_1hot[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask])
 
 def sample_from_softmax_batch(step_action_prob):
     action_one_hot = []
