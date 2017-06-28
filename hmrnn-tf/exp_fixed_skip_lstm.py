@@ -127,6 +127,8 @@ def main(_):
   else:
     ml_grads = tf.gradients(tg_ml_cost, tvars)
   ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
+  
+  tf.add_to_collection('n_skip', args.n_skip)
 
   sync_data(args)
   datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
