@@ -1008,7 +1008,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
     skip_cnt = [0] * batch_size
 
     # Init Previous skip size
-    skip_size = [0] * batch_size
+    skip_size_list = [0] * batch_size
 
     # Init sample update position
     update_pos = [0] * batch_size
@@ -1062,7 +1062,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
         if len(read_data_idx) > 0:
             # Get data to read
             read_x_data = np.asarray([step_x_data[i] for i in read_data_idx])
-            read_a_data = np.asarray([skip_size[i] for i in read_data_idx]).reshape([-1, 1])/float(args.n_action)
+            read_a_data = np.asarray([skip_size_list[i] for i in read_data_idx]).reshape([-1, 1])/float(args.n_action)
             read_y_data = np.asarray([step_y_data[i] for i in read_data_idx])
             read_states = np.asarray([prev_states[i] for i in read_data_idx])
 
@@ -1099,7 +1099,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                 read_cnt[idx] -= 1
 
                 # Update skip_size
-                skip_size[idx] = 0.
+                skip_size_list[idx] = 0.
 
                 # Move position
                 update_pos[idx] += 1
@@ -1117,7 +1117,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                     skip_cnt[idx] = action_idx[i]
 
                     # Update skip_size
-                    skip_size[idx] = action_idx[i]
+                    skip_size_list[idx] = action_idx[i]
 
                     # Update sample position
                     last_action_pos[idx] = t
