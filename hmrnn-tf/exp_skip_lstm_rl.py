@@ -68,6 +68,7 @@ tg_fields = ['seq_x_data',
              'seq_action_ent']
 
 sg_fields = ['step_x_data',
+             'step_a_data'
              'prev_states',
              'step_h_state',
              'step_last_state',
@@ -120,6 +121,10 @@ def build_graph(args):
                                      shape=(None, args.n_input),
                                      name='step_x_data')
 
+        step_a_data = tf.placeholder(dtype=tf.float32,
+                                     shape=(None, 1),
+                                     name='step_a_data')
+
         # Prev state [2, batch_size, n_hidden]
         prev_state = tf.placeholder(dtype=tf.float32,
                                     shape=(2, None, args.n_hidden),
@@ -154,9 +159,9 @@ def build_graph(args):
 
     # Action logits
     if FLAGS.ref_input:
-        step_action_input = [step_x_data, step_h_state]
+        step_action_input = [step_h_state, step_a_data, step_x_data]
     else:
-        step_action_input = step_h_state
+        step_action_input = [step_h_state, step_a_data]
     step_action_logits = _action_logit(inputs=step_action_input,
                                        scope='action_logit')
 
@@ -168,6 +173,7 @@ def build_graph(args):
 
     # Set sampling graph
     sample_graph = SampleGraph(step_x_data,
+                               step_a_data,
                                prev_state,
                                step_h_state,
                                step_last_state,
