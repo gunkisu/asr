@@ -68,7 +68,7 @@ tg_fields = ['seq_x_data',
              'seq_action_ent']
 
 sg_fields = ['step_x_data',
-             'step_a_data'
+             'step_a_data',
              'prev_states',
              'step_h_state',
              'step_last_state',
