@@ -68,12 +68,13 @@ class StackLSTMModule(object):
     if one_step:
       outputs, states = stack_rnn_cell(inputs=inputs,
                                        state=rnn_tuple_state)
-
+      stack_name = 'one_step_stack'
     else:
       outputs, states = tf.nn.dynamic_rnn(cell=stack_rnn_cell,
                                           inputs=inputs,
                                           initial_state=rnn_tuple_state)
-    last_state_list = [tf.stack([states[l][0], states[l][1]], axis=0) for l in range(self._num_layers)]
+      stack_name = 'dynamic_stack'
+    last_state_list = [tf.stack([states[l][0], states[l][1]], axis=0, name=stack_name) for l in range(self._num_layers)]
     return outputs, last_state_list
 
 
