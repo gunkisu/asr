@@ -1160,12 +1160,10 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 
                     wrong_cnt = skip_size-match_cnt
 
-                    reward = match_cnt-wrong_cnt
-
-                    if reward:
-                        reward = reward * reward
+                    if wrong_cnt == 0:
+                        reward = skip_size*skip_size
                     else:
-                        reward = - (reward * reward)
+                        reward = 0.
 
                     # Save reward
                     skip_r_data[last_action_pos[idx], idx] = reward
@@ -1431,25 +1429,26 @@ def skip_rnn_act_parallel(x,
                          mask,
                          reward_mask) + [output_image,]
 
-def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, fast_action, n_fast_action):
+def skip_rnn_forward_parallel(x,
+                          x_mask,
+                          sess,
+                          sample_graph,
+                          args):
     def transpose_all(actions, label_probs, mask):
         return [np.transpose(actions, [1,0,2]),
                 np.transpose(label_probs, [1,0,2]),
                 np.transpose(mask, [1,0])]
 
-    sg = sample_graph
 
-    # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
-    x = np.transpose(x, [1,0,2])
-    x_mask = np.transpose(x_mask, [1,0])
+    n_class = sample_graph.step_label_probs.shape[-1].value
+    n_hidden = sample_graph.step_last_state.shape[-1].value
+    n_action = sample_graph.step_action_probs.shape[-1].value
 
-    n_class = sg.step_label_probs.shape[-1].value
-    n_hidden = sg.step_last_state.shape[-1].value
-    n_action = sg.step_action_probs.shape[-1].value
+    # x shape is [time_step, batch_size, features]
 
     n_seq, n_batch, n_feat = x.shape
-    seq_lens = x_mask.sum(axis=0, dtype=np.int32)
-    max_seq_len = max(seq_lens)
+    seq_lens = x_mask.sum(axis=0)
+    max_seq_len = int(max(seq_lens))
 
     # shape should be (2, n_batch, n_hidden) when it is used
     prev_state = np.zeros((n_batch, 2, n_hidden))
@@ -1461,19 +1460,27 @@ def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, fast_action, n_fast
 
     new_x = np.zeros([max_seq_len, n_batch, n_feat])
     label_probs = np.zeros([max_seq_len, n_batch, n_class])
-    actions = np.zeros([max_seq_len-1, n_batch, n_action]) 
+    actions = np.zeros([max_seq_len-1, n_batch, n_action])
 
     # for each step (index j)
     for j, x_step in enumerate(x):
         # Get final step data
-        _x_step, _prev_state, target_indices = \
-            filter_last_forward(x_step, prev_state, j, seq_lens, sample_done)
+        [_x_step,
+         _prev_state,
+         target_indices] = filter_last_forward(x_step,
+                                       prev_state,
+                                       j,
+                                       seq_lens,
+                                       sample_done)
 
+        # If final step sample exists,
         if len(_x_step):
             # Read and update state
-            step_label_likelihood_j, new_prev_state = \
-                sess.run([sg.step_label_probs, sg.step_last_state], 
-                    feed_dict={sg.step_x_data: _x_step, sg.prev_states: np.transpose(_prev_state, [1, 0, 2])})
+            [step_label_likelihood_j,
+             new_prev_state] = sess.run([sample_graph.step_label_probs,
+                                         sample_graph.step_last_state],
+                                        feed_dict={sample_graph.step_x_data: _x_step,
+                                                   sample_graph.prev_states: np.transpose(_prev_state, [1, 0, 2])})
 
             # Roll state
             new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
@@ -1481,20 +1488,29 @@ def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, fast_action, n_fast
             # Fill read data to new sequence
             fill(new_x, _x_step, target_indices, update_pos)
             fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
-         
+
             advance_pos(update_pos, target_indices)
             update_prev_state(prev_state, new_prev_state, target_indices)
             sample_done.extend(target_indices)
 
         # Based on action, get related samples
-        _x_step, _prev_state, target_indices = \
-            filter_action_end_forward(x_step, prev_state, j, action_counters, sample_done)
+        [_x_step,
+         _prev_state,
+         target_indices] = filter_action_end_forward(x_step,
+                                             prev_state,
+                                             j,
+                                             action_counters,
+                                             sample_done)
 
+        # If sample exist, process
         if len(_x_step):
             # Given input, update state and also action sample
             action_idx, step_label_likelihood_j, new_prev_state = \
-                sess.run([sg.step_action_samples, sg.step_label_probs, sg.step_last_state],
-                    feed_dict={sg.step_x_data: _x_step, sg.prev_states: np.transpose(_prev_state, [1, 0, 2])})
+                sess.run([sample_graph.step_action_samples,
+                          sample_graph.step_label_probs,
+                          sample_graph.step_last_state],
+                          feed_dict={sample_graph.step_x_data: _x_step,
+                                     sample_graph.prev_states: np.transpose(_prev_state, [1, 0, 2])})
 
             # roll state
             new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
@@ -1506,14 +1522,13 @@ def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, fast_action, n_fast
             fill(actions, action_one_hot, target_indices, update_pos)
 
             # update counter
-            update_action_counters2(action_counters, action_idx.flatten(), 
-                target_indices, n_action, fast_action, n_fast_action)
+            update_action_counters2(action_counters, action_idx.flatten(), target_indices, n_action, args.fast_action, args.n_fast_action)
 
             advance_pos(update_pos, target_indices)
             update_prev_state(prev_state, new_prev_state, target_indices)
 
         else:
-            update_action_counters2(action_counters, [], [], n_action, fast_action, n_fast_action)
+            update_action_counters2(action_counters, [], [], n_action, args.fast_action, args.n_fast_action)
 
     new_max_seq_len, mask = gen_mask_from(update_pos)
     return transpose_all(actions[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask)
@@ -1522,17 +1537,17 @@ def sample_from_softmax_batch(step_action_prob):
     action_one_hot = []
     action_idx = []
 
-    for p in step_action_prob: 
+    for p in step_action_prob:
         _action_one_hot = np.random.multinomial(1, p)
         action_one_hot.append(_action_one_hot)
         action_idx.append(np.argmax(_action_one_hot))
-     
-    return np.asarray(action_one_hot), np.asarray(action_idx)        
+
+    return np.asarray(action_one_hot), np.asarray(action_idx)
 
 def sample_from_softmax(step_action_prob):
     action_one_hot = np.random.multinomial(1, step_action_prob.flatten())
     action_idx = np.argmax(action_one_hot)
-     
+
     return action_one_hot, action_idx
 
 def mask_episodes(X, Y, actions, rewards, action_entropies, batch_size, x_size, act_size):
@@ -1555,7 +1570,7 @@ def mask_episodes(X, Y, actions, rewards, action_entropies, batch_size, x_size, 
         masked_action_entropies[i, :this_x_len-1] = action_entropy
         new_mask[i, :this_x_len] = 1.
         new_reward_mask[i, :this_x_len-1] = 1.
-   
+
     return masked_X, masked_Y, masked_actions, masked_rewards, masked_action_entropies, new_mask, new_reward_mask
 
 def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args, final_cost=False):
@@ -1583,7 +1598,7 @@ def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args, fin
     advantages_1d = advantages.reshape([-1])[reward_mask_1d==1.]
     advantages = ((advantages - advantages_1d.mean()) / (advantages_1d.std()+1e-8)) * new_reward_mask
 
-    valid_x_indices= np.where(new_reward_mask==1.) 
+    valid_x_indices= np.where(new_reward_mask==1.)
     valid_new_x = new_x[valid_x_indices]
     discounted_rewards_1d = np.concatenate(discounted_rewards, axis=0)
     vf.fit(valid_new_x, discounted_rewards_1d)
@@ -1594,36 +1609,41 @@ def discount(x, gamma):
     assert x.ndim >= 1
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
 
-# Shannon entropy for a paramaterized categorical distributions 
-def categorical_ent(dist): 
+# Shannon entropy for a paramaterized categorical distributions
+def categorical_ent(dist):
     ent = -tf.reduce_sum(dist * tf.log(dist + 1e-8), axis=-1)
     return ent
 
-def expand_output(actions_1hot, mask, new_mask, output):
-    # Does not support fast action yet
-    shape = list(mask.shape)
-    if len(output.shape) > 2:
-        shape.append(output.shape[-1])
-
-    new_output = np.zeros(shape)
+def expand_pred_idx(actions_1hot, x_mask, pred_idx, n_batch, args):
+    new_pred_idx = np.zeros_like(x_mask)
 
     skip_info = np.argmax(actions_1hot, axis=2) + 1 # number of repeats
-    new_seq_lens = new_mask.sum(axis=1, dtype=np.int32)
-    seq_lens = mask.sum(axis=1, dtype=np.int32)
+    pred_idx = pred_idx.reshape([n_batch, -1])
 
     # for each example
-    for i, (s, p, new_slen, slen) in enumerate(zip(skip_info, output, new_seq_lens, seq_lens)):
+    for i, (s, p) in enumerate(zip(skip_info, pred_idx)):
         # for each step
         start_idx = 0
-
-        for s_step, p_step in itertools.izip(s[:new_slen-1], p[:new_slen-1]):
-            end_idx = min(start_idx+s_step, slen-1)
-            new_output[i,start_idx:end_idx] = p_step
+        for s_step, p_step in itertools.izip_longest(s, p, fillvalue=1):
+            new_pred_idx[start_idx:start_idx+s_step, i] = p_step
             start_idx += s_step
-        
-        new_output[i,slen-1] = p[new_slen-1]
 
-    return new_output
+    return new_pred_idx
+
+def expand_label_probs(actions_1hot, orig_x_mask, label_probs):
+    new_label_probs = np.zeros([orig_x_mask.shape[0], orig_x_mask.shape[1], label_probs.shape[-1]])
+
+    skip_info = np.argmax(actions_1hot, axis=2) + 1 # number of repeats
+
+    # for each example
+    for i, (s, p) in enumerate(zip(skip_info, label_probs)):
+        # for each step
+        start_idx = 0
+        for s_step, p_step in itertools.izip_longest(s, p, fillvalue=1):
+            new_label_probs[i,start_idx:start_idx+s_step] = p_step
+            start_idx += s_step
+
+    return new_label_probs
 
 def interpolate_feat(input_data, num_skips, axis=1, use_bidir=True):
     # Fill skipped ones by repeating (forward)

@@ -188,12 +188,17 @@ def build_graph(args):
     seq_label_logits = _label_logit(inputs=tf.reshape(seq_h_state_3d, [-1, args.n_hidden]),
                                     scope='label_logit')
 
+    # Action size
+    seq_action_size = tf.expand_dims(input=tf.argmax(seq_action_data, axis=-1), axis=-1)
+    seq_action_value = tf.to_float(seq_action_size)/args.n_action
+
     # Action logits
+    seq_action_input = []
+    seq_action_input.append(tf.reshape(seq_h_state_3d, [-1, args.n_hidden]))
+    seq_action_input.append(tf.reshape(seq_action_value, [-1, 1]))
     if FLAGS.ref_input:
-        seq_action_input = [tf.reshape(seq_x_data, [-1, args.n_input]),
-                            tf.reshape(seq_h_state_3d, [-1, args.n_hidden])]
-    else:
-        seq_action_input = tf.reshape(seq_h_state_3d, [-1, args.n_hidden])
+        seq_action_input.append(tf.reshape(seq_x_data, [-1, args.n_input]))
+
     seq_action_logits = _action_logit(inputs=seq_action_input,
                                       scope='action_logit')
     # Action probs
