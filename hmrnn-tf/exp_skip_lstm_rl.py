@@ -148,7 +148,7 @@ def build_graph(args):
     # Sampling graph #
     ##################
     # Recurrent update
-    step_h_state, step_last_state = _rnn(inputs=tf.concat([step_x_data, step_a_data], axis=-1),
+    step_h_state, step_last_state = _rnn(inputs=tf.concat([step_x_data, step_a_data*0.], axis=-1),
                                          init_state=prev_state,
                                          one_step=True)
 
@@ -193,7 +193,7 @@ def build_graph(args):
 
     # Recurrent update
     init_state = tf.zeros(shape=(2, tf.shape(seq_x_data)[0], args.n_hidden))
-    seq_h_state_3d, seq_last_state = _rnn(inputs=tf.concat([seq_x_data, seq_action_value], axis=-1),
+    seq_h_state_3d, seq_last_state = _rnn(inputs=tf.concat([seq_x_data, seq_action_value*0.], axis=-1),
                                           init_state=init_state,
                                           one_step=False)
 
