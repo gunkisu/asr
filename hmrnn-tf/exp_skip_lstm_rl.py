@@ -148,7 +148,7 @@ def build_graph(args):
     # Sampling graph #
     ##################
     # Recurrent update
-    step_h_state, step_last_state = _rnn(inputs=step_x_data,
+    step_h_state, step_last_state = _rnn(inputs=tf.concat([step_x_data, step_a_data], axis=-1),
                                          init_state=prev_state,
                                          one_step=True)
 
@@ -159,9 +159,9 @@ def build_graph(args):
 
     # Action logits
     if FLAGS.ref_input:
-        step_action_input = [step_h_state, step_a_data, step_x_data]
+        step_action_input = [step_h_state, step_x_data]
     else:
-        step_action_input = [step_h_state, step_a_data]
+        step_action_input = step_h_state
     step_action_logits = _action_logit(inputs=step_action_input,
                                        scope='action_logit')
 
@@ -184,9 +184,16 @@ def build_graph(args):
     ##################
     # Training graph #
     ##################
+    # Action size
+    seq_action_size = tf.expand_dims(input=tf.argmax(seq_action_data, axis=-1), axis=-1)
+    seq_action_size = tf.concat([tf.zeros(shape=[tf.shape(seq_action_data)[0], 1, 1]),
+                                 seq_action_size[:, 1:, :]],
+                                axis=1)
+    seq_action_value = tf.to_float(seq_action_size)/args.n_action
+
     # Recurrent update
     init_state = tf.zeros(shape=(2, tf.shape(seq_x_data)[0], args.n_hidden))
-    seq_h_state_3d, seq_last_state = _rnn(inputs=seq_x_data,
+    seq_h_state_3d, seq_last_state = _rnn(inputs=tf.concat([seq_x_data, seq_action_value], axis=-1),
                                           init_state=init_state,
                                           one_step=False)
 
@@ -194,19 +201,15 @@ def build_graph(args):
     seq_label_logits = _label_logit(inputs=tf.reshape(seq_h_state_3d, [-1, args.n_hidden]),
                                     scope='label_logit')
 
-    # Action size
-    seq_action_size = tf.expand_dims(input=tf.argmax(seq_action_data, axis=-1), axis=-1)
-    seq_action_value = tf.to_float(seq_action_size)/args.n_action
-
     # Action logits
-    seq_action_input = []
-    seq_action_input.append(tf.reshape(seq_h_state_3d, [-1, args.n_hidden]))
-    seq_action_input.append(tf.reshape(seq_action_value, [-1, 1]))
     if FLAGS.ref_input:
-        seq_action_input.append(tf.reshape(seq_x_data, [-1, args.n_input]))
-
+        seq_action_input = [tf.reshape(seq_h_state_3d, [-1, args.n_hidden]),
+                            tf.reshape(seq_x_data, [-1, args.n_input])]
+    else:
+        seq_action_input = tf.reshape(seq_h_state_3d, [-1, args.n_hidden])
     seq_action_logits = _action_logit(inputs=seq_action_input,
                                       scope='action_logit')
+
     # Action probs
     seq_action_probs = tf.nn.softmax(logits=seq_action_logits)
 
