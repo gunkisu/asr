@@ -358,7 +358,7 @@ def main(_):
     global_step = tf.Variable(0, trainable=False, name="global_step")
 
     # Get ml/rl related parameters
-    tvars = tf.trainable_variables()
+    tvars = tf.trainable_variables();print(tvars)
     ml_vars = [tvar for tvar in tvars if "action" not in tvar.name]
     rl_vars = [tvar for tvar in tvars if "action" in tvar.name]
 
