@@ -1073,7 +1073,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
         if len(read_data_idx) > 0:
             # Get data to read
             read_x_data = np.asarray([step_x_data[idx] for idx in read_data_idx])
-            read_a_data = np.asarray([skip_size_list[idx] for idx in read_data_idx]).reshape([-1, 1])/float(args.n_action)
+            # read_a_data = np.asarray([skip_size_list[idx] for idx in read_data_idx]).reshape([-1, 1])/float(args.n_action)
             read_y_data = np.asarray([step_y_data[idx] for idx in read_data_idx])
             read_states = np.asarray([prev_states[idx] for idx in read_data_idx])
 
@@ -1088,7 +1088,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                                        sample_graph.step_h_state,
                                        sample_graph.step_last_state],
                                       feed_dict={sample_graph.step_x_data: read_x_data,
-                                                 sample_graph.step_a_data: read_a_data,
+                                                 # sample_graph.step_a_data: read_a_data,
                                                  sample_graph.prev_states: np.transpose(read_states, [1, 0, 2])})
             update_state = np.transpose(update_state, (1, 0, 2))
 
@@ -1183,17 +1183,17 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                     for l in seq_y_data[action_start_pos+1:(action_end_pos+1), idx]:
                         if l == prd_label:
                             match_cnt += 1
-                        # else:
-                        #     break
+                        else:
+                            break
                     # Get misalignment
                     wrong_cnt = skip_size-match_cnt
 
                     reward = match_cnt - wrong_cnt
                     # Save reward
                     if reward > 0:
-                        skip_r_data[prev_action_pos[idx], idx] = reward*reward
+                        skip_r_data[prev_action_pos[idx], idx] = skip_size*skip_size
                     else:
-                        skip_r_data[prev_action_pos[idx], idx] = -reward*reward
+                        skip_r_data[prev_action_pos[idx], idx] = -skip_size*skip_size
 
                     # Set read
                     read_cnt[idx] = args.min_read

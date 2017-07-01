@@ -68,7 +68,6 @@ tg_fields = ['seq_x_data',
              'seq_action_ent']
 
 sg_fields = ['step_x_data',
-             'step_a_data',
              'prev_states',
              'step_h_state',
              'step_last_state',
@@ -121,10 +120,6 @@ def build_graph(args):
                                      shape=(None, args.n_input),
                                      name='step_x_data')
 
-        step_a_data = tf.placeholder(dtype=tf.float32,
-                                     shape=(None, 1),
-                                     name='step_a_data')
-
         # Prev state [2, batch_size, n_hidden]
         prev_state = tf.placeholder(dtype=tf.float32,
                                     shape=(2, None, args.n_hidden),
@@ -148,7 +143,7 @@ def build_graph(args):
     # Sampling graph #
     ##################
     # Recurrent update
-    step_h_state, step_last_state = _rnn(inputs=tf.concat([step_x_data, step_a_data], axis=-1),
+    step_h_state, step_last_state = _rnn(inputs=step_x_data,
                                          init_state=prev_state,
                                          one_step=True)
 
@@ -173,7 +168,6 @@ def build_graph(args):
 
     # Set sampling graph
     sample_graph = SampleGraph(step_x_data,
-                               step_a_data,
                                prev_state,
                                step_h_state,
                                step_last_state,
@@ -184,16 +178,16 @@ def build_graph(args):
     ##################
     # Training graph #
     ##################
-    # Action size
-    seq_action_size = tf.expand_dims(input=tf.argmax(seq_action_data, axis=-1), axis=-1)
-    seq_action_size = tf.to_float(seq_action_size) / args.n_action
-    seq_action_size = tf.concat([tf.zeros(shape=[tf.shape(seq_action_data)[0], 1, 1]),
-                                 seq_action_size[:, 1:, :]],
-                                axis=1)
+    # # Action size
+    # seq_action_size = tf.expand_dims(input=tf.argmax(seq_action_data, axis=-1), axis=-1)
+    # seq_action_size = tf.to_float(seq_action_size) / args.n_action
+    # seq_action_size = tf.concat([tf.zeros(shape=[tf.shape(seq_action_data)[0], 1, 1]),
+    #                              seq_action_size[:, 1:, :]],
+    #                             axis=1)
 
     # Recurrent update
     init_state = tf.zeros(shape=(2, tf.shape(seq_x_data)[0], args.n_hidden))
-    seq_h_state_3d, seq_last_state = _rnn(inputs=tf.concat([seq_x_data, seq_action_size], axis=-1),
+    seq_h_state_3d, seq_last_state = _rnn(inputs=seq_x_data,
                                           init_state=init_state,
                                           one_step=False)
 
