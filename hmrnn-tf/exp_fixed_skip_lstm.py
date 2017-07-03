@@ -21,7 +21,7 @@ from itertools import islice
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('learning-rate', 0.002, 'Initial learning rate')
-flags.DEFINE_integer('batch-size', 64, 'Size of mini-batch')
+flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
 flags.DEFINE_integer('min-after-cache', 1024, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
 flags.DEFINE_integer('display-freq', 100, 'Display frequency')
@@ -135,7 +135,7 @@ def main(_):
     sync_data(args)
     datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
     train_set, valid_set, test_set = [create_ivector_datastream(path=args.data_path, which_set=dataset, 
-            batch_size=args.batch_size, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort) for dataset in datasets]
+            batch_size=args.n_batch, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort) for dataset in datasets]
 
     init_op = tf.global_variables_initializer()
     save_op = tf.train.Saver(max_to_keep=5)
