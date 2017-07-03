@@ -68,18 +68,15 @@ def main(_):
         print('Computing label probs...', file=sys.stderr)
 
         sw = StopWatch()
-        
-        # debugging
-        fixed_skip = True
 
         for bidx, (batch, uttid_batch) in enumerate(zip(test_set.get_epoch_iterator(), uttid_stream.get_epoch_iterator())):
-            orig_x, orig_x_mask, _, _, y, _ = batch
+            orig_x, orig_x_mask, _, _ = batch
             uttid_batch, = uttid_batch
 
             feat_lens = orig_x_mask.sum(axis=1, dtype=np.int32)
 
             actions_1hot, label_probs, new_mask = skip_rnn_forward_parallel2(
-                orig_x, orig_x_mask, sess, sample_graph, fast_action, n_fast_action, fixed_skip)
+                orig_x, orig_x_mask, sess, sample_graph, fast_action, n_fast_action)
 
             seq_label_probs = expand_output(actions_1hot, orig_x_mask, new_mask, label_probs)
 

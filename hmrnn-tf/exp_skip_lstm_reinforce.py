@@ -292,8 +292,6 @@ def main(_):
         disp_sw = StopWatch()
         eval_sw = StopWatch()
         per_sw = StopWatch()
-
-        fixed_skip = True
         
         # For each epoch 
         for _epoch in xrange(args.n_epoch):
@@ -313,7 +311,7 @@ def main(_):
                 # TODO: gen_episodes needs to transpose input matrices inside of it 
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
                         gen_episodes(np.transpose(x, [1,0,2]), np.transpose(x_mask, [1,0]), np.transpose(y, [1,0]), 
-                            sess, sg, args, fixed_skip)
+                            sess, sg, args)
                 
                 advantages,_ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
                 _feed_states = initial_states(n_batch, args.n_hidden)
@@ -389,7 +387,7 @@ def main(_):
 
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, _ = \
                         gen_episodes(np.transpose(x, [1,0,2]), np.transpose(x_mask, [1,0]), np.transpose(y, [1,0]), 
-                            sess, sg, args, fixed_skip)
+                            sess, sg, args)
                 advantages, _ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 _feed_states = initial_states(n_batch, args.n_hidden)
