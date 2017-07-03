@@ -18,7 +18,7 @@ import kaldi_io
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_integer('batch-size', 64, 'Size of mini-batch')
+flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_boolean('no-copy', True, '') # test set is typically small
 flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
@@ -37,9 +37,9 @@ def main(_):
     print(args.__flags, file=sys.stderr)
 
     sync_data(args)
-    test_set = create_ivector_test_datastream(args.data_path, args.dataset, args.batch_size)
+    test_set = create_ivector_test_datastream(args.data_path, args.dataset, args.n_batch)
 
-    uttid_stream = get_uttid_stream(args.data_path, args.dataset, args.batch_size) 
+    uttid_stream = get_uttid_stream(args.data_path, args.dataset, args.n_batch) 
 
     with tf.Session() as sess:
 
@@ -73,7 +73,7 @@ def main(_):
 
             seq_label_probs, = sess.run([_seq_label_probs],
                 feed_dict={seq_x_data: x, seq_x_mask: x_mask, init_state: feed_states})
-        
+
             seq_label_probs = seq_label_probs.reshape([n_batch, n_seq, -1])
             seq_label_probs = seq_label_probs.repeat(n_skip+1, axis=1)
 
