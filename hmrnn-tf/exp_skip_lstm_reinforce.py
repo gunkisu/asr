@@ -25,7 +25,7 @@ from libs.utils import sync_data, StopWatch
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('learning-rate', 0.01, 'Initial learning rate')
+flags.DEFINE_float('learning-rate', 0.001, 'Initial learning rate')
 flags.DEFINE_float('rl-learning-rate', 0.01, 'Initial learning rate for RL')
 flags.DEFINE_integer('min-after-cache', 1024, 'Size of mini-batch')
 flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')

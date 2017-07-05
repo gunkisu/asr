@@ -501,14 +501,15 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
 
         prev_step_idx = prev_step_idx_list[idx]
         prev_pred_idx = prev_pred_idx_list[idx]
-        action_size = cur_step_idx - prev_step_idx
         ref_labels = y[prev_step_idx:cur_step_idx, idx]
 
-        num_matches = 0
+        match_count = 0
+        miss_count = 0
         for l in ref_labels:
-            if l == prev_pred_idx: num_matches += 1 
+            if l == prev_pred_idx: match_count += 1
+            else: miss_count += 1
         
-        reward_list[reward_update_pos[idx], idx] = num_matches
+        reward_list[reward_update_pos[idx], idx] = match_count - miss_count
         reward_target_indices.append(idx)
 
     return reward_target_indices
@@ -927,18 +928,11 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
 
     max_seq_len, mask, max_reward_seq_len, reward_mask = gen_mask(update_pos, reward_update_pos, n_batch)
 
-    # Make visual image
     full_action_samples = np.transpose(full_action_samples, [1, 2, 0])
     full_action_samples = np.expand_dims(full_action_samples, axis=-1)
     full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1)
     full_action_samples = np.repeat(full_action_samples, repeats=5, axis=2)
 
-    full_action_probs = np.transpose(full_action_probs, [1, 2, 0])
-    full_action_probs = np.expand_dims(full_action_probs, axis=-1)
-    full_action_probs = np.repeat(full_action_probs, repeats=5, axis=1)
-    full_action_probs = np.repeat(full_action_probs, repeats=5, axis=2)
-
-    # batch_size, seq_len
     full_label_data = np.expand_dims(y, axis=-1)
     full_label_data = np.transpose(full_label_data, [1, 2, 0])
     full_label_data = np.expand_dims(full_label_data, axis=-1)
@@ -951,10 +945,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
                                                    np.zeros_like(full_label_data)], axis=-1),
                                    np.concatenate([np.zeros_like(full_action_samples),
                                                    full_action_samples,
-                                                   np.zeros_like(full_action_samples)], axis=-1),
-                                   np.concatenate([np.zeros_like(full_action_probs),
-                                                   np.zeros_like(full_action_probs),
-                                                   full_action_probs], axis=-1)],
+                                                   np.zeros_like(full_action_samples)], axis=-1)],
                                   axis=1)
     return transpose_all([new_x[:max_seq_len],
                          new_y[:max_seq_len],
