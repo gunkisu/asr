@@ -14,7 +14,7 @@ from collections import namedtuple
 from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import skip_rnn_act, skip_rnn_act_parallel, aggr_skip_rnn_act_parallel
+from mixer import gen_episode_with_seg_reward
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_output
 from model import LinearCell
@@ -25,10 +25,9 @@ from libs.utils import sync_data, StopWatch
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('learning-rate', 0.002, 'Initial learning rate')
+flags.DEFINE_float('learning-rate', 0.01, 'Initial learning rate')
 flags.DEFINE_float('rl-learning-rate', 0.01, 'Initial learning rate for RL')
 flags.DEFINE_integer('min-after-cache', 1024, 'Size of mini-batch')
-flags.DEFINE_float('ent-weight', 0.1, 'entropy regularizer weight')
 flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
 flags.DEFINE_integer('display-freq', 100, 'Display frequency')
@@ -41,10 +40,7 @@ flags.DEFINE_integer('base-seed', 20170309, 'Base random seed')
 flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
 flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
 flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
-flags.DEFINE_boolean('parallel', True, 'If true, do parallel sampling')
-flags.DEFINE_boolean('aggr-reward', True, 'If true, use reward from FER within skimm')
 flags.DEFINE_boolean('fast-action', False, 'If true, operate in the fast action mode')
-flags.DEFINE_boolean('ref-input', False, 'If true, policy refers input')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
 flags.DEFINE_boolean('no-copy', False, '')
@@ -56,26 +52,11 @@ flags.DEFINE_string('valid-dataset', 'test_dev93', '')
 flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 
-tg_fields = ['ml_cost',
-                         'rl_cost',
-                         'rl_ent_cost',
-                         'seq_x_data',
-                         'seq_x_mask',
-                         'seq_y_data',
-                         'init_state',
-                         'seq_action', 
-                         'seq_advantage',
-                         'seq_action_mask',
-                         'pred_idx']
+tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',
+    'seq_y_data', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
 
-sg_fields = ['step_h_state',
-                         'step_last_state',
-                         'step_label_probs',
-                         'step_action_probs',
-                         'step_action_samples',
-                         'step_x_data',
-                         'prev_states',
-                         'action_entropy']
+sg_fields = ['step_h_state', 'step_last_state', 'step_label_probs', 'step_action_probs',
+    'step_action_samples', 'step_x_data', 'prev_states', 'action_entropy']
 
 TrainGraph = namedtuple('TrainGraph', ' '.join(tg_fields))
 SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
@@ -114,10 +95,7 @@ def build_graph(args):
     step_label_logits = _label_logit(step_h_state, 'label_logit')
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
 
-    if FLAGS.ref_input:
-        step_action_logits = _action_logit([step_x_data, step_h_state], 'action_logit')
-    else:
-        step_action_logits = _action_logit(step_h_state, 'action_logit')
+    step_action_logits = _action_logit(step_h_state, 'action_logit')
     step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
     step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
     step_action_entropy = categorical_ent(step_action_probs)
@@ -140,11 +118,7 @@ def build_graph(args):
     seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
     seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
-    if FLAGS.ref_input:
-        seq_action_logits = _action_logit([tf.reshape(seq_x_data[:, :-1, :], [-1, args.n_input]), seq_hid_2d_rl], 'action_logit')
-    else:
-        seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
-
+    seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
     seq_action_probs = tf.nn.softmax(seq_action_logits)
 
     action_prob_entropy = categorical_ent(seq_action_probs)
@@ -156,28 +130,11 @@ def build_graph(args):
     rl_cost *= tf.reshape(seq_advantage, [-1])
     rl_cost = -tf.reduce_sum(rl_cost*tf.reshape(seq_action_mask, [-1]))
 
-    rl_ent_cost = -action_prob_entropy
+    train_graph = TrainGraph(ml_cost, rl_cost, seq_x_data, seq_x_mask, 
+        seq_y_data, init_state, seq_action, seq_advantage, seq_action_mask, pred_idx)
 
-    train_graph = TrainGraph(ml_cost,
-                                                     rl_cost,
-                                                     rl_ent_cost,
-                                                     seq_x_data,
-                                                     seq_x_mask,
-                                                     seq_y_data,
-                                                     init_state,
-                                                     seq_action,
-                                                     seq_advantage,
-                                                     seq_action_mask, 
-                                                     pred_idx)
-
-    sample_graph = SampleGraph(step_h_state,
-                                                         step_last_state,
-                                                         step_label_probs,
-                                                         step_action_probs,
-                                                         step_action_samples,
-                                                         step_x_data,
-                                                         prev_states,
-                                                         step_action_entropy)
+    sample_graph = SampleGraph(step_h_state, step_last_state, step_label_probs,
+        step_action_probs, step_action_samples, step_x_data, prev_states, step_action_entropy)
 
     return train_graph, sample_graph
 
@@ -226,7 +183,7 @@ def main(_):
         ml_grads = tf.gradients(tg_ml_cost, ml_vars)
     ml_op = ml_opt_func.apply_gradients(zip(ml_grads, ml_vars), global_step=global_step)
 
-    tg_rl_cost = tf.reduce_mean(tg.rl_cost) + tg.rl_ent_cost*args.ent_weight
+    tg_rl_cost = tf.reduce_mean(tg.rl_cost)
     rl_grads = tf.gradients(tg_rl_cost, rl_vars)
     rl_op = rl_opt_func.apply_gradients(zip(rl_grads, rl_vars), global_step=global_step)
     
@@ -262,13 +219,8 @@ def main(_):
 
     vf = LinearVF()
 
-    if args.parallel:
-        if args.aggr_reward:
-            gen_episodes = aggr_skip_rnn_act_parallel
-        else:
-            gen_episodes = skip_rnn_act_parallel
-    else:
-        gen_episodes = skip_rnn_act
+    
+    gen_episodes = gen_episode_with_seg_reward
 
     with tf.Session() as sess:
         sess.run(init_op)
@@ -310,8 +262,7 @@ def main(_):
 
                 # TODO: gen_episodes needs to transpose input matrices inside of it 
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
-                        gen_episodes(np.transpose(x, [1,0,2]), np.transpose(x_mask, [1,0]), np.transpose(y, [1,0]), 
-                            sess, sg, args)
+                        gen_episodes(x, x_mask, y, sess, sg, args)
                 
                 advantages,_ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
                 _feed_states = initial_states(n_batch, args.n_hidden)
@@ -386,8 +337,7 @@ def main(_):
                 n_batch = x.shape[0]
 
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, _ = \
-                        gen_episodes(np.transpose(x, [1,0,2]), np.transpose(x_mask, [1,0]), np.transpose(y, [1,0]), 
-                            sess, sg, args)
+                        gen_episodes(x, x_mask, y, sess, sg, args)
                 advantages, _ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 _feed_states = initial_states(n_batch, args.n_hidden)

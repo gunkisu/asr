@@ -491,6 +491,28 @@ def fill_aggr_reward(reward_list,
 
     return reward_target_indices
 
+def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
+        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos):
+    reward_target_indices = []
+
+    for idx in target_indices:
+        if ref_update_pos[idx] == 0:
+            continue
+
+        prev_step_idx = prev_step_idx_list[idx]
+        prev_pred_idx = prev_pred_idx_list[idx]
+        action_size = cur_step_idx - prev_step_idx
+        ref_labels = y[prev_step_idx:cur_step_idx, idx]
+
+        num_matches = 0
+        for l in ref_labels:
+            if l == prev_pred_idx: num_matches += 1 
+        
+        reward_list[reward_update_pos[idx], idx] = num_matches
+        reward_target_indices.append(idx)
+
+    return reward_target_indices
+
 def fill_ml_aggr_reward(reward_list,
                         y_seq,
                         cur_step_idx,
@@ -804,6 +826,143 @@ def aggr_skip_rnn_act_parallel(x,
                          action_entropies[:max_seq_len-1],
                          mask,
                          reward_mask) + [output_image,]
+                       
+def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, 
+    fill_function=fill_seg_match_reward):
+
+    sg = sample_graph
+
+    # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
+    x = np.transpose(x, [1,0,2])
+    x_mask = np.transpose(x_mask, [1,0])
+    y = np.transpose(y, [1,0])
+
+    n_seq, n_batch, n_feat = x.shape
+    seq_lens = x_mask.sum(axis=0)
+    max_seq_len = int(max(seq_lens))
+
+    # shape should be (2, n_batch, n_hidden) when it is used
+    prev_state = np.zeros((n_batch, 2, args.n_hidden))
+
+    action_counters = [0]*n_batch
+    update_pos = [0]*n_batch
+    reward_update_pos = [0]*n_batch
+    sample_done = [] # indices of examples done processing
+
+    prev_action_idx = [-1]*n_batch
+    prev_action_pos = [-1]*n_batch
+
+    new_x = np.zeros([max_seq_len, n_batch, n_feat])
+    new_y = np.zeros([max_seq_len, n_batch])
+    actions = np.zeros([max_seq_len-1, n_batch, args.n_action])
+    rewards = np.zeros([max_seq_len-1, n_batch])
+    action_entropies = np.zeros([max_seq_len-1, n_batch])
+
+    # for recording
+    full_action_samples = np.zeros([max_seq_len, n_batch, args.n_action])
+    full_action_probs = np.zeros([max_seq_len, n_batch, args.n_action])
+
+    # for each time step (index j)
+    for j, (x_step, y_step) in enumerate(itertools.izip(x, y)):
+        _x_step, _y_step, _prev_state, target_indices = \
+            filter_last(x_step, y_step, prev_state, j, seq_lens, sample_done)
+
+        if len(_x_step):
+            step_label_likelihood_j, new_prev_state = \
+                sess.run([sg.step_label_probs, sg.step_last_state],
+                    feed_dict={sg.step_x_data: _x_step, sg.prev_states: np.transpose(_prev_state, [1, 0, 2])})
+
+            step_label_idx = step_label_likelihood_j.argmax(axis=1)
+
+            new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
+
+            fill(new_x, _x_step, target_indices, update_pos)
+            fill(new_y, _y_step, target_indices, update_pos)
+
+            reward_target_indices = fill_function(rewards, y, j, 
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos)
+
+            advance_pos(update_pos, target_indices)
+            advance_pos(reward_update_pos, reward_target_indices)
+            update_prev_state(prev_state, new_prev_state, target_indices)
+            sample_done.extend(target_indices)
+
+        _x_step, _y_step, _prev_state, target_indices = \
+            filter_action_end(x_step, y_step, prev_state, j, action_counters, sample_done)
+
+        if len(_x_step):
+            action_idx, step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy = \
+                sess.run([sg.step_action_samples, sg.step_action_probs, sg.step_label_probs,
+                    sg.step_last_state, sg.action_entropy],
+                    feed_dict={sg.step_x_data: _x_step, sg.prev_states: np.transpose(_prev_state, [1, 0, 2])})
+
+            step_label_idx = step_label_likelihood_j.argmax(axis=1)
+
+            new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
+            action_one_hot = np.eye(args.n_action)[action_idx.flatten()]
+
+            fill(new_x, _x_step, target_indices, update_pos)
+            fill(new_y, _y_step, target_indices, update_pos)
+            fill(action_entropies, action_entropy, target_indices, update_pos)
+            fill(actions, action_one_hot, target_indices, update_pos)
+
+            update_action_counters(action_counters, action_idx.flatten(), target_indices, args)
+
+            reward_target_indices = fill_function(rewards, y, j,
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos)
+
+            advance_pos(update_pos, target_indices)
+            advance_pos(reward_update_pos, reward_target_indices)
+            update_prev_state(prev_state, new_prev_state, target_indices)
+
+            for label, idx in zip(step_label_idx, target_indices):
+                prev_action_idx[idx] = label
+                prev_action_pos[idx] = j
+
+            for i, s_idx in enumerate(target_indices):
+                full_action_samples[j, s_idx] = action_one_hot[i]
+                full_action_probs[j, s_idx] = step_action_prob_j[i]
+        else:
+            update_action_counters(action_counters, [], [], args)
+
+    max_seq_len, mask, max_reward_seq_len, reward_mask = gen_mask(update_pos, reward_update_pos, n_batch)
+
+    # Make visual image
+    full_action_samples = np.transpose(full_action_samples, [1, 2, 0])
+    full_action_samples = np.expand_dims(full_action_samples, axis=-1)
+    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1)
+    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=2)
+
+    full_action_probs = np.transpose(full_action_probs, [1, 2, 0])
+    full_action_probs = np.expand_dims(full_action_probs, axis=-1)
+    full_action_probs = np.repeat(full_action_probs, repeats=5, axis=1)
+    full_action_probs = np.repeat(full_action_probs, repeats=5, axis=2)
+
+    # batch_size, seq_len
+    full_label_data = np.expand_dims(y, axis=-1)
+    full_label_data = np.transpose(full_label_data, [1, 2, 0])
+    full_label_data = np.expand_dims(full_label_data, axis=-1)
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=1)
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
+    full_label_data /= float(args.n_class)
+
+    output_image = np.concatenate([np.concatenate([full_label_data,
+                                                   np.zeros_like(full_label_data),
+                                                   np.zeros_like(full_label_data)], axis=-1),
+                                   np.concatenate([np.zeros_like(full_action_samples),
+                                                   full_action_samples,
+                                                   np.zeros_like(full_action_samples)], axis=-1),
+                                   np.concatenate([np.zeros_like(full_action_probs),
+                                                   np.zeros_like(full_action_probs),
+                                                   full_action_probs], axis=-1)],
+                                  axis=1)
+    return transpose_all([new_x[:max_seq_len],
+                         new_y[:max_seq_len],
+                         actions[:max_seq_len-1],
+                         rewards[:max_reward_seq_len],
+                         action_entropies[:max_seq_len-1],
+                         mask,
+                         reward_mask]) + [output_image,]
 
 def aggr_ml_skip_rnn_act_parallel(x,
                                   x_mask,
