@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import socket
 import sys
 sys.path.insert(0, '..')
 
@@ -14,7 +15,8 @@ from collections import namedtuple
 from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import gen_episode_with_seg_reward
+from mixer import get_gpuname
+from mixer import gen_episode_with_seg_reward, fill_seg_match_reward2, fill_seg_match_reward
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_output
 from model import LinearCell
@@ -146,6 +148,9 @@ def main(_):
     print(' '.join(sys.argv))
     args = FLAGS
     print(args.__flags)
+    print('Hostname: {}'.format(socket.gethostname()))
+    print('GPU: {}'.format(get_gpuname()))
+
     if not args.start_from_ckpt:
         if tf.gfile.Exists(args.log_dir):
             tf.gfile.DeleteRecursively(args.log_dir)
@@ -219,9 +224,6 @@ def main(_):
 
     vf = LinearVF()
 
-    
-    gen_episodes = gen_episode_with_seg_reward
-
     with tf.Session() as sess:
         sess.run(init_op)
 
@@ -262,7 +264,7 @@ def main(_):
 
                 # TODO: gen_episodes needs to transpose input matrices inside of it 
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
-                        gen_episodes(x, x_mask, y, sess, sg, args)
+                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, fill_seg_match_reward2)
                 
                 advantages,_ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
                 _feed_states = initial_states(n_batch, args.n_hidden)
@@ -337,7 +339,7 @@ def main(_):
                 n_batch = x.shape[0]
 
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, _ = \
-                        gen_episodes(x, x_mask, y, sess, sg, args)
+                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, fill_seg_match_reward2)
                 advantages, _ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 _feed_states = initial_states(n_batch, args.n_hidden)

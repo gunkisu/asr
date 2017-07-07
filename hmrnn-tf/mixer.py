@@ -3,9 +3,15 @@ import numpy as np
 import scipy.signal
 import tensorflow as tf
 import itertools
+import subprocess
 
 from tensorflow.python.framework import ops
 
+def get_gpuname():
+  p = subprocess.Popen("nvidia-smi -q | grep 'Product Name'", shell=True, stdout=subprocess.PIPE)
+  out = p.stdout.read()
+  gpuname = out.split(':')[1].strip()
+  return gpuname
 
 # Misc
 def gen_mask(x, max_seq_len):
@@ -501,6 +507,7 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
 
         prev_step_idx = prev_step_idx_list[idx]
         prev_pred_idx = prev_pred_idx_list[idx]
+        action_size = cur_step_idx - prev_step_idx
         ref_labels = y[prev_step_idx:cur_step_idx, idx]
 
         match_count = 0
@@ -513,6 +520,33 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         reward_target_indices.append(idx)
 
     return reward_target_indices
+
+def fill_seg_match_reward2(reward_list, y, cur_step_idx, prev_pred_idx_list,
+        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action):
+    reward_target_indices = []
+
+    for idx in target_indices:
+        if ref_update_pos[idx] == 0:
+            continue
+
+        prev_step_idx = prev_step_idx_list[idx]
+        prev_pred_idx = prev_pred_idx_list[idx]
+        action_size = cur_step_idx - prev_step_idx
+        ref_labels = y[prev_step_idx:cur_step_idx, idx]
+
+        match_count = 0
+        miss_count = 0
+        target_label = prev_pred_idx
+#        target_label = ref_labels[0] # focus on only segmentation
+        for l in ref_labels:
+            if l == target_label: match_count += 1
+            else: miss_count += 1
+        
+        reward_list[reward_update_pos[idx], idx] = float(match_count) / action_size + float(action_size) /  n_action
+        reward_target_indices.append(idx)
+
+    return reward_target_indices
+
 
 def fill_ml_aggr_reward(reward_list,
                         y_seq,
@@ -881,7 +915,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
             fill(new_y, _y_step, target_indices, update_pos)
 
             reward_target_indices = fill_function(rewards, y, j, 
-                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos)
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
@@ -910,7 +944,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
             update_action_counters(action_counters, action_idx.flatten(), target_indices, args)
 
             reward_target_indices = fill_function(rewards, y, j,
-                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos)
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
