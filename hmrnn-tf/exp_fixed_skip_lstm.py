@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 import sys
 import os
+import socket
 import numpy as np
 import tensorflow as tf
 
-from mixer import gen_mask
+from mixer import gen_mask, get_gpuname
 from mixer import nats2bits
 from mixer import insert_item2dict
 from model import LinearCell
@@ -97,6 +98,9 @@ def main(_):
     print(' '.join(sys.argv))
     args = FLAGS
     print(args.__flags)
+    print('Hostname: {}'.format(socket.gethostname()))
+    print('GPU: {}'.format(get_gpuname()))    
+    
     if not args.start_from_ckpt:
         if tf.gfile.Exists(args.log_dir):
             tf.gfile.DeleteRecursively(args.log_dir)
