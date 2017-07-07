@@ -20,7 +20,7 @@ from mixer import gen_episode_with_seg_reward, fill_seg_match_reward2, fill_seg_
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_output
 from model import LinearCell
-from model import LSTMModule
+from model import StackLSTMModule
 
 from data.fuel_utils import create_ivector_datastream
 from libs.utils import sync_data, StopWatch
@@ -34,6 +34,7 @@ flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
 flags.DEFINE_integer('display-freq', 100, 'Display frequency')
 flags.DEFINE_integer('n-input', 123, 'Number of RNN hidden units')
+flags.DEFINE_integer('n-layers', 1, 'Number of RNN hidden layers')
 flags.DEFINE_integer('n-hidden', 1024, 'Number of RNN hidden units')
 flags.DEFINE_integer('n-class', 3436, 'Number of target symbols')
 flags.DEFINE_integer('n-action', 3, 'Number of actions (max skim size)')
@@ -83,7 +84,7 @@ def build_graph(args):
         prev_states = tf.placeholder(tf.float32, shape=(2, None, args.n_hidden), name='prev_states')
 
     with tf.variable_scope('rnn'):
-        _rnn = LSTMModule(num_units=args.n_hidden)
+        _rnn = StackLSTMModule(num_units=args.n_hidden, num_layers=args.n_layers)
 
     with tf.variable_scope('label'):
         _label_logit = LinearCell(num_units=args.n_class)
@@ -173,6 +174,7 @@ def main(_):
     global_step = tf.Variable(0, trainable=False, name="global_step")
 
     tvars = tf.trainable_variables()
+    print([tvar.name for tvar in tvars])
     ml_vars = [tvar for tvar in tvars if "action_logit" not in tvar.name]
     rl_vars = [tvar for tvar in tvars if "action_logit" in tvar.name]
 
