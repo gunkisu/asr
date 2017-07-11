@@ -181,8 +181,8 @@ def build_graph(args):
 
     # Action sampling
     step_action_samples = tf.cond(pred=use_sampling,
-                                  fn1=tf.multinomial(logits=step_action_logits, num_samples=1),
-                                  fn2=tf.argmax(input=step_action_logits, axis=-1))
+                                  fn1=lambda: tf.multinomial(logits=step_action_logits, num_samples=1),
+                                  fn2=lambda: tf.argmax(input=step_action_logits, axis=-1))
 
     # Set sampling graph
     sample_graph = SampleGraph(step_x_data,
