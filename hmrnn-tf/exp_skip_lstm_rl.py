@@ -57,6 +57,7 @@ flags.DEFINE_boolean('use-baseline', True, '')
 tg_fields = ['seq_x_data',
              'seq_x_mask',
              'seq_y_data',
+             'seq_a_data',
              'seq_action_data',
              'seq_action_mask',
              'seq_advantage',
@@ -68,6 +69,7 @@ tg_fields = ['seq_x_data',
              'seq_action_ent']
 
 sg_fields = ['step_x_data',
+             'prev_h_data',
              'prev_states',
              'step_h_state',
              'step_last_state',
@@ -98,6 +100,9 @@ def build_graph(args):
         seq_y_data = tf.placeholder(dtype=tf.int32,
                                     shape=(None, None),
                                     name='seq_y_data')
+        seq_a_data = tf.placeholder(dtype=tf.float32,
+                                    shape=(None, None, args.n_action),
+                                    name='seq_a_data')
 
         # Action related data [batch_size, seq_len, ...]
         seq_action_data = tf.placeholder(dtype=tf.float32,
@@ -119,6 +124,11 @@ def build_graph(args):
         step_x_data = tf.placeholder(dtype=tf.float32,
                                      shape=(None, args.n_input),
                                      name='step_x_data')
+
+        # Prev action
+        prev_a_data = tf.placeholder(dtype=tf.float32,
+                                     shape=(None, args.n_action),
+                                     name='prev_a_data')
 
         # Prev state [2, batch_size, n_hidden]
         prev_state = tf.placeholder(dtype=tf.float32,
@@ -143,7 +153,7 @@ def build_graph(args):
     # Sampling graph #
     ##################
     # Recurrent update
-    step_h_state, step_last_state = _rnn(inputs=step_x_data,
+    step_h_state, step_last_state = _rnn(inputs=tf.concat(values=[step_x_data, prev_a_data], axis=-1),
                                          init_state=prev_state,
                                          one_step=True)
 
@@ -168,6 +178,7 @@ def build_graph(args):
 
     # Set sampling graph
     sample_graph = SampleGraph(step_x_data,
+                               prev_a_data,
                                prev_state,
                                step_h_state,
                                step_last_state,
@@ -178,16 +189,9 @@ def build_graph(args):
     ##################
     # Training graph #
     ##################
-    # # Action size
-    # seq_action_size = tf.expand_dims(input=tf.argmax(seq_action_data, axis=-1), axis=-1)
-    # seq_action_size = tf.to_float(seq_action_size) / args.n_action
-    # seq_action_size = tf.concat([tf.zeros(shape=[tf.shape(seq_action_data)[0], 1, 1]),
-    #                              seq_action_size[:, 1:, :]],
-    #                             axis=1)
-
     # Recurrent update
     init_state = tf.zeros(shape=(2, tf.shape(seq_x_data)[0], args.n_hidden))
-    seq_h_state_3d, seq_last_state = _rnn(inputs=seq_x_data,
+    seq_h_state_3d, seq_last_state = _rnn(inputs=tf.concat(values=[seq_x_data, seq_a_data], axis=-1),
                                           init_state=init_state,
                                           one_step=False)
 
@@ -229,6 +233,7 @@ def build_graph(args):
     train_graph = TrainGraph(seq_x_data,
                              seq_x_mask,
                              seq_y_data,
+                             seq_a_data,
                              seq_action_data,
                              seq_action_mask,
                              seq_advantage,
@@ -509,7 +514,7 @@ def main(_):
             print('Epoch {} training'.format(_epoch + 1))
 
             # Set rl skipping flag
-            use_rl_skipping = True #if _best_fer < 0.5 else False
+            use_rl_skipping = True
 
             # For each batch (update)
             for batch_data in train_set.get_epoch_iterator():
@@ -558,6 +563,8 @@ def main(_):
                     # Training Phase #
                     ##################
                     # Update model
+                    skip_a_data = np.zeros_like(skip_action_data)
+                    skip_a_data[:, 1:, :] = skip_action_data[:, :-1, :]
                     [_tr_ml_cost,
                      _tr_rl_cost,
                      _,
@@ -572,6 +579,7 @@ def main(_):
                                                 feed_dict={tg.seq_x_data: skip_x_data,
                                                            tg.seq_x_mask: skip_x_mask,
                                                            tg.seq_y_data: skip_y_data,
+                                                           tg.seq_a_data: skip_a_data,
                                                            tg.seq_action_data: skip_action_data,
                                                            tg.seq_action_mask: skip_action_mask,
                                                            tg.seq_advantage: skip_advantage,
@@ -755,6 +763,8 @@ def main(_):
                     #################
                     # Forward Phase #
                     #################
+                    skip_a_data = np.zeros_like(skip_action_data)
+                    skip_a_data[:, 1:, :] = skip_action_data[:, :-1, :]
                     # Update model
                     [_val_ml_cost,
                      _val_rl_cost,
@@ -766,6 +776,7 @@ def main(_):
                                                  feed_dict={tg.seq_x_data: skip_x_data,
                                                             tg.seq_x_mask: skip_x_mask,
                                                             tg.seq_y_data: skip_y_data,
+                                                            tg.seq_a_data: skip_a_data,
                                                             tg.seq_action_data: skip_action_data,
                                                             tg.seq_action_mask: skip_action_mask,
                                                             tg.seq_advantage: skip_advantage,
