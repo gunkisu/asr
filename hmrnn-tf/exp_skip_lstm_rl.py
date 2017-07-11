@@ -138,7 +138,6 @@ def build_graph(args):
 
         # Flag for sampling
         use_sampling = tf.placeholder(dtype=tf.bool,
-                                      shape=[1],
                                       name='use_sampling')
     ###########
     # Modules #
