@@ -1294,6 +1294,9 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                 skip_h_data[t, idx] = h_state[i]
 
                 # Update previous state
+                prev_action[idx] = np.zeros(shape=[args.n_action])
+
+                # Update previous state
                 prev_states[idx] = update_state[i]
 
                 # Reduce read counter as read one step
