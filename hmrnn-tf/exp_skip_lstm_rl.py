@@ -180,7 +180,7 @@ def build_graph(args):
     step_action_probs = tf.nn.softmax(logits=step_action_logits)
 
     # Action sampling
-    step_action_samples = tf.cond(pred=use_sampling*tf.ones(shape=[tf.shape(step_action_logits)[0], 1], dtype=tf.bool),
+    step_action_samples = tf.cond(pred=tf.to_float(use_sampling)*tf.ones(shape=[tf.shape(step_action_logits)[0], 1]),
                                   fn1=lambda: tf.multinomial(logits=step_action_logits, num_samples=1),
                                   fn2=lambda: tf.reshape(tf.argmax(input=step_action_logits, axis=-1), [-1, 1]))
 
