@@ -67,8 +67,8 @@ class StackLSTMModule(object):
     stack_rnn_cell = tf.contrib.rnn.MultiRNNCell(rnn_cell_list, state_is_tuple=True)
 
     if one_step:
-      outputs, states = stack_rnn_cell(inputs=inputs,
-                                       state=rnn_tuple_state)
+      with tf.variable_scope('rnn'):
+        outputs, states = stack_rnn_cell(inputs=inputs, state=rnn_tuple_state)
       stack_name = 'one_step_stack'
     else:
       outputs, states = tf.nn.dynamic_rnn(cell=stack_rnn_cell,
