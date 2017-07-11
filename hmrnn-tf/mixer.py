@@ -1187,6 +1187,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                                   seq_y_data,
                                   sess,
                                   sample_graph,
+                                  use_sampling,
                                   args):
     # Get input sequence size
     max_seq_len, batch_size, feat_size = seq_x_data.shape
@@ -1277,7 +1278,8 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                                        sample_graph.step_last_state],
                                       feed_dict={sample_graph.step_x_data: read_x_data,
                                                  sample_graph.prev_a_data: read_a_data,
-                                                 sample_graph.prev_states: np.transpose(read_states, [1, 0, 2])})
+                                                 sample_graph.prev_states: np.transpose(read_states, [1, 0, 2]),
+                                                 sample_graph.use_sampling: use_sampling})
             update_state = np.transpose(update_state, (1, 0, 2))
 
             # For each read data

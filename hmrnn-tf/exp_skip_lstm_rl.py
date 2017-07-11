@@ -75,7 +75,8 @@ sg_fields = ['step_x_data',
              'step_last_state',
              'step_label_probs',
              'step_action_probs',
-             'step_action_samples']
+             'step_action_samples',
+             'use_sampling']
 
 TrainGraph = namedtuple('TrainGraph', ' '.join(tg_fields))
 SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
@@ -134,6 +135,11 @@ def build_graph(args):
         prev_state = tf.placeholder(dtype=tf.float32,
                                     shape=(2, None, args.n_hidden),
                                     name='prev_states')
+
+        # Flag for sampling
+        use_sampling = tf.placeholder(dtype=tf.bool,
+                                      shape=[1],
+                                      name='use_sampling')
     ###########
     # Modules #
     ###########
@@ -174,7 +180,9 @@ def build_graph(args):
     step_action_probs = tf.nn.softmax(logits=step_action_logits)
 
     # Action sampling
-    step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1)
+    step_action_samples = tf.cond(pred=use_sampling,
+                                  fn1=tf.multinomial(logits=step_action_logits, num_samples=1),
+                                  fn2=tf.argmax(input=step_action_logits, axis=-1))
 
     # Set sampling graph
     sample_graph = SampleGraph(step_x_data,
@@ -184,7 +192,8 @@ def build_graph(args):
                                step_last_state,
                                step_label_probs,
                                step_action_probs,
-                               step_action_samples)
+                               step_action_samples,
+                               use_sampling)
 
     ##################
     # Training graph #
@@ -474,6 +483,10 @@ def main(_):
         val_fer = tf.placeholder(tf.float32)
         val_fer_summary = tf.summary.scalar("valid_fer", val_fer)
 
+        # For output visualization
+        val_image = tf.placeholder(tf.float32)
+        val_image_summary = tf.summary.image("valid_image", val_image)
+
     # Set module
     gen_episodes = improve_skip_rnn_act_parallel
 
@@ -546,7 +559,8 @@ def main(_):
                                                   seq_y_data=seq_y_data,
                                                   sess=sess,
                                                   sample_graph=sg,
-                                                  args=args)
+                                                  args=args,
+                                                  use_sampling=True)
 
                     # Compute baseline and refine reward
                     skip_advantage, skip_disc_rewards = compute_advantage(seq_h_data=skip_h_data,
@@ -747,7 +761,8 @@ def main(_):
                                                   seq_y_data=seq_y_data,
                                                   sess=sess,
                                                   sample_graph=sg,
-                                                  args=args)
+                                                  args=args,
+                                                  use_sampling=False)
 
                     # Compute baseline and refine reward
                     skip_advantage, skip_disc_rewards = compute_advantage(seq_h_data=skip_h_data,
@@ -765,7 +780,6 @@ def main(_):
                     #################
                     skip_a_data = np.zeros_like(skip_action_data)
                     skip_a_data[:, 1:, :] = skip_action_data[:, :-1, :]
-                    # Update model
                     [_val_ml_cost,
                      _val_rl_cost,
                      _val_pred_logit,
@@ -852,11 +866,19 @@ def main(_):
                                                  avg_val_ce, avg_val_fer,
                                                  eval_sw.elapsed()))
 
+            ################
+            # Write result #
+            ################
             [_val_ce_summary,
-             _val_fer_summary] = sess.run([val_ce_summary,
-                                           val_fer_summary],
+             _val_fer_summary,
+             _val_img_summary] = sess.run([val_ce_summary,
+                                           val_fer_summary,
+                                           val_image_summary],
                                           feed_dict={val_ce: avg_val_ce,
-                                                     val_fer: avg_val_fer})
+                                                     val_fer: avg_val_fer,
+                                                     val_image: result_image})
+
+            summary_writer.add_summary(_val_img_summary, global_step.eval())
             summary_writer.add_summary(_val_ce_summary, global_step.eval())
             summary_writer.add_summary(_val_fer_summary, global_step.eval())
 
