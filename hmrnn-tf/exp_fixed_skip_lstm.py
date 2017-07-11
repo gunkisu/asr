@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 import sys
 import os
-import socket
 import numpy as np
 import tensorflow as tf
 
-from mixer import gen_mask, get_gpuname
+from mixer import gen_mask
 from mixer import nats2bits
 from mixer import insert_item2dict
 from model import LinearCell
@@ -22,7 +21,7 @@ from itertools import islice
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('learning-rate', 0.002, 'Initial learning rate')
-flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
+flags.DEFINE_integer('batch-size', 64, 'Size of mini-batch')
 flags.DEFINE_integer('min-after-cache', 1024, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
 flags.DEFINE_integer('display-freq', 100, 'Display frequency')
@@ -98,9 +97,6 @@ def main(_):
     print(' '.join(sys.argv))
     args = FLAGS
     print(args.__flags)
-    print('Hostname: {}'.format(socket.gethostname()))
-    print('GPU: {}'.format(get_gpuname()))    
-    
     if not args.start_from_ckpt:
         if tf.gfile.Exists(args.log_dir):
             tf.gfile.DeleteRecursively(args.log_dir)
@@ -139,7 +135,7 @@ def main(_):
     sync_data(args)
     datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
     train_set, valid_set, test_set = [create_ivector_datastream(path=args.data_path, which_set=dataset, 
-            batch_size=args.n_batch, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort) for dataset in datasets]
+            batch_size=args.batch_size, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort) for dataset in datasets]
 
     init_op = tf.global_variables_initializer()
     save_op = tf.train.Saver(max_to_keep=5)
