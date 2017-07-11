@@ -9,7 +9,7 @@ from mixer import nats2bits
 from mixer import insert_item2dict
 from model import LinearCell
 from model import LSTMModule, StackLSTMModule
-from mixer import save_npz2
+from mixer import save_npz2, gen_zero_state, feed_init_state
 
 from collections import namedtuple, OrderedDict
 
@@ -45,29 +45,37 @@ flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_integer('n-skip', 1, 'Number of frames to skip')
 
 TrainGraph = namedtuple('TrainGraph', 'ml_cost seq_x_data seq_x_mask seq_y_data init_state pred_idx seq_label_probs')
+TestGraph = namedtuple('TestGraph', 'step_label_probs')
+
+def lstm_state(n_hidden, layer):
+    return tf.contrib.rnn.LSTMStateTuple(tf.placeholder(tf.float32, shape=(None, n_hidden), name='cstate_{}'.format(layer)), 
+        tf.placeholder(tf.float32, shape=(None, n_hidden), name='hstate_{}'.format(layer)))
 
 def build_graph(args):
     with tf.device(args.device):
-        # [batch_size, seq_len, ...]
+        # n_batch, n_seq, n_feat
         seq_x_data = tf.placeholder(dtype=tf.float32, shape=(None, None, args.n_input), name='seq_x_data')
         seq_x_mask = tf.placeholder(dtype=tf.float32, shape=(None, None), name='seq_x_mask')
         seq_y_data = tf.placeholder(dtype=tf.int32, shape=(None, None))
 
-        # [2, batch_size, ...]
-        init_state = tf.placeholder(tf.float32, shape=(2, None, args.n_hidden), name='init_state')
+        init_state = tuple( lstm_state(args.n_hidden, l) for l in range(args.n_layer))
+
+        step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
 
     with tf.variable_scope('rnn'):
-#    _rnn = LSTMModule(num_units=args.n_hidden)
-        _rnn = StackLSTMModule(num_units=args.n_hidden, num_layers=args.n_layer)
+        def lstm_cell():
+            return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
+           
+        cell = tf.contrib.rnn.MultiRNNCell([lstm_cell() for _ in range(args.n_layer)])
 
     with tf.variable_scope('label'):
         _label_logit = LinearCell(num_units=args.n_class)
 
     # training graph
-    seq_hid_3d, _ = _rnn(seq_x_data, init_state)
+    seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state)
     seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden])
 
-    seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')
+    seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')   
 
     y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=FLAGS.n_class)
 
@@ -79,6 +87,11 @@ def build_graph(args):
 
     seq_label_probs = tf.nn.softmax(seq_label_logits, name='seq_label_probs')
 
+    # testing graph
+    step_h_state, step_last_state = cell(step_x_data, init_state)
+    step_label_logits = _label_logit(step_h_state, 'label_logit')
+    step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
+
     train_graph = TrainGraph(ml_cost,
                                                      seq_x_data,
                                                      seq_x_mask,
@@ -87,12 +100,10 @@ def build_graph(args):
                                                      pred_idx,
                                                      seq_label_probs)
 
-    return train_graph
+    test_graph = TestGraph(step_label_probs)
 
-def initial_states(batch_size, n_hidden):
-    init_state = np.zeros([2, batch_size, n_hidden], dtype=np.float32)
-    return init_state
-
+    return train_graph, test_graph
+    
 def main(_):
     print(' '.join(sys.argv))
     args = FLAGS
@@ -113,7 +124,7 @@ def main(_):
 
     eval_summary = OrderedDict() # 
 
-    tg = build_graph(args)
+    tg, test_graph = build_graph(args)
     tg_ml_cost = tf.reduce_mean(tg.ml_cost)
 
     global_step = tf.Variable(0, trainable=False, name="global_step")
@@ -131,6 +142,7 @@ def main(_):
     ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
     
     tf.add_to_collection('n_skip', args.n_skip)
+    tf.add_to_collection('n_hidden', args.n_hidden)
 
     sync_data(args)
     datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
@@ -155,8 +167,7 @@ def main(_):
         sess.run(init_op)
 
         if args.start_from_ckpt:
-            save_op = tf.train.import_meta_graph(os.path.join(args.log_dir,
-                                                                                                                'model.ckpt.meta'))
+            save_op = tf.train.import_meta_graph(os.path.join(args.log_dir, 'model.ckpt.meta'))
             save_op.restore(sess, os.path.join(args.log_dir, 'model.ckpt'))
             print("Restore from the last checkpoint. "
                         "Restarting from %d step." % global_step.eval())
@@ -188,27 +199,29 @@ def main(_):
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
                  
                 for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1):
-                        x, x_mask, y = sub_batch
-                        n_batch, _, _ = x.shape
-                        _n_exp += n_batch
+                    x, x_mask, y = sub_batch
+                    n_batch, _, _ = x.shape
+                    _n_exp += n_batch
 
-                        _feed_states = initial_states(n_batch, args.n_hidden)
+                    zero_state = gen_zero_state(n_batch, args.n_hidden)
 
-                        _tr_ml_cost, _pred_idx, _ = sess.run([tg.ml_cost, tg.pred_idx, ml_op],
-                                         feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask,
-                                                    tg.seq_y_data: y, tg.init_state: _feed_states})
+                    feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask, tg.seq_y_data: y}
+                    feed_init_state(feed_dict, tg.init_state, zero_state)
 
-                        tr_ce_sum += _tr_ml_cost.sum()
-                        tr_ce_count += x_mask.sum()
-                        _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ml_cost.sum() / x_mask.sum()})
-                        summary_writer.add_summary(_tr_ce_summary, global_step.eval())
+                    _tr_ml_cost, _pred_idx, _ = sess.run([tg.ml_cost, tg.pred_idx, ml_op],
+                                     feed_dict=feed_dict)
 
-                        _, n_seq = orig_y.shape
-                        _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
-                        _pred_idx = _pred_idx[:,:n_seq]
+                    tr_ce_sum += _tr_ml_cost.sum()
+                    tr_ce_count += x_mask.sum()
+                    _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ml_cost.sum() / x_mask.sum()})
+                    summary_writer.add_summary(_tr_ce_summary, global_step.eval())
 
-                        tr_acc_sum += ((_pred_idx == orig_y) * orig_x_mask).sum()
-                        tr_acc_count += orig_x_mask.sum()
+                    _, n_seq = orig_y.shape
+                    _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
+                    _pred_idx = _pred_idx[:,:n_seq]
+
+                    tr_acc_sum += ((_pred_idx == orig_y) * orig_x_mask).sum()
+                    tr_acc_count += orig_x_mask.sum()
                                  
                 if global_step.eval() % args.display_freq == 0:
                     avg_tr_ce = tr_ce_sum / tr_ce_count
@@ -240,24 +253,26 @@ def main(_):
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
                  
                 for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1, return_first=True):
-                        x, x_mask, y = sub_batch
-                        n_batch, _, _ = x.shape
+                    x, x_mask, y = sub_batch
+                    n_batch, _, _ = x.shape
 
-                        _feed_states = initial_states(n_batch, args.n_hidden)
+                    zero_state = gen_zero_state(n_batch, args.n_hidden)
 
-                        _val_ml_cost, _pred_idx = sess.run([tg.ml_cost, tg.pred_idx],
-                                        feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask,
-                                                    tg.seq_y_data: y, tg.init_state: _feed_states})
-                        
-                        val_ce_sum += _val_ml_cost.sum()
-                        val_ce_count += x_mask.sum()
+                    feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask, tg.seq_y_data: y}
+                    feed_init_state(feed_dict, tg.init_state, zero_state)
 
-                        _, n_seq = orig_y.shape
-                        _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
-                        _pred_idx = _pred_idx[:,:n_seq]
+                    _val_ml_cost, _pred_idx = sess.run([tg.ml_cost, tg.pred_idx],
+                                    feed_dict=feed_dict)
+                    
+                    val_ce_sum += _val_ml_cost.sum()
+                    val_ce_count += x_mask.sum()
 
-                        val_acc_sum += ((_pred_idx == orig_y) * orig_x_mask).sum()
-                        val_acc_count += orig_x_mask.sum()
+                    _, n_seq = orig_y.shape
+                    _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
+                    _pred_idx = _pred_idx[:,:n_seq]
+
+                    val_acc_sum += ((_pred_idx == orig_y) * orig_x_mask).sum()
+                    val_acc_count += orig_x_mask.sum()
 
             avg_val_ce = val_ce_sum / val_ce_count
             avg_val_fer = 1. - float(val_acc_sum) / val_acc_count

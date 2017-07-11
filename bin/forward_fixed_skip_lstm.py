@@ -12,6 +12,9 @@ from collections import namedtuple, OrderedDict
 from data.fuel_utils import create_ivector_test_datastream, get_uttid_stream
 from libs.utils import sync_data, skip_frames_fixed, StopWatch
 
+from skiprnn.mixer import gen_zero_state, feed_init_state
+
+
 from itertools import islice
 
 import kaldi_io
@@ -26,10 +29,6 @@ flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5',
 flags.DEFINE_string('dataset', 'test_dev93', '')
 flags.DEFINE_string('wxfilename', 'ark:-', '')
 flags.DEFINE_string('metafile', 'best_model.ckpt-1000.meta', '')
-
-def initial_states(batch_size, n_hidden):
-    init_state = np.zeros([2, batch_size, n_hidden], dtype=np.float32)
-    return init_state
 
 def main(_):
     print(' '.join(sys.argv), file=sys.stderr)
@@ -50,7 +49,15 @@ def main(_):
         _seq_label_probs = sess.graph.get_tensor_by_name('seq_label_probs:0')
         seq_x_data = sess.graph.get_tensor_by_name('seq_x_data:0')
         seq_x_mask = sess.graph.get_tensor_by_name('seq_x_mask:0')
-        init_state = sess.graph.get_tensor_by_name('init_state:0')
+
+        cstates = [op.outputs[0] for op in sess.graph.get_operations() if 'cstate' in op.name]
+        hstates = [op.outputs[0] for op in sess.graph.get_operations() if 'hstate' in op.name]
+
+        init_state = []
+        for c, h in zip(cstates, hstates):
+            init_state.append(tf.contrib.rnn.LSTMStateTuple(c, h))
+        n_hidden, = sess.graph.get_collection('n_hidden')
+
         n_skip, = sess.graph.get_collection('n_skip')
 
         writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
@@ -69,10 +76,12 @@ def main(_):
             x, x_mask = sub_batch
             n_batch, n_seq, _ = x.shape
 
-            feed_states = initial_states(n_batch, init_state.shape[-1])
+            zero_state = gen_zero_state(n_batch, n_hidden)
 
-            seq_label_probs, = sess.run([_seq_label_probs],
-                feed_dict={seq_x_data: x, seq_x_mask: x_mask, init_state: feed_states})
+            feed_dict={seq_x_data: x, seq_x_mask: x_mask}
+            feed_init_state(feed_dict, init_state, zero_state)
+
+            seq_label_probs, = sess.run([_seq_label_probs], feed_dict=feed_dict)
 
             seq_label_probs = seq_label_probs.reshape([n_batch, n_seq, -1])
             seq_label_probs = seq_label_probs.repeat(n_skip+1, axis=1)

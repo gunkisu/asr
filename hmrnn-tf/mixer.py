@@ -13,6 +13,13 @@ def get_gpuname():
   gpuname = out.split(':')[1].strip()
   return gpuname
 
+def gen_zero_state(n_batch, n_units):
+    return np.zeros([n_batch, n_units], dtype=np.float32)
+
+def feed_init_state(feed_dict, init_state, zero_state):
+    for c, s in init_state:
+        feed_dict.update({c: zero_state, s: zero_state})
+
 # Misc
 def gen_mask(x, max_seq_len):
   n_step = x.shape[0]
@@ -862,12 +869,12 @@ def aggr_skip_rnn_act_parallel(x,
                          mask,
                          reward_mask) + [output_image,]
                        
+
 def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, 
     fill_function=fill_seg_match_reward):
 
     sg = sample_graph
 
-    # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
     x = np.transpose(x, [1,0,2])
     x_mask = np.transpose(x_mask, [1,0])
     y = np.transpose(y, [1,0])
@@ -877,8 +884,8 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
     max_seq_len = int(max(seq_lens))
 
     # shape should be (2, n_batch, n_hidden) when it is used
-    prev_state = np.zeros((n_batch, 2, args.n_hidden))
 
+    prev_state = np.zeros((n_batch, 2, args.n_hidden))
     action_counters = [0]*n_batch
     update_pos = [0]*n_batch
     reward_update_pos = [0]*n_batch
@@ -988,6 +995,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
                          action_entropies[:max_seq_len-1],
                          mask,
                          reward_mask]) + [output_image,]
+
 
 def aggr_ml_skip_rnn_act_parallel(x,
                                   x_mask,
