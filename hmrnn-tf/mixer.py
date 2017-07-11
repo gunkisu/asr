@@ -1189,11 +1189,13 @@ def aggr_ml_skip_rnn_act_parallel(x,
                          mask,
                          reward_mask) + [output_image,]
 
+
 def improve_skip_rnn_act_parallel(seq_x_data,
                                   seq_x_mask,
                                   seq_y_data,
                                   sess,
                                   sample_graph,
+                                  use_sampling,
                                   args):
     # Get input sequence size
     max_seq_len, batch_size, feat_size = seq_x_data.shape
@@ -1219,6 +1221,9 @@ def improve_skip_rnn_act_parallel(seq_x_data,
     # Init last action step
     prev_action_pos = [-1] * batch_size
     prev_action_org_pos = [-1] * batch_size
+
+    # Init previous action data
+    prev_action = np.zeros(shape=(batch_size, args.n_action))
 
     # Init previous action label prob
     prev_action_label_prb = np.zeros(shape=(batch_size, args.n_class))
@@ -1265,9 +1270,9 @@ def improve_skip_rnn_act_parallel(seq_x_data,
         if len(read_data_idx) > 0:
             # Get data to read
             read_x_data = np.asarray([step_x_data[idx] for idx in read_data_idx])
-            # read_a_data = np.asarray([skip_size_list[idx] for idx in read_data_idx]).reshape([-1, 1])/float(args.n_action)
             read_y_data = np.asarray([step_y_data[idx] for idx in read_data_idx])
             read_states = np.asarray([prev_states[idx] for idx in read_data_idx])
+            read_a_data = np.asarray([prev_action[idx] for idx in read_data_idx])
 
             # Update states and sample action
             [action_idx,
@@ -1280,8 +1285,9 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                                        sample_graph.step_h_state,
                                        sample_graph.step_last_state],
                                       feed_dict={sample_graph.step_x_data: read_x_data,
-                                                 # sample_graph.step_a_data: read_a_data,
-                                                 sample_graph.prev_states: np.transpose(read_states, [1, 0, 2])})
+                                                 sample_graph.prev_a_data: read_a_data,
+                                                 sample_graph.prev_states: np.transpose(read_states, [1, 0, 2]),
+                                                 sample_graph.use_sampling: use_sampling})
             update_state = np.transpose(update_state, (1, 0, 2))
 
             # For each read data
@@ -1315,6 +1321,9 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                     # Update action data
                     skip_a_data[t, idx, action_idx[i]] = 1.0
                     skip_a_mask[t, idx] = 1.0
+
+                    # Update previous state
+                    prev_action[idx] = skip_a_data[t, idx]
 
                     # Update skip cnt
                     skip_cnt[idx] = action_idx[i]
@@ -1380,9 +1389,8 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                     # Get misalignment
                     wrong_cnt = skip_size-match_cnt
 
-                    reward = match_cnt - wrong_cnt
                     # Save reward
-                    if reward > 0:
+                    if wrong_cnt > 0:
                         skip_r_data[prev_action_pos[idx], idx] = skip_size*skip_size
                     else:
                         skip_r_data[prev_action_pos[idx], idx] = -skip_size*skip_size
@@ -1393,7 +1401,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                     if sample_seq_len[idx]-1 == j:
                         skip_a_data[prev_action_pos[idx], idx] = np.zeros([args.n_action])
                         skip_a_data[prev_action_pos[idx], idx, j-prev_action_org_pos[idx]] = 1.0
-
+                        prev_action[idx] = skip_a_data[prev_action_pos[idx], idx]
 
     # Make visual image
     log_action_idx = np.transpose(log_action_idx, [1, 2, 0])
