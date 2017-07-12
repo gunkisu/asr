@@ -578,6 +578,7 @@ def main(_):
                     # Update model
                     skip_a_data = np.zeros_like(skip_action_data)
                     skip_a_data[:, 1:, :] = skip_action_data[:, :-1, :]
+                    skip_a_data[:, 0, 0] = 1.0
                     [_tr_ml_cost,
                      _tr_rl_cost,
                      _,
@@ -779,6 +780,7 @@ def main(_):
                     #################
                     skip_a_data = np.zeros_like(skip_action_data)
                     skip_a_data[:, 1:, :] = skip_action_data[:, :-1, :]
+                    skip_a_data[:, 0, 0] = 1.0
                     [_val_ml_cost,
                      _val_rl_cost,
                      _val_pred_logit,

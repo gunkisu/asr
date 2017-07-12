@@ -1224,6 +1224,8 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 
     # Init previous action data
     prev_action = np.zeros(shape=(batch_size, args.n_action))
+    read_action_vec = np.zeros(shape=[args.n_action])
+    read_action_vec[0] = 1.0
 
     # Init previous action label prob
     prev_action_label_prb = np.zeros(shape=(batch_size, args.n_class))
@@ -1246,33 +1248,33 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 
     # For each step (time step j)
     for j, (step_x_data, step_x_mask, step_y_data) in enumerate(itertools.izip(seq_x_data, seq_x_mask, seq_y_data)):
-        # Init read/skip sample index list
+        # Init to be read/skipped sample index list
         read_data_idx = []
         skip_data_idx = []
 
         # For each sample, decide to read or skip
         for i in range(batch_size):
-            # If step is available
+            # If step is not available, not consider
             if step_x_mask[i] == 0:
                 continue
 
-            # Get sample idx to read
+            # Get sample idx to read, if read_cnt>0
             if read_cnt[i] > 0:
                 assert skip_cnt[i] == 0
                 read_data_idx.append(i)
 
-            # Get sample idx to skip
+            # Otherwise, get sample idx to skip
             else:
                 assert read_cnt[i] == 0
                 skip_data_idx.append(i)
 
         # To read (update states and sample if needed)
         if len(read_data_idx) > 0:
-            # Get data to read
+            # Get current step data to read
             read_x_data = np.asarray([step_x_data[idx] for idx in read_data_idx])
+            read_a_data = np.asarray([prev_action[idx] for idx in read_data_idx])
             read_y_data = np.asarray([step_y_data[idx] for idx in read_data_idx])
             read_states = np.asarray([prev_states[idx] for idx in read_data_idx])
-            read_a_data = np.asarray([prev_action[idx] for idx in read_data_idx])
 
             # Update states and sample action
             [action_idx,
@@ -1300,9 +1302,10 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                 skip_x_mask[t, idx] = 1.0
                 skip_y_data[t, idx] = read_y_data[i]
                 skip_h_data[t, idx] = h_state[i]
+                skip_a_data[t, idx] = read_action_vec
 
-                # Update previous state
-                prev_action[idx] = np.zeros(shape=[args.n_action])
+                # Update action as NULL(zeros)
+                prev_action[idx] = read_action_vec
 
                 # Update previous state
                 prev_states[idx] = update_state[i]
@@ -1357,7 +1360,6 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 
         # To skip (compute reward and reset)
         if len(skip_data_idx) > 0:
-
             # For each data skipped
             for idx in skip_data_idx:
                 # Reduce skip counter
@@ -1394,9 +1396,9 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 
                     # Save reward
                     if wrong_cnt > 0:
-                        skip_r_data[prev_action_pos[idx], idx] = skip_size*skip_size
-                    else:
                         skip_r_data[prev_action_pos[idx], idx] = -skip_size*skip_size
+                    else:
+                        skip_r_data[prev_action_pos[idx], idx] = skip_size*skip_size
 
                     # Set read
                     read_cnt[idx] = args.min_read
