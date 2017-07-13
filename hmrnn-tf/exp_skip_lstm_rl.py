@@ -65,7 +65,7 @@ tg_fields = ['seq_x_data',
              'seq_ml_cost',
              'seq_rl_cost',
              'seq_real_rl_cost',
-             'seq_action_ent']
+             'seq_a_ent']
 
 sg_fields = ['step_x_data',
              'prev_a_data',
@@ -342,8 +342,8 @@ def main(_):
     # Print settings
     print(' '.join(sys.argv))
     args = FLAGS
-    for opt in args.__flags:
-        print(opt)
+    # for opt in args.__flags:
+    print(type(args.__flags))
 
     # Load checkpoint
     if not args.start_from_ckpt:
