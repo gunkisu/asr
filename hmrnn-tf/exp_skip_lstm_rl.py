@@ -342,7 +342,7 @@ def main(_):
     # Print settings
     print(' '.join(sys.argv))
     args = FLAGS
-    for k, v in args.__flags.iteritems:
+    for k, v in args.__flags.iteritems():
         print(k, ': ', v)
 
     # Load checkpoint
