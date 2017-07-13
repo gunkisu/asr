@@ -285,6 +285,7 @@ def expand_pred_idx(seq_skip_1hot,
         print(skip_step[:10])
         print(prd_idx[:10])
         print(expand_output[i, :50])
+        raw_input()
 
     return expand_output
 
