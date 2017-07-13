@@ -469,6 +469,10 @@ def main(_):
         tr_rw_hist = tf.placeholder(tf.float32)
         tr_rw_hist_summary = tf.summary.histogram("train_reward_hist", tr_rw_hist)
 
+        # For RL skip count
+        tr_skip_cnt = tf.placeholder(tf.float32)
+        tr_skip_cnt_summary = tf.summary.scalar("train_skip_cnt", tr_skip_cnt)
+
     # Set per-epoch logging
     with tf.name_scope("per_epoch_eval"):
         # For best valid ML cost (full)
@@ -490,6 +494,10 @@ def main(_):
         # For output visualization
         val_image = tf.placeholder(tf.float32)
         val_image_summary = tf.summary.image("valid_image", val_image)
+
+        # For RL skip count
+        val_skip_cnt = tf.placeholder(tf.float32)
+        val_skip_cnt_summary = tf.summary.scalar("valid_skip_cnt", val_skip_cnt)
 
     # Set module
     gen_episodes = improve_skip_rnn_act_parallel
@@ -514,6 +522,7 @@ def main(_):
         tr_rl_sum = 0.; tr_rl_count = 0
         tr_ent_sum = 0.; tr_ent_count = 0
         tr_reward_sum = 0.; tr_reward_count = 0
+        tr_skip_sum = 0.; tr_skip_count = 0
 
         _best_ce = np.iinfo(np.int32).max
         _best_fer = 1.00
@@ -565,6 +574,10 @@ def main(_):
                                                   sample_graph=sg,
                                                   args=args,
                                                   use_sampling=True)
+
+                    # Compute skip ratio
+                    tr_skip_sum += skip_x_mask.sum()/seq_x_mask.sum()
+                    tr_skip_count += 1.0
 
                     # Compute baseline and refine reward
                     skip_advantage, skip_disc_rewards = compute_advantage(seq_h_data=skip_h_data,
@@ -632,21 +645,26 @@ def main(_):
                      _tr_image_summary,
                      _tr_ent_summary,
                      _tr_reward_summary,
-                     _tr_rw_hist_summary] = sess.run([tr_rl_summary,
-                                                      tr_image_summary,
-                                                      tr_ent_summary,
-                                                      tr_reward_summary,
-                                                      tr_rw_hist_summary],
-                                                     feed_dict={tr_rl: _tr_rl_cost.sum(),
-                                                                tr_image: result_image,
-                                                                tr_ent: (_tr_act_ent.sum() / skip_a_mask.sum()),
-                                                                tr_reward: ((skip_rewards*skip_a_mask).sum()/skip_a_mask.sum()),
-                                                                tr_rw_hist: skip_rewards})
+                     _tr_rw_hist_summary,
+                     _tr_skip_cnt_summary] = sess.run([tr_rl_summary,
+                                                       tr_image_summary,
+                                                       tr_ent_summary,
+                                                       tr_reward_summary,
+                                                       tr_rw_hist_summary,
+                                                       tr_skip_cnt_summary],
+                                                      feed_dict={tr_rl: _tr_rl_cost.sum(),
+                                                                 tr_image: result_image,
+                                                                 tr_ent: (_tr_act_ent.sum() / skip_a_mask.sum()),
+                                                                 tr_reward: ((skip_rewards*skip_a_mask).sum()/skip_a_mask.sum()),
+                                                                 tr_rw_hist: skip_rewards,
+                                                                 tr_skip_cnt: skip_x_mask.sum()/seq_x_mask.sum()})
+
                     summary_writer.add_summary(_tr_rl_summary, global_step.eval())
                     summary_writer.add_summary(_tr_image_summary, global_step.eval())
                     summary_writer.add_summary(_tr_ent_summary, global_step.eval())
                     summary_writer.add_summary(_tr_reward_summary, global_step.eval())
                     summary_writer.add_summary(_tr_rw_hist_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_skip_cnt_summary, global_step.eval())
                 else:
                     # Number of samples
                     batch_size = seq_x_data.shape[0]
@@ -693,12 +711,15 @@ def main(_):
                         avg_tr_rl = tr_rl_sum / tr_rl_count
                         avg_tr_ent = tr_ent_sum / tr_ent_count
                         avg_tr_reward = tr_reward_sum / tr_reward_count
+                        avg_tr_skip = tr_skip_sum / tr_skip_count
                         print("TRAIN: epoch={} iter={} "
                               "ml_cost(ce/frame)={:.2f} fer={:.2f} "
                               "rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} "
+                              "skip_ratio={:.2f} "
                               "time_taken={:.2f}".format(_epoch, global_step.eval(),
                                                          avg_tr_ce, avg_tr_fer,
                                                          avg_tr_rl, avg_tr_reward, avg_tr_ent,
+                                                         avg_tr_skip,
                                                          disp_sw.elapsed()))
                     else:
                         print("TRAIN: epoch={} iter={} "
@@ -713,6 +734,7 @@ def main(_):
                     tr_rl_sum = 0.; tr_rl_count = 0
                     tr_ent_sum = 0.; tr_ent_count = 0
                     tr_reward_sum = 0.; tr_reward_count = 0
+                    tr_skip_sum = 0.; tr_skip_count = 0
 
                     disp_sw.reset()
 
@@ -730,6 +752,7 @@ def main(_):
             val_rl_sum = 0.; val_rl_count = 0
             val_ent_sum = 0.; val_ent_count = 0
             val_reward_sum = 0.; val_reward_count = 0
+            val_skip_sum = 0.; val_skip_count = 0
             eval_sw.reset()
 
             # For each batch in Valid
@@ -765,6 +788,10 @@ def main(_):
                                                   args=args,
                                                   use_sampling=False)
 
+                    # Compute skip ratio
+                    val_skip_sum += skip_x_mask.sum()/seq_x_mask.sum()
+                    val_skip_count += 1.0
+
                     # Compute baseline and refine reward
                     skip_advantage, skip_disc_rewards = compute_advantage(seq_h_data=skip_h_data,
                                                                           seq_r_data=skip_rewards,
@@ -790,7 +817,7 @@ def main(_):
                                                             tg.seq_x_mask: skip_x_mask,
                                                             tg.seq_y_data: skip_y_data,
                                                             tg.seq_a_data: skip_a_data,
-                                                            tg.seq_a_mask: seq_a_mask,
+                                                            tg.seq_a_mask: skip_a_mask,
                                                             tg.seq_advantage: skip_advantage,
                                                             tg.seq_reward: skip_disc_rewards})
 
@@ -849,13 +876,16 @@ def main(_):
                 avg_val_rl = val_rl_sum / val_rl_count
                 avg_val_ent = val_ent_sum / val_ent_count
                 avg_val_reward = val_reward_sum / val_reward_count
+                avg_val_skip = val_skip_sum / val_skip_count
 
                 print("VALID: epoch={} "
                       "ml_cost(ce/frame)={:.2f} fer={:.2f} "
                       "rl_cost={:.4f} reward={:.4f} action_entropy={:.2f} "
+                      "skip_ratio={:.2f} "
                       "time_taken={:.2f}".format(_epoch,
                                                  avg_val_ce, avg_val_fer,
                                                  avg_val_rl, avg_val_reward, avg_val_ent,
+                                                 avg_val_skip,
                                                  eval_sw.elapsed()))
             else:
                 print("VALID: epoch={} "
@@ -869,13 +899,17 @@ def main(_):
             ################
             [_val_ce_summary,
              _val_fer_summary,
+             _val_skip_cnt_summary,
              _val_img_summary] = sess.run([val_ce_summary,
                                            val_fer_summary,
+                                           val_skip_cnt_summary,
                                            val_image_summary],
                                           feed_dict={val_ce: avg_val_ce,
                                                      val_fer: avg_val_fer,
+                                                     val_skip_cnt: avg_val_skip,
                                                      val_image: result_image})
 
+            summary_writer.add_summary(_val_skip_cnt_summary, global_step.eval())
             summary_writer.add_summary(_val_img_summary, global_step.eval())
             summary_writer.add_summary(_val_ce_summary, global_step.eval())
             summary_writer.add_summary(_val_fer_summary, global_step.eval())
