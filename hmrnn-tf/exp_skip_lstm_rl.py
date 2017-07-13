@@ -347,7 +347,7 @@ def main(_):
     print(' '.join(sys.argv))
     args = FLAGS
     for k, v in args.__flags.iteritems():
-        print(k, ': ', v)
+        print(k, v)
 
     # Load checkpoint
     if not args.start_from_ckpt:
