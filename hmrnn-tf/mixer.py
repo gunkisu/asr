@@ -1226,7 +1226,6 @@ def improve_skip_rnn_act_parallel(seq_x_data,
     prev_action = np.zeros(shape=(batch_size, args.n_action))
     read_action_vec = np.zeros(shape=[args.n_action])
     read_action_vec[0] = 1.0
-    print(read_action_vec)
 
     # Init previous action label prob
     prev_action_label_prb = np.zeros(shape=(batch_size, args.n_class))
