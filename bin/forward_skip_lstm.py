@@ -29,11 +29,15 @@ flags.DEFINE_string('dataset', 'test_dev93', '')
 flags.DEFINE_string('wxfilename', 'ark:-', '')
 flags.DEFINE_string('metafile', 'best_model.ckpt-1000.meta', '')
 
-SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples step_action_probs step_last_state step_x_data prev_states')
+SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples step_action_probs step_last_state step_x_data init_state')
 
-def initial_states(batch_size, n_hidden):
-    init_state = np.zeros([2, batch_size, n_hidden], dtype=np.float32)
-    return init_state
+def match_c(opname):
+    return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/add_1' in opname
+
+def match_h(opname):
+    return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/mul_2' in opname
+
+
 
 def main(_):
     print(' '.join(sys.argv), file=sys.stderr)
@@ -57,11 +61,23 @@ def main(_):
         step_action_probs = sess.graph.get_tensor_by_name('step_action_probs:0')
         step_action_samples = sess.graph.get_tensor_by_name('step_action_samples/Multinomial:0')
         step_x_data = sess.graph.get_tensor_by_name('step_x_data:0')
-        prev_states = sess.graph.get_tensor_by_name('prev_states:0')
-        step_last_state = sess.graph.get_tensor_by_name('one_step_stack:0')
         fast_action, n_fast_action = sess.graph.get_collection('fast_action')
 
-        sample_graph = SampleGraph(_step_label_probs, step_action_samples, step_action_probs, step_last_state, step_x_data, prev_states)
+        cstates = [op.outputs[0] for op in sess.graph.get_operations() if 'cstate' in op.name]
+        hstates = [op.outputs[0] for op in sess.graph.get_operations() if 'hstate' in op.name]
+
+        init_state = []
+        for c, h in zip(cstates, hstates):
+            init_state.append(tf.contrib.rnn.LSTMStateTuple(c, h))
+
+        step_last_state = []
+
+        last_cstates = [op.outputs[0] for op in sess.graph.get_operations() if match_c(op.name)]
+        last_hstates = [op.outputs[0] for op in sess.graph.get_operations() if match_h(op.name)]
+        for c, h in zip(last_cstates, last_hstates):
+            step_last_state.append(tf.contrib.rnn.LSTMStateTuple(c, h))
+
+        sample_graph = SampleGraph(_step_label_probs, step_action_samples, step_action_probs, step_last_state, step_x_data, init_state)
 
         writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 
