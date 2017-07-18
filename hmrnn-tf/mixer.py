@@ -1352,9 +1352,27 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 
                     # If skipping is 0, reset to read mode
                     if skip_cnt[idx] == 0:
-                        # Save reward (reward nothing)
-#=====================>REWARD FOR NO SKIP
-                        skip_r_data[t, idx] = 0.0
+                        # Get action position
+                        action_start_pos = prev_action_org_pos[idx]
+
+                        # Get label of the last read step
+                        prd_label = seq_y_data[action_start_pos, idx]
+
+                        # Check how much it aligns to the last read step
+                        seg_cnt = 1.0
+                        for l, m in zip(seq_y_data[(action_start_pos + 1):(action_start_pos + args.n_action), idx],
+                                        seq_x_mask[(action_start_pos + 1):(action_start_pos + args.n_action), idx]):
+                            # If data is available and label aligns
+                            if m > 0. and l == prd_label:
+                                seg_cnt += 1.0
+                            else:
+                                break
+
+                        # Save reward
+                        if seg_cnt == 1.0:
+                            skip_r_data[prev_action_pos[idx], idx] = 1.0
+                        else:
+                            skip_r_data[prev_action_pos[idx], idx] = -1.0
 
                         # Set read
                         read_cnt[idx] = args.min_read
@@ -1376,7 +1394,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                     action_end_pos = j
 
                     # Current action size
-                    skip_size = action_end_pos - action_start_pos
+                    skip_size = action_end_pos - action_start_pos + 1.0
 
                     # Get label of the last read step
                     prd_label = seq_y_data[action_start_pos, idx]
@@ -1384,22 +1402,30 @@ def improve_skip_rnn_act_parallel(seq_x_data,
 #==================> COMPUTE REWARD
 # 1) LARGER SKIP SIZE IS BETTER (SUPER-LINEAR TO SKIP-SIZE)
 # 2) MISALIGNMENT HAS TO BE AVOID (PENALIZE MISALIGNMENT)
-                    match_cnt = 0.0
+                    seg_cnt = 0.0
 
                     # Check how much it aligns to the last read step
-                    for l in seq_y_data[action_start_pos+1:(action_end_pos+1), idx]:
-                        if l == prd_label:
-                            match_cnt += 1
+                    for l, m in zip(seq_y_data[(action_start_pos+1):(action_start_pos+args.n_action), idx],
+                                    seq_x_mask[(action_start_pos+1):(action_start_pos+args.n_action), idx]):
+                        # If data is available and label aligns
+                        if m > 0. and l == prd_label:
+                            seg_cnt += 1.0
                         else:
                             break
-                    # Get misalignment
-                    wrong_cnt = skip_size-match_cnt
+# GIVEN CURRENT SEGMENT SIZE
+# IF SKIP_SIZE>SEG_SIZE:
+#       OVER USE => PENALIZE -1 (THIS MAKES MIS-CLASSIFICATION)
+# IF SKIP_SIZE<SEG_SIZE:
+#       LESS USE => PENALIZE -1 (THIS DOESN'T MAKE MIS-CLASSIFICATION, BUT ADDITIONAL COMPUTATION)
+# IF SKIP_SIZE==SEG_SIZE:
+#       BEST => REWARD + 1(THIS IS BEST WHAT CAN DO IN CURRENT STATE)
+
 
                     # Save reward
-                    if wrong_cnt > 0:
-                        skip_r_data[prev_action_pos[idx], idx] = -skip_size*skip_size
+                    if skip_size == seg_cnt:
+                        skip_r_data[prev_action_pos[idx], idx] = 1.0
                     else:
-                        skip_r_data[prev_action_pos[idx], idx] = skip_size*skip_size
+                        skip_r_data[prev_action_pos[idx], idx] = -1.0
 
                     # Set read
                     read_cnt[idx] = args.min_read
