@@ -78,7 +78,6 @@ class StackLSTMModule(object):
     last_state_list = [tf.stack([states[l][0], states[l][1]], axis=0, name=stack_name) for l in range(self._num_layers)]
     return outputs, last_state_list
 
-
 def _affine(args, output_size, bias=True, scope=None, init_W=None):
   # Calculate the total size of arguments on dimension 1
   total_arg_size = 0

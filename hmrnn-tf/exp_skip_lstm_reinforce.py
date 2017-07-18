@@ -19,8 +19,8 @@ from mixer import get_gpuname
 from mixer import gen_episode_with_seg_reward, fill_seg_match_reward2, fill_seg_match_reward
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_output
+from mixer import lstm_state, gen_zero_state, feed_init_state
 from model import LinearCell
-from model import StackLSTMModule
 
 from data.fuel_utils import create_ivector_datastream
 from libs.utils import sync_data, StopWatch
@@ -34,7 +34,7 @@ flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
 flags.DEFINE_integer('display-freq', 100, 'Display frequency')
 flags.DEFINE_integer('n-input', 123, 'Number of RNN hidden units')
-flags.DEFINE_integer('n-layers', 1, 'Number of RNN hidden layers')
+flags.DEFINE_integer('n-layer', 1, 'Number of RNN hidden layers')
 flags.DEFINE_integer('n-hidden', 1024, 'Number of RNN hidden units')
 flags.DEFINE_integer('n-class', 3436, 'Number of target symbols')
 flags.DEFINE_integer('n-action', 3, 'Number of actions (max skim size)')
@@ -59,32 +59,30 @@ tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',
     'seq_y_data', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
 
 sg_fields = ['step_h_state', 'step_last_state', 'step_label_probs', 'step_action_probs',
-    'step_action_samples', 'step_x_data', 'prev_states', 'action_entropy']
+    'step_action_samples', 'step_x_data', 'init_state', 'action_entropy']
 
 TrainGraph = namedtuple('TrainGraph', ' '.join(tg_fields))
 SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
 
 def build_graph(args):
     with tf.device(args.device):
-        # [batch_size, seq_len, ...]
+        # n_batch, n_seq, n_feat
         seq_x_data = tf.placeholder(dtype=tf.float32, shape=(None, None, args.n_input))
         seq_x_mask = tf.placeholder(dtype=tf.float32, shape=(None, None))
         seq_y_data = tf.placeholder(dtype=tf.int32, shape=(None, None))
 
-        # [2, batch_size, ...]
-        init_state = tf.placeholder(tf.float32, shape=(2, None, args.n_hidden))
+        init_state = tuple( lstm_state(args.n_hidden, l) for l in range(args.n_layer))
 
         seq_action = tf.placeholder(tf.float32, shape=(None, None, args.n_action))
         seq_advantage = tf.placeholder(tf.float32, shape=(None, None))
         seq_action_mask = tf.placeholder(tf.float32, shape=(None, None))
         
-        # input data (batch_size, feat_size) for sampling
         step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
-        # previous state (2, batch_size, num_hiddens)
-        prev_states = tf.placeholder(tf.float32, shape=(2, None, args.n_hidden), name='prev_states')
 
-    with tf.variable_scope('rnn'):
-        _rnn = StackLSTMModule(num_units=args.n_hidden, num_layers=args.n_layers)
+    def lstm_cell():
+        return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
+       
+    cell = tf.contrib.rnn.MultiRNNCell([lstm_cell() for _ in range(args.n_layer)])
 
     with tf.variable_scope('label'):
         _label_logit = LinearCell(num_units=args.n_class)
@@ -93,7 +91,7 @@ def build_graph(args):
         _action_logit = LinearCell(num_units=args.n_action)
 
     # sampling graph
-    step_h_state, step_last_state = _rnn(step_x_data, prev_states, one_step=True)
+    step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
 
     step_label_logits = _label_logit(step_h_state, 'label_logit')
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
@@ -104,7 +102,7 @@ def build_graph(args):
     step_action_entropy = categorical_ent(step_action_probs)
 
     # training graph
-    seq_hid_3d, _ = _rnn(seq_x_data, init_state)
+    seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
     seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden])
 
     seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')
@@ -137,12 +135,12 @@ def build_graph(args):
         seq_y_data, init_state, seq_action, seq_advantage, seq_action_mask, pred_idx)
 
     sample_graph = SampleGraph(step_h_state, step_last_state, step_label_probs,
-        step_action_probs, step_action_samples, step_x_data, prev_states, step_action_entropy)
+        step_action_probs, step_action_samples, step_x_data, init_state, step_action_entropy)
 
     return train_graph, sample_graph
 
-def initial_states(batch_size, n_hidden):
-    init_state = np.zeros([2, batch_size, n_hidden], dtype=np.float32)
+def initial_states(batch_size, n_hidden, n_layers):
+    init_state = [np.zeros([2, batch_size, n_hidden], dtype=np.float32) for i in range(n_layers)]
     return init_state
 
 def main(_):
@@ -264,23 +262,20 @@ def main(_):
                 n_batch = x.shape[0]
                 _n_exp += n_batch
 
-                # TODO: gen_episodes needs to transpose input matrices inside of it 
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, fill_seg_match_reward2)
-                
                 advantages,_ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
-                _feed_states = initial_states(n_batch, args.n_hidden)
-                
-                _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \
-                        sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op, tg.pred_idx],
-                                            feed_dict={tg.seq_x_data: new_x,
-                                                                 tg.seq_x_mask: new_x_mask,
-                                                                 tg.seq_y_data: new_y,
-                                                                 tg.init_state: _feed_states,
-                                                                 tg.seq_action: actions_1hot,
-                                                                 tg.seq_advantage: advantages,
-                                                                 tg.seq_action_mask: new_reward_mask})
 
+                zero_state = gen_zero_state(n_batch, args.n_hidden)
+
+                feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
+                    tg.seq_action: actions_1hot, tg.seq_advantage: advantages, 
+                    tg.seq_action_mask: new_reward_mask}
+                feed_init_state(feed_dict, tg.init_state, zero_state)
+
+                _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \
+                    sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op, tg.pred_idx], feed_dict=feed_dict)
+        
                 tr_ce_sum += _tr_ml_cost.sum()
                 tr_ce_count += new_x_mask.sum()
 
@@ -344,16 +339,15 @@ def main(_):
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, fill_seg_match_reward2)
                 advantages, _ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
-                _feed_states = initial_states(n_batch, args.n_hidden)
+                zero_state = gen_zero_state(n_batch, args.n_hidden)
+
+                feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
+                    tg.seq_action: actions_1hot, tg.seq_advantage: advantages, 
+                    tg.seq_action_mask: new_reward_mask}
+                feed_init_state(feed_dict, tg.init_state, zero_state)
 
                 _val_ml_cost, _val_rl_cost, pred_idx = sess.run([tg.ml_cost, tg.rl_cost, tg.pred_idx],
-                                feed_dict={tg.seq_x_data: new_x, 
-                                            tg.seq_x_mask: new_x_mask,
-                                            tg.seq_y_data: new_y, 
-                                            tg.init_state: _feed_states,
-                                            tg.seq_action: actions_1hot, 
-                                            tg.seq_advantage: advantages, 
-                                            tg.seq_action_mask: new_reward_mask})
+                                feed_dict=feed_dict)
                 
                 val_ce_sum += _val_ml_cost.sum()
                 val_ce_count += new_x_mask.sum()

@@ -20,6 +20,21 @@ def feed_init_state(feed_dict, init_state, zero_state):
     for c, s in init_state:
         feed_dict.update({c: zero_state, s: zero_state})
 
+def feed_prev_state(feed_dict, init_state, new_state):
+    # shape of init_state: n_layer, 2, n_batch, n_hidden
+    # shape of new state: n_batch, n_layer, 2, n_hidden
+    # new shape: n_layer, 2, n_batch, n_hidden
+    new_state = np.transpose(new_state, [1, 2, 0, 3])
+    for i, n in zip(init_state, new_state):
+        ic, ih = i
+        nc, nh = n
+
+        feed_dict.update({ic: nc, ih: nh})
+
+def lstm_state(n_hidden, layer):
+    return tf.contrib.rnn.LSTMStateTuple(tf.placeholder(tf.float32, shape=(None, n_hidden), name='cstate_{}'.format(layer)), 
+        tf.placeholder(tf.float32, shape=(None, n_hidden), name='hstate_{}'.format(layer)))
+
 # Misc
 def gen_mask(x, max_seq_len):
   n_step = x.shape[0]
@@ -883,9 +898,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
     seq_lens = x_mask.sum(axis=0)
     max_seq_len = int(max(seq_lens))
 
-    # shape should be (2, n_batch, n_hidden) when it is used
-
-    prev_state = np.zeros((n_batch, 2, args.n_hidden))
+    prev_state = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
     action_counters = [0]*n_batch
     update_pos = [0]*n_batch
     reward_update_pos = [0]*n_batch
@@ -910,13 +923,17 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
             filter_last(x_step, y_step, prev_state, j, seq_lens, sample_done)
 
         if len(_x_step):
+
+            feed_dict={sg.step_x_data: _x_step}
+            feed_prev_state(feed_dict, sg.init_state, _prev_state)
+
             step_label_likelihood_j, new_prev_state = \
                 sess.run([sg.step_label_probs, sg.step_last_state],
-                    feed_dict={sg.step_x_data: _x_step, sg.prev_states: np.transpose(_prev_state, [1, 0, 2])})
+                    feed_dict=feed_dict)
 
             step_label_idx = step_label_likelihood_j.argmax(axis=1)
 
-            new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
+            new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
@@ -933,14 +950,18 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
             filter_action_end(x_step, y_step, prev_state, j, action_counters, sample_done)
 
         if len(_x_step):
+
+            feed_dict={sg.step_x_data: _x_step}
+            feed_prev_state(feed_dict, sg.init_state, _prev_state)
+
             action_idx, step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy = \
                 sess.run([sg.step_action_samples, sg.step_action_probs, sg.step_label_probs,
                     sg.step_last_state, sg.action_entropy],
-                    feed_dict={sg.step_x_data: _x_step, sg.prev_states: np.transpose(_prev_state, [1, 0, 2])})
+                    feed_dict=feed_dict)
 
             step_label_idx = step_label_likelihood_j.argmax(axis=1)
 
-            new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
+            new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
             action_one_hot = np.eye(args.n_action)[action_idx.flatten()]
 
             fill(new_x, _x_step, target_indices, update_pos)
@@ -1772,17 +1793,16 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fas
     x_mask = np.transpose(x_mask, [1,0])
 
     n_class = sg.step_label_probs.shape[-1].value
-    n_hidden = sg.step_last_state.shape[-1].value
+    n_hidden = sg.step_last_state[0].c.shape[-1].value
     n_action = sg.step_action_probs.shape[-1].value
+    n_layer = len(sg.step_last_state)
 
     n_seq, n_batch, n_feat = x.shape
     seq_lens = x_mask.sum(axis=0, dtype=np.int32)
     max_seq_len = max(seq_lens)
 
-    # shape should be (2, n_batch, n_hidden) when it is used
-    prev_state = np.zeros((n_batch, 2, n_hidden))
+    prev_state = np.zeros([n_batch, n_layer, 2, n_hidden])
 
-    # init counter and positions
     action_counters = [0]*n_batch
     update_pos = [0]*n_batch
     sample_done = [] # indices of examples fully processed
@@ -1797,10 +1817,13 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fas
             filter_last_forward(x_step, prev_state, j, seq_lens, sample_done)
 
         if len(_x_step):
+            feed_dict={sg.step_x_data: _x_step}
+            feed_prev_state(feed_dict, sg.init_state, _prev_state)
+
             step_label_likelihood_j, new_prev_state = \
-                sess.run([sg.step_label_probs, sg.step_last_state], 
-                    feed_dict={sg.step_x_data: _x_step, sg.prev_states: np.transpose(_prev_state, [1, 0, 2])})
-            new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
+                sess.run([sg.step_label_probs, sg.step_last_state], feed_dict=feed_dict)
+
+            new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
@@ -1813,11 +1836,15 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fas
             filter_action_end_forward(x_step, prev_state, j, action_counters, sample_done)
 
         if len(_x_step):
+            feed_dict={sg.step_x_data: _x_step}
+            feed_prev_state(feed_dict, sg.init_state, _prev_state)
+
             action_idx, step_label_likelihood_j, new_prev_state = \
                 sess.run([sg.step_action_samples, sg.step_label_probs, sg.step_last_state],
-                    feed_dict={sg.step_x_data: _x_step, sg.prev_states: np.transpose(_prev_state, [1, 0, 2])})
-            new_prev_state = np.transpose(new_prev_state, [1, 0, 2])
-            
+                    feed_dict=feed_dict)
+
+            new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
+
             fill(new_x, _x_step, target_indices, update_pos)
             fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
 

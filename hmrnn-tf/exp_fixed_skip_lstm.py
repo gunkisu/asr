@@ -7,8 +7,8 @@ import tensorflow as tf
 from mixer import gen_mask
 from mixer import nats2bits
 from mixer import insert_item2dict
+from mixer import lstm_state
 from model import LinearCell
-from model import LSTMModule, StackLSTMModule
 from mixer import save_npz2, gen_zero_state, feed_init_state
 
 from collections import namedtuple, OrderedDict
