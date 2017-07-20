@@ -1393,7 +1393,7 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                         if seg_cnt == 1.0:
                             skip_r_data[prev_action_pos[idx], idx] = 1.0
                         else:
-                            skip_r_data[prev_action_pos[idx], idx] = -(seg_cnt-1.0)**2
+                            skip_r_data[prev_action_pos[idx], idx] = 0.0
 
                         # Set read
                         read_cnt[idx] = args.min_read
@@ -1445,13 +1445,13 @@ def improve_skip_rnn_act_parallel(seq_x_data,
                     # Save reward
                     if skip_size == seg_cnt:
                         # Got best
-                        skip_r_data[prev_action_pos[idx], idx] = seg_cnt**2
+                        skip_r_data[prev_action_pos[idx], idx] = 1.0
                     elif skip_size > seg_cnt:
                         # Got mis-classified (accuracy decrease)
-                        skip_r_data[prev_action_pos[idx], idx] = -(seg_cnt-skip_size)**2
+                        skip_r_data[prev_action_pos[idx], idx] = -1.0
                     else:
                         # Got less (computation increase)
-                        skip_r_data[prev_action_pos[idx], idx] = skip_size**2
+                        skip_r_data[prev_action_pos[idx], idx] = 0.0
 
                     # Set read
                     read_cnt[idx] = args.min_read
