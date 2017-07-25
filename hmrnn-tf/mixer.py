@@ -23,7 +23,9 @@ def feed_init_state(feed_dict, init_state, zero_state):
 def feed_prev_state(feed_dict, init_state, new_state):
     # shape of init_state: n_layer, 2, n_batch, n_hidden
     # shape of new state: n_batch, n_layer, 2, n_hidden
-    # new shape: n_layer, 2, n_batch, n_hidden
+    # n_batch in init_state is None so it can take 
+    # new_state in different batch sizes
+
     new_state = np.transpose(new_state, [1, 2, 0, 3])
     for i, n in zip(init_state, new_state):
         ic, ih = i
@@ -34,6 +36,12 @@ def feed_prev_state(feed_dict, init_state, new_state):
 def lstm_state(n_hidden, layer):
     return tf.contrib.rnn.LSTMStateTuple(tf.placeholder(tf.float32, shape=(None, n_hidden), name='cstate_{}'.format(layer)), 
         tf.placeholder(tf.float32, shape=(None, n_hidden), name='hstate_{}'.format(layer)))
+
+def match_c(opname):
+    return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/add_1' in opname
+
+def match_h(opname):
+    return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/mul_2' in opname
 
 # Misc
 def gen_mask(x, max_seq_len):
@@ -544,7 +552,7 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
     return reward_target_indices
 
 def fill_seg_match_reward2(reward_list, y, cur_step_idx, prev_pred_idx_list,
-        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action):
+        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action, alpha=1.0, beta=1.0):
     reward_target_indices = []
 
     for idx in target_indices:
@@ -558,13 +566,14 @@ def fill_seg_match_reward2(reward_list, y, cur_step_idx, prev_pred_idx_list,
 
         match_count = 0
         miss_count = 0
-        target_label = prev_pred_idx
-#        target_label = ref_labels[0] # focus on only segmentation
+#        target_label = prev_pred_idx
+        target_label = ref_labels[0] # focus on only segmentation
         for l in ref_labels:
             if l == target_label: match_count += 1
             else: miss_count += 1
         
-        reward_list[reward_update_pos[idx], idx] = float(match_count) / action_size + float(action_size) /  n_action
+        reward_list[reward_update_pos[idx], idx] = alpha * float(match_count) / action_size + \
+            beta * float(action_size) /  n_action
         reward_target_indices.append(idx)
 
     return reward_target_indices
@@ -885,6 +894,35 @@ def aggr_skip_rnn_act_parallel(x,
                          reward_mask) + [output_image,]
                        
 
+def color_flip(color, n_class):
+    if color == n_class-1:
+        return 0
+    elif color == 0:
+        return n_class-1
+    else:
+        raise ValueError
+
+def to_label_change(y, n_class):
+    # y is in shape [n_seq, n_batch]
+
+    n_seq, n_batch = y.shape
+    label_change = np.zeros([n_seq, n_batch])
+    
+    color = np.zeros([n_batch], dtype=np.int32)
+    color[:] = n_class-1
+
+    label_change[0] = color
+
+    for i, (prev_color, cur_color) in enumerate(zip(y[:-1], y[1:]), start=1):
+        for b, (pc, cc) in enumerate(zip(prev_color, cur_color)):
+            if pc == cc:
+                label_change[i][b] = color[b]
+            else:
+                color[b] = color_flip(color[b], n_class)
+                label_change[i][b] = color[b]
+
+    return label_change
+
 def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, 
     fill_function=fill_seg_match_reward):
 
@@ -939,7 +977,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
             fill(new_y, _y_step, target_indices, update_pos)
 
             reward_target_indices = fill_function(rewards, y, j, 
-                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action)
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action, args.alpha, args.beta)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
@@ -972,7 +1010,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
             update_action_counters(action_counters, action_idx.flatten(), target_indices, args)
 
             reward_target_indices = fill_function(rewards, y, j,
-                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action)
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action, args.alpha, args.beta)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
@@ -992,13 +1030,17 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
 
     full_action_samples = np.transpose(full_action_samples, [1, 2, 0])
     full_action_samples = np.expand_dims(full_action_samples, axis=-1)
-    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1)
+    # make it thicker
+    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1) 
     full_action_samples = np.repeat(full_action_samples, repeats=5, axis=2)
+
+    y = to_label_change(y, args.n_class)
 
     full_label_data = np.expand_dims(y, axis=-1)
     full_label_data = np.transpose(full_label_data, [1, 2, 0])
     full_label_data = np.expand_dims(full_label_data, axis=-1)
-    full_label_data = np.repeat(full_label_data, repeats=5, axis=1)
+    # make it thicker
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=1) 
     full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
     full_label_data /= float(args.n_class)
 
@@ -1758,6 +1800,42 @@ def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, fast_action, n_fast
     new_max_seq_len, mask = gen_mask_from(update_pos)
     return transpose_all([actions_1hot[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask])
 
+def fixed_skip_forward(x, x_mask, sess, test_graph):
+    tg = test_graph
+
+    # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
+    x = np.transpose(x, [1,0,2])
+    x_mask = np.transpose(x_mask, [1,0])
+
+    n_class = tg.step_label_probs.shape[-1].value
+    n_hidden = tg.step_last_state[0].c.shape[-1].value
+    n_layer = len(tg.step_last_state)
+    
+    n_seq, n_batch, n_feat = x.shape
+    seq_lens = x_mask.sum(axis=0, dtype=np.int32)
+    max_seq_len = max(seq_lens)
+
+    prev_state = np.zeros([n_batch, n_layer, 2, n_hidden])
+    target_indices = list(range(n_batch)) # always update all prev_state
+
+    update_pos = [0]*n_batch
+    label_probs = np.zeros([max_seq_len, n_batch, n_class])
+
+    # for each step (index j)
+    for j, x_step in enumerate(x):
+        feed_dict={tg.step_x_data: x_step}
+        feed_prev_state(feed_dict, tg.init_state, prev_state)
+
+        step_label_likelihood_j, new_prev_state = \
+            sess.run([tg.step_label_probs, tg.step_last_state], feed_dict=feed_dict)
+        
+        new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
+        fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
+       
+        update_prev_state(prev_state, new_prev_state, target_indices)
+        advance_pos(update_pos, target_indices)
+
+    return transpose_all([label_probs[:max_seq_len]])
 
 def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fast_action):
     sg = sample_graph
@@ -1878,6 +1956,8 @@ def mask_episodes(X, Y, actions, rewards, action_entropies, batch_size, x_size, 
     return masked_X, masked_Y, masked_actions, masked_rewards, masked_action_entropies, new_mask, new_reward_mask
 
 def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args, final_cost=False):
+    # shape: n_batch, n_seq, n_feat or n_batch, n_seq
+
     reward_mask_1d = new_reward_mask.reshape([-1])
     rewards_1d = rewards.reshape([-1])[reward_mask_1d==1.]
     discounted_rewards = []

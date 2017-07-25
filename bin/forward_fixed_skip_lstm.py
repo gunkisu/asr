@@ -12,8 +12,7 @@ from collections import namedtuple, OrderedDict
 from data.fuel_utils import create_ivector_test_datastream, get_uttid_stream
 from libs.utils import sync_data, skip_frames_fixed, StopWatch
 
-from skiprnn.mixer import gen_zero_state, feed_init_state
-
+from skiprnn.mixer import gen_zero_state, feed_init_state, fixed_skip_forward, match_c, match_h
 
 from itertools import islice
 
@@ -29,6 +28,8 @@ flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5',
 flags.DEFINE_string('dataset', 'test_dev93', '')
 flags.DEFINE_string('wxfilename', 'ark:-', '')
 flags.DEFINE_string('metafile', 'best_model.ckpt-1000.meta', '')
+
+TestGraph = namedtuple('TestGraph', 'step_x_data init_state step_last_state step_label_probs')
 
 def main(_):
     print(' '.join(sys.argv), file=sys.stderr)
@@ -46,9 +47,8 @@ def main(_):
         save_op = tf.train.import_meta_graph(args.metafile)
         save_op.restore(sess, args.metafile[:-5])
 
-        _seq_label_probs = sess.graph.get_tensor_by_name('seq_label_probs:0')
-        seq_x_data = sess.graph.get_tensor_by_name('seq_x_data:0')
-        seq_x_mask = sess.graph.get_tensor_by_name('seq_x_mask:0')
+        step_label_probs = sess.graph.get_tensor_by_name('step_label_probs:0')
+        step_x_data = sess.graph.get_tensor_by_name('step_x_data:0')
 
         cstates = [op.outputs[0] for op in sess.graph.get_operations() if 'cstate' in op.name]
         hstates = [op.outputs[0] for op in sess.graph.get_operations() if 'hstate' in op.name]
@@ -56,8 +56,15 @@ def main(_):
         init_state = []
         for c, h in zip(cstates, hstates):
             init_state.append(tf.contrib.rnn.LSTMStateTuple(c, h))
-        n_hidden, = sess.graph.get_collection('n_hidden')
 
+        step_last_state = []
+        last_cstates = [op.outputs[0] for op in sess.graph.get_operations() if match_c(op.name)]
+        last_hstates = [op.outputs[0] for op in sess.graph.get_operations() if match_h(op.name)]
+        for c, h in zip(last_cstates, last_hstates):
+            step_last_state.append(tf.contrib.rnn.LSTMStateTuple(c, h))
+
+        tg = TestGraph(step_x_data, init_state, step_last_state, step_label_probs)        
+        
         n_skip, = sess.graph.get_collection('n_skip')
 
         writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
@@ -76,12 +83,7 @@ def main(_):
             x, x_mask = sub_batch
             n_batch, n_seq, _ = x.shape
 
-            zero_state = gen_zero_state(n_batch, n_hidden)
-
-            feed_dict={seq_x_data: x, seq_x_mask: x_mask}
-            feed_init_state(feed_dict, init_state, zero_state)
-
-            seq_label_probs, = sess.run([_seq_label_probs], feed_dict=feed_dict)
+            seq_label_probs, = fixed_skip_forward(x, x_mask, sess, tg)
 
             seq_label_probs = seq_label_probs.reshape([n_batch, n_seq, -1])
             seq_label_probs = seq_label_probs.repeat(n_skip+1, axis=1)

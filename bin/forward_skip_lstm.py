@@ -11,7 +11,7 @@ import tensorflow as tf
 
 from collections import OrderedDict
 from collections import namedtuple
-from skiprnn.mixer import skip_rnn_forward_parallel2, expand_output
+from skiprnn.mixer import skip_rnn_forward_parallel2, expand_output, match_c, match_h
 
 from data.fuel_utils import create_ivector_test_datastream, get_uttid_stream, create_ivector_test_datastream_with_targets
 from libs.utils import sync_data, skip_frames_fixed, StopWatch
@@ -30,14 +30,6 @@ flags.DEFINE_string('wxfilename', 'ark:-', '')
 flags.DEFINE_string('metafile', 'best_model.ckpt-1000.meta', '')
 
 SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples step_action_probs step_last_state step_x_data init_state')
-
-def match_c(opname):
-    return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/add_1' in opname
-
-def match_h(opname):
-    return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/mul_2' in opname
-
-
 
 def main(_):
     print(' '.join(sys.argv), file=sys.stderr)

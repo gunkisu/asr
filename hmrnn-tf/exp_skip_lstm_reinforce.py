@@ -29,6 +29,8 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('learning-rate', 0.001, 'Initial learning rate')
 flags.DEFINE_float('rl-learning-rate', 0.01, 'Initial learning rate for RL')
+flags.DEFINE_float('beta', 1.0, 'beta in reward computation')
+flags.DEFINE_float('alpha', 1.0, 'alpha in reward computation')
 flags.DEFINE_integer('min-after-cache', 1024, 'Size of mini-batch')
 flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
@@ -138,10 +140,6 @@ def build_graph(args):
         step_action_probs, step_action_samples, step_x_data, init_state, step_action_entropy)
 
     return train_graph, sample_graph
-
-def initial_states(batch_size, n_hidden, n_layers):
-    init_state = [np.zeros([2, batch_size, n_hidden], dtype=np.float32) for i in range(n_layers)]
-    return init_state
 
 def main(_):
     print(' '.join(sys.argv))

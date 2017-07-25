@@ -45,11 +45,7 @@ flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_integer('n-skip', 1, 'Number of frames to skip')
 
 TrainGraph = namedtuple('TrainGraph', 'ml_cost seq_x_data seq_x_mask seq_y_data init_state pred_idx seq_label_probs')
-TestGraph = namedtuple('TestGraph', 'step_label_probs')
-
-def lstm_state(n_hidden, layer):
-    return tf.contrib.rnn.LSTMStateTuple(tf.placeholder(tf.float32, shape=(None, n_hidden), name='cstate_{}'.format(layer)), 
-        tf.placeholder(tf.float32, shape=(None, n_hidden), name='hstate_{}'.format(layer)))
+TestGraph = namedtuple('TestGraph', 'step_x_data init_state step_last_state step_label_probs')
 
 def build_graph(args):
     with tf.device(args.device):
@@ -72,7 +68,7 @@ def build_graph(args):
         _label_logit = LinearCell(num_units=args.n_class)
 
     # training graph
-    seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state)
+    seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
     seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden])
 
     seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')   
@@ -88,7 +84,7 @@ def build_graph(args):
     seq_label_probs = tf.nn.softmax(seq_label_logits, name='seq_label_probs')
 
     # testing graph
-    step_h_state, step_last_state = cell(step_x_data, init_state)
+    step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
     step_label_logits = _label_logit(step_h_state, 'label_logit')
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
 
@@ -100,7 +96,7 @@ def build_graph(args):
                                                      pred_idx,
                                                      seq_label_probs)
 
-    test_graph = TestGraph(step_label_probs)
+    test_graph = TestGraph(step_x_data, init_state, step_last_state, step_label_probs)
 
     return train_graph, test_graph
     
