@@ -421,6 +421,21 @@ def filter_last(x_step, y_step, prev_state, j, seq_lens, sample_done):
     return np.asarray(new_x_step), np.asarray(new_y_step), \
         np.asarray(new_prev_state), target_indices
 
+def filter_last2(x_step, y_step, j, seq_lens, sample_done):
+    new_x_step = []
+    new_y_step = []
+    target_indices = [] 
+
+    for i, (x, y, l) in enumerate(itertools.izip(x_step, y_step, seq_lens)):
+        if i in sample_done: continue 
+
+        if j == l-1:
+            new_x_step.append(x)
+            new_y_step.append(y)
+            target_indices.append(i)
+    
+    return np.asarray(new_x_step), np.asarray(new_y_step), target_indices
+
 def filter_last_forward(x_step, prev_state, j, seq_lens, sample_done):
     new_x_step = []
     new_prev_state = []
@@ -454,6 +469,21 @@ def filter_action_end(x_step, y_step, prev_state, j, action_counters, sample_don
 
     return np.asarray(new_x_step), np.asarray(new_y_step), \
         np.asarray(new_prev_state), target_indices
+
+def filter_action_end2(x_step, y_step, j, action_counters, sample_done):
+    new_x_step = []
+    new_y_step = []
+    target_indices = [] 
+
+    for i, (x, y, ac) in enumerate(zip(x_step, y_step, action_counters)):
+        if i in sample_done: continue 
+
+        if ac == 0:
+            new_x_step.append(x)
+            new_y_step.append(y)
+            target_indices.append(i)
+
+    return np.asarray(new_x_step), np.asarray(new_y_step), target_indices
 
 def filter_action_end_forward(x_step, prev_state, j, action_counters, sample_done):
     new_x_step = []
@@ -562,18 +592,25 @@ def fill_seg_match_reward2(reward_list, y, cur_step_idx, prev_pred_idx_list,
         prev_step_idx = prev_step_idx_list[idx]
         prev_pred_idx = prev_pred_idx_list[idx]
         action_size = cur_step_idx - prev_step_idx
-        ref_labels = y[prev_step_idx:cur_step_idx, idx]
+#        ref_labels = y[prev_step_idx:cur_step_idx, idx]
+
+        ref_labels = y[prev_step_idx:prev_step_idx+n_action, idx]
 
         match_count = 0
         miss_count = 0
 #        target_label = prev_pred_idx
         target_label = ref_labels[0] # focus on only segmentation
+
         for l in ref_labels:
             if l == target_label: match_count += 1
-            else: miss_count += 1
+            else: break
+
+        if match_count == action_size:
+            r = 1
+        else:
+            r = 0
         
-        reward_list[reward_update_pos[idx], idx] = alpha * float(match_count) / action_size + \
-            beta * float(action_size) /  n_action
+        reward_list[reward_update_pos[idx], idx] = r
         reward_target_indices.append(idx)
 
     return reward_target_indices
@@ -662,7 +699,7 @@ def update_action_counters2(action_counters, action_idx, target_indices, n_actio
     new_ac = [ac-1 for ac in new_ac]
     action_counters[:] = new_ac
 
-def gen_mask(update_pos, reward_update_pos, batch_size):
+def gen_mask2(update_pos, reward_update_pos, batch_size):
     max_seq_len = max(update_pos)
     max_reward_seq_len = max(reward_update_pos)
     mask = np.zeros([max_seq_len, batch_size])
@@ -675,6 +712,15 @@ def gen_mask(update_pos, reward_update_pos, batch_size):
         reward_mask[:pos, i] = 1.
 
     return max_seq_len, mask, max_reward_seq_len, reward_mask
+
+def gen_mask3(update_pos, batch_size):
+    max_seq_len = max(update_pos)
+    mask = np.zeros([max_seq_len, batch_size])
+
+    for i, pos in enumerate(update_pos):
+        mask[:pos, i] = 1.
+
+    return max_seq_len, mask
 
 def gen_mask_from(update_pos):
     batch_size = len(update_pos)
@@ -1026,7 +1072,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
         else:
             update_action_counters(action_counters, [], [], args)
 
-    max_seq_len, mask, max_reward_seq_len, reward_mask = gen_mask(update_pos, reward_update_pos, n_batch)
+    max_seq_len, mask, max_reward_seq_len, reward_mask = gen_mask2(update_pos, reward_update_pos, n_batch)
 
     full_action_samples = np.transpose(full_action_samples, [1, 2, 0])
     full_action_samples = np.expand_dims(full_action_samples, axis=-1)
@@ -1059,6 +1105,73 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
                          mask,
                          reward_mask]) + [output_image,]
 
+def get_seg_len(ref_labels):
+    start_label = ref_labels[0]
+    seg_len = 0
+    for l in ref_labels:
+        if l == start_label: seg_len += 1
+        else:
+            break
+
+    return seg_len
+
+def gen_supervision(x, x_mask, y, args):
+    x = np.transpose(x, [1,0,2])
+    x_mask = np.transpose(x_mask, [1,0])
+    y = np.transpose(y, [1,0])
+
+    n_seq, n_batch, n_feat = x.shape
+    seq_lens = x_mask.sum(axis=0)
+    max_seq_len = int(max(seq_lens))
+
+    action_counters = [0]*n_batch
+    update_pos = [0]*n_batch
+    sample_done = [] # indices of examples done processing
+
+    new_x = np.zeros([max_seq_len, n_batch, n_feat])
+    new_y = np.zeros([max_seq_len, n_batch])
+    actions = np.zeros([max_seq_len-1, n_batch])
+    actions_1hot = np.zeros([max_seq_len-1, n_batch, args.n_action])
+
+    # for each time step (index j)
+    for j, (x_step, y_step) in enumerate(itertools.izip(x, y)):
+        _x_step, _y_step, target_indices = filter_last2(x_step, y_step, j, seq_lens, sample_done)
+
+        if len(_x_step):
+            fill(new_x, _x_step, target_indices, update_pos)
+            fill(new_y, _y_step, target_indices, update_pos)
+
+            advance_pos(update_pos, target_indices)
+            sample_done.extend(target_indices)
+
+        _x_step, _y_step, target_indices = filter_action_end2(x_step, y_step, j, action_counters, sample_done)
+
+        if len(_x_step):
+            best_actions = []
+            for idx in target_indices:
+                upto = min(j+args.n_action, seq_lens[idx])
+                ref_labels = y[j:j+args.n_action, idx]
+                seg_len = get_seg_len(ref_labels)
+                best_actions.append(seg_len - 1)
+        
+            fill(new_x, _x_step, target_indices, update_pos)
+            fill(new_y, _y_step, target_indices, update_pos)
+            fill(actions, best_actions, target_indices, update_pos)
+            action_one_hot = np.eye(args.n_action)[best_actions]
+            fill(actions_1hot, action_one_hot, target_indices, update_pos)
+            
+            update_action_counters(action_counters, best_actions, target_indices, args)
+
+            advance_pos(update_pos, target_indices)
+        else:
+            update_action_counters(action_counters, [], [], args)
+
+    max_seq_len, mask = gen_mask3(update_pos, n_batch)
+
+    return transpose_all([new_x[:max_seq_len],
+                         new_y[:max_seq_len],
+                         actions[:max_seq_len-1], actions_1hot[:max_seq_len-1],
+                         mask])
 
 def aggr_ml_skip_rnn_act_parallel(x,
                                   x_mask,
@@ -2019,6 +2132,41 @@ def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args, fin
     vf.fit(valid_new_x, discounted_rewards_1d)
 
     return advantages, discounted_rewards_arr
+
+def compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args, final_cost=False):
+    # shape: n_batch, n_seq, n_feat or n_batch, n_seq
+
+    reward_mask_1d = new_reward_mask.reshape([-1])
+    rewards_1d = rewards.reshape([-1])[reward_mask_1d==1.]
+    discounted_rewards = []
+    for reward, mask in zip(rewards, new_reward_mask):
+        this_len = int(mask.sum())
+        discounted_reward = discount(reward[:this_len], args.discount_gamma)
+        if final_cost:
+            discounted_reward = np.ones_like(discounted_reward)*discounted_reward[0]
+        discounted_rewards.append(discounted_reward)
+
+    reshape_new_x = new_x.reshape([-1, new_x.shape[2]])
+    baseline_1d = vf.predict(reshape_new_x)
+    baseline_2d = baseline_1d.reshape([new_x.shape[0], -1]) * new_x_mask
+
+    advantages = np.zeros_like(rewards)
+    discounted_rewards_arr = np.zeros_like(rewards)
+    for i, (delta, mask) in enumerate(zip(baseline_2d, new_reward_mask)):
+        this_len = int(mask.sum())
+        advantages[i, :this_len] = discounted_rewards[i] - delta[:this_len]
+        discounted_rewards_arr[i, :this_len] = discounted_rewards[i]
+
+    advantages_1d = advantages.reshape([-1])[reward_mask_1d==1.]
+    advantages = ((advantages - advantages_1d.mean()) / (advantages_1d.std()+1e-8)) * new_reward_mask
+
+    valid_x_indices= np.where(new_reward_mask==1.)
+    valid_new_x = new_x[valid_x_indices]
+    discounted_rewards_1d = np.concatenate(discounted_rewards, axis=0)
+    vf.fit(valid_new_x, discounted_rewards_1d)
+
+    return advantages, discounted_rewards_arr
+
 
 def discount(x, gamma):
     assert x.ndim >= 1
