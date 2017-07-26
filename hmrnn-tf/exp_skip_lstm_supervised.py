@@ -16,7 +16,7 @@ from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
 from mixer import get_gpuname
-from mixer import gen_supervision
+from mixer import gen_supervision, skip_rnn_forward_supervised
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_output
 from mixer import lstm_state, gen_zero_state, feed_init_state
@@ -60,7 +60,7 @@ flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 TrainGraph = namedtuple('TrainGraph', 
     'ml_cost rl_cost seq_x_data seq_x_mask seq_y_data seq_jump_data init_state pred_idx')
 TestGraph = namedtuple('TestGraph', 
-    'step_h_state step_last_state step_label_probs step_action_probs step_x_data init_state')
+    'step_h_state step_last_state step_label_probs step_action_probs step_pred_idx step_x_data init_state')
 
 def build_graph(args):
     with tf.device(args.device):
@@ -125,8 +125,10 @@ def build_graph(args):
     step_action_logits = _action_logit(step_h_state, 'action_logit')
     step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
 
+    step_pred_idx = tf.argmax(step_action_logits, axis=1)
+    
     test_graph = TestGraph(step_h_state, step_last_state, step_label_probs, 
-        step_action_probs, step_x_data, init_state)
+        step_action_probs, step_pred_idx, step_x_data, init_state)
 
     return train_graph, test_graph
 
@@ -199,6 +201,10 @@ def main(_):
         tr_ce2 = tf.placeholder(tf.float32)
         tr_ce2_summary = tf.summary.scalar("tr_rl", tr_ce2)
 
+        tr_image = tf.placeholder(tf.float32)
+        tr_image_summary = tf.summary.image("tr_image", tr_image)
+
+
     with tf.name_scope("per_epoch_eval"):
         best_val_ce = tf.placeholder(tf.float32)
         val_ce = tf.placeholder(tf.float32)
@@ -263,14 +269,20 @@ def main(_):
                 tr_acc_sum += ((pred_idx == y) * x_mask).sum()
                 tr_acc_count += x_mask.sum()
 
-                _tr_ce_summary, _tr_fer_summary, _tr_ce2_summary = \
-                    sess.run([tr_ce_summary, tr_fer_summary, tr_ce2_summary],
+                # visualization
+                actions_1hot2, label_probs, mask, output_image = skip_rnn_forward_supervised(x, x_mask, sess, test_graph, y, 
+                    args.fast_action, args.n_fast_action)
+
+                _tr_ce_summary, _tr_fer_summary, _tr_ce2_summary, _tr_image_summary = \
+                    sess.run([tr_ce_summary, tr_fer_summary, tr_ce2_summary, tr_image_summary],
                         feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(), 
                             tr_fer: ((pred_idx == y) * x_mask).sum() / x_mask.sum(), 
-                            tr_ce2: _tr_rl_cost.sum() / new_x_mask[:,:-1].sum()})
+                            tr_ce2: _tr_rl_cost.sum() / new_x_mask[:,:-1].sum(),
+                            tr_image: output_image})
                 summary_writer.add_summary(_tr_ce_summary, global_step.eval())
                 summary_writer.add_summary(_tr_fer_summary, global_step.eval())
                 summary_writer.add_summary(_tr_ce2_summary, global_step.eval())
+                summary_writer.add_summary(_tr_image_summary, global_step.eval())
 
                 if global_step.eval() % args.display_freq == 0:
                     avg_tr_ce = tr_ce_sum / tr_ce_count
