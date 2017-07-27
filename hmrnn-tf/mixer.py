@@ -2123,6 +2123,7 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
+            fill(actions_1hot, action_1hot, target_indices, update_pos)
 
             update_prev_state(prev_state, new_prev_state, target_indices)
 
@@ -2130,10 +2131,6 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast
                 target_indices, n_action, fast_action, n_fast_action)
 
             advance_pos(update_pos, target_indices)
-
-            for i, s_idx in enumerate(target_indices):
-                actions_1hot[j, s_idx] = action_1hot[i]
-        
         else:
             update_action_counters2(action_counters, [], [], n_action, fast_action, n_fast_action)
 
