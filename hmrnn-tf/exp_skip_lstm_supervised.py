@@ -116,7 +116,7 @@ def build_graph(args):
     train_graph = TrainGraph(ml_cost, rl_cost, seq_x_data, seq_x_mask, 
         seq_y_data, seq_jump_data, init_state, pred_idx)
 
-    # testing graph
+    # testing graph (step_h_state == step_last_state)
     step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
 
     step_label_logits = _label_logit(step_h_state, 'label_logit')
@@ -125,7 +125,7 @@ def build_graph(args):
     step_action_logits = _action_logit(step_h_state, 'action_logit')
     step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
 
-    step_pred_idx = tf.argmax(step_action_logits, axis=1)
+    step_pred_idx = tf.argmax(step_action_logits, axis=1, name='step_pred_idx')
     
     test_graph = TestGraph(step_h_state, step_last_state, step_label_probs, 
         step_action_probs, step_pred_idx, step_x_data, init_state)
@@ -270,8 +270,8 @@ def main(_):
                 tr_acc_count += x_mask.sum()
 
                 # visualization
-                actions_1hot2, label_probs, mask, output_image = skip_rnn_forward_supervised(x, x_mask, sess, test_graph, y, 
-                    args.fast_action, args.n_fast_action)
+                actions_1hot2, label_probs, mask, output_image = skip_rnn_forward_supervised(x, x_mask, sess, test_graph, 
+                    args.fast_action, args.n_fast_action, y)
 
                 _tr_ce_summary, _tr_fer_summary, _tr_ce2_summary, _tr_image_summary = \
                     sess.run([tr_ce_summary, tr_fer_summary, tr_ce2_summary, tr_image_summary],
