@@ -2086,6 +2086,9 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast
 
     actions_1hot = np.zeros([max_seq_len, n_batch, n_action])
 
+    # for visualization
+    actions_taken = np.zeros([max_seq_len, n_batch, n_action])
+
     # for each step (index j)
     for j, x_step in enumerate(x):
         _x_step, _prev_state, target_indices = \
@@ -2125,6 +2128,10 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast
             fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
             fill(actions_1hot, action_1hot, target_indices, update_pos)
 
+            # visualization
+            for i, s_idx in enumerate(target_indices):
+                actions_taken[j, s_idx] = action_1hot[i]
+
             update_prev_state(prev_state, new_prev_state, target_indices)
 
             update_action_counters2(action_counters, action_idx.flatten(), 
@@ -2138,8 +2145,8 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast
     
     outp = transpose_all([actions_1hot[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask])
 
-    if y: # visualization request
-        full_action_samples = np.transpose(actions_1hot, [1, 2, 0])
+    if y is not None: # visualization request
+        full_action_samples = np.transpose(actions_taken, [1, 2, 0])
         full_action_samples = np.expand_dims(full_action_samples, axis=-1)
         # make it thicker
         full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1) 
