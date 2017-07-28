@@ -27,10 +27,8 @@ from libs.utils import sync_data, StopWatch
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('learning-rate', 0.001, 'Initial learning rate')
+flags.DEFINE_float('learning-rate', 0.01, 'Initial learning rate')
 flags.DEFINE_float('rl-learning-rate', 0.01, 'Initial learning rate for RL')
-flags.DEFINE_float('beta', 1.0, 'beta in reward computation')
-flags.DEFINE_float('alpha', 1.0, 'alpha in reward computation')
 flags.DEFINE_integer('min-after-cache', 1024, 'Size of mini-batch')
 flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
 flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
@@ -171,15 +169,14 @@ def main(_):
                                                                              beta1=0.9, beta2=0.99)
 
     if args.grad_clip:
-        ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, ml_vars),
-                                                                            clip_norm=1.0)
+        ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, tvars), clip_norm=1.0)
     else:
-        ml_grads = tf.gradients(tg_ml_cost, ml_vars)
-    ml_op = ml_opt_func.apply_gradients(zip(ml_grads, ml_vars), global_step=global_step)
+        ml_grads = tf.gradients(tg_ml_cost, tvars)
+    ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
 
     tg_rl_cost = tf.reduce_mean(tg.rl_cost)
-    rl_grads = tf.gradients(tg_rl_cost, rl_vars)
-    rl_op = rl_opt_func.apply_gradients(zip(rl_grads, rl_vars), global_step=global_step)
+    rl_grads = tf.gradients(tg_rl_cost, tvars)
+    rl_op = rl_opt_func.apply_gradients(zip(rl_grads, tvars), global_step=global_step)
     
     tf.add_to_collection('fast_action', args.fast_action)
     tf.add_to_collection('fast_action', args.n_fast_action)
@@ -204,12 +201,13 @@ def main(_):
         tr_image = tf.placeholder(tf.float32)
         tr_image_summary = tf.summary.image("tr_image", tr_image)
 
-
     with tf.name_scope("per_epoch_eval"):
-        best_val_ce = tf.placeholder(tf.float32)
-        val_ce = tf.placeholder(tf.float32)
-        best_val_ce_summary = tf.summary.scalar("best_valid_ce", best_val_ce)
-        val_ce_summary = tf.summary.scalar("valid_ce", val_ce)
+        val_fer = tf.placeholder(tf.float32)
+        val_fer_summary = tf.summary.scalar("val_fer", val_fer)
+        best_val_fer = tf.placeholder(tf.float32)
+        best_val_fer_summary = tf.summary.scalar("best_valid_fer", best_val_fer)
+        val_image = tf.placeholder(tf.float32)
+        val_image_summary = tf.summary.image("val_image", val_image)
 
     vf = LinearVF()
 
@@ -305,53 +303,36 @@ def main(_):
             print('Testing')
 
             # Evaluate the model on the validation set
-            val_ce_sum = 0.; val_ce_count = 0
             val_acc_sum = 0; val_acc_count = 0
-            val_ce2_sum = 0.; val_ce2_count = 0
             
             eval_sw.reset()
             for batch in valid_set.get_epoch_iterator():
                 x, x_mask, _, _, y, _ = batch
                 n_batch = x.shape[0]
 
-                new_x, new_y, actions, actions_1hot, new_x_mask = gen_supervision(x, x_mask, y, args)
-
-                zero_state = gen_zero_state(n_batch, args.n_hidden)
-
-                feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
-                    tg.seq_jump_data: actions}
-                feed_init_state(feed_dict, tg.init_state, zero_state)
-
-                _val_ml_cost, _val_rl_cost, pred_idx = sess.run([tg.ml_cost, tg.rl_cost, tg.pred_idx],
-                                feed_dict=feed_dict)
+                actions_1hot2, label_probs, new_mask, output_image = \
+                    skip_rnn_forward_supervised(x, x_mask, sess, test_graph, 
+                    args.fast_action, args.n_fast_action, y)
                 
-                val_ce_sum += _val_ml_cost.sum()
-                val_ce_count += new_x_mask.sum()
-                val_ce2_sum += _val_rl_cost.sum()
-                val_ce2_count += new_x_mask[:,:-1].sum()
-
-                pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx.reshape([n_batch, -1]))
+                pred_idx = expand_output(actions_1hot, x_mask, new_mask, label_probs.argmax(axis=-1))
                 val_acc_sum += ((pred_idx == y) * x_mask).sum()
                 val_acc_count += x_mask.sum()
 
-            avg_val_ce = val_ce_sum / val_ce_count
-            avg_val_ce2 = val_ce2_sum / val_ce2_count
             avg_val_fer = 1. - val_acc_sum / val_acc_count
          
-            print("VALID: epoch={} ml_cost(ce/frame)={:.2f} fer={:.2f} rl_cost={:.4f} time_taken={:.2f}".format(
-                    _epoch, avg_val_ce, avg_val_fer, avg_val_ce2, eval_sw.elapsed()))
+            print("VALID: epoch={} fer={:.2f} time_taken={:.2f}".format(
+                    _epoch, avg_val_fer, eval_sw.elapsed()))
 
-            _val_ce_summary, = sess.run([val_ce_summary], feed_dict={val_ce: avg_val_ce}) 
-            summary_writer.add_summary(_val_ce_summary, global_step.eval())
+            _val_fer_summary, = sess.run([val_fer_summary], feed_dict={val_fer: avg_val_fer}) 
+            summary_writer.add_summary(_val_fer_summary, global_step.eval())
             
-            insert_item2dict(eval_summary, 'val_ce', avg_val_ce)
-            insert_item2dict(eval_summary, 'val_ce2', avg_val_ce2)
+            insert_item2dict(eval_summary, 'val_fer', avg_val_fer)
             insert_item2dict(eval_summary, 'time', eval_sw.elapsed())
             save_npz2(file_name, eval_summary)
 
             # Save model
-            if avg_val_ce < _best_score:
-                _best_score = avg_val_ce
+            if avg_val_fer < _best_score:
+                _best_score = avg_val_fer
                 best_ckpt = best_save_op.save(sess, os.path.join(args.log_dir,
                                                                                                                  "best_model.ckpt"),
                                                                             global_step=global_step)
@@ -360,9 +341,9 @@ def main(_):
                                                     global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
 
-            _best_val_ce_summary, = sess.run([best_val_ce_summary],
-                                                                feed_dict={best_val_ce: _best_score})
-            summary_writer.add_summary(_best_val_ce_summary, global_step.eval())
+            _best_val_fer_summary, = sess.run([best_val_fer_summary],
+                                                                feed_dict={best_val_fer: _best_score})
+            summary_writer.add_summary(_best_val_fer_summary, global_step.eval())
         summary_writer.close()
 
         print("Optimization Finished.")
