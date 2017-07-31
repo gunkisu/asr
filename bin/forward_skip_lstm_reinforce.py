@@ -23,6 +23,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_boolean('no-copy', True, '')
+flags.DEFINE_boolean('show-progress', False, '')
 flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
 flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
 flags.DEFINE_string('dataset', 'test_dev93', '')
@@ -93,7 +94,8 @@ def main(_):
                 uttid = uttid.encode('ascii')
                 writer.write(uttid, np.log(output[:valid_len] + 1e-8))
 
-            print('.', file=sys.stderr, end='')
+            if args.show_progress:
+                print('.', file=sys.stderr, end='')
 
         print('', file=sys.stderr)
         print('Done', file=sys.stderr)
