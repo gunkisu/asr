@@ -323,9 +323,11 @@ def main(_):
             print("VALID: epoch={} fer={:.2f} time_taken={:.2f}".format(
                     _epoch, avg_val_fer, eval_sw.elapsed()))
 
-            _val_fer_summary, = sess.run([val_fer_summary], feed_dict={val_fer: avg_val_fer}) 
+            _val_fer_summary, _val_image_summary = sess.run([val_fer_summary, val_image_summary], 
+                feed_dict={val_fer: avg_val_fer, val_image: output_image}) 
             summary_writer.add_summary(_val_fer_summary, global_step.eval())
-            
+            summary_writer.add_summary(_val_image_summary, global_step.eval())
+           
             insert_item2dict(eval_summary, 'val_fer', avg_val_fer)
             insert_item2dict(eval_summary, 'time', eval_sw.elapsed())
             save_npz2(file_name, eval_summary)
