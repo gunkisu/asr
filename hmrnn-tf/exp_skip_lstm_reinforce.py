@@ -16,7 +16,7 @@ from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
 from mixer import get_gpuname
-from mixer import gen_episode_with_seg_reward, fill_seg_match_reward2, fill_seg_match_reward
+from mixer import gen_episode_with_seg_reward
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_output
 from mixer import lstm_state, gen_zero_state, feed_init_state
@@ -188,7 +188,8 @@ def main(_):
 
     tg_rl_cost = tf.reduce_mean(tg.rl_cost)
     rl_grads = tf.gradients(tg_rl_cost, rl_vars)
-    rl_op = rl_opt_func.apply_gradients(zip(rl_grads, rl_vars), global_step=global_step)
+    # do not increase global step -- ml op increases it 
+    rl_op = rl_opt_func.apply_gradients(zip(rl_grads, rl_vars))
     
     tf.add_to_collection('fast_action', args.fast_action)
     tf.add_to_collection('fast_action', args.n_fast_action)
@@ -261,7 +262,7 @@ def main(_):
                 _n_exp += n_batch
 
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
-                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, fill_seg_match_reward2)
+                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
                 advantages,_ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
@@ -334,7 +335,7 @@ def main(_):
                 n_batch = x.shape[0]
 
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, _ = \
-                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, fill_seg_match_reward2)
+                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
                 advantages, _ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)

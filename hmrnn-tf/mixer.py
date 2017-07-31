@@ -558,30 +558,6 @@ def fill_aggr_reward(reward_list,
     return reward_target_indices
 
 def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
-        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos):
-    reward_target_indices = []
-
-    for idx in target_indices:
-        if ref_update_pos[idx] == 0:
-            continue
-
-        prev_step_idx = prev_step_idx_list[idx]
-        prev_pred_idx = prev_pred_idx_list[idx]
-        action_size = cur_step_idx - prev_step_idx
-        ref_labels = y[prev_step_idx:cur_step_idx, idx]
-
-        match_count = 0
-        miss_count = 0
-        for l in ref_labels:
-            if l == prev_pred_idx: match_count += 1
-            else: miss_count += 1
-        
-        reward_list[reward_update_pos[idx], idx] = match_count - miss_count
-        reward_target_indices.append(idx)
-
-    return reward_target_indices
-
-def fill_seg_match_reward2(reward_list, y, cur_step_idx, prev_pred_idx_list,
         prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action, alpha=1.0, beta=1.0):
     reward_target_indices = []
 
@@ -598,8 +574,8 @@ def fill_seg_match_reward2(reward_list, y, cur_step_idx, prev_pred_idx_list,
 
         match_count = 0
         miss_count = 0
-#        target_label = prev_pred_idx
-        target_label = ref_labels[0] # focus on only segmentation
+        target_label = prev_pred_idx
+#        target_label = ref_labels[0] # focus on only segmentation
 
         for l in ref_labels:
             if l == target_label: match_count += 1
@@ -608,7 +584,7 @@ def fill_seg_match_reward2(reward_list, y, cur_step_idx, prev_pred_idx_list,
         if match_count == action_size:
             r = 1
         else:
-            r = 0
+            r = -1
         
         reward_list[reward_update_pos[idx], idx] = r
         reward_target_indices.append(idx)
