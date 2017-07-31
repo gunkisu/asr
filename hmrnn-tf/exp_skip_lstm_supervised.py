@@ -16,7 +16,7 @@ from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
 from mixer import get_gpuname
-from mixer import gen_supervision, skip_rnn_forward_supervised
+from mixer import gen_supervision, skip_rnn_forward_supervised, gen_episode_supervised
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_output
 from mixer import lstm_state, gen_zero_state, feed_init_state
@@ -160,8 +160,8 @@ def main(_):
 
     tvars = tf.trainable_variables()
     print([tvar.name for tvar in tvars])
-    ml_vars = [tvar for tvar in tvars if "action_logit" not in tvar.name]
-    rl_vars = [tvar for tvar in tvars if "action_logit" in tvar.name]
+    ml_tvars = [tvar for tvar in tvars if "action_logit" not in tvar.name]
+    rl_tvars = [tvar for tvar in tvars if "action_logit" in tvar.name]
 
     ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.learning_rate,
                                                                              beta1=0.9, beta2=0.99)
@@ -169,14 +169,14 @@ def main(_):
                                                                              beta1=0.9, beta2=0.99)
 
     if args.grad_clip:
-        ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, tvars), clip_norm=1.0)
+        ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, ml_tvars), clip_norm=1.0)
     else:
-        ml_grads = tf.gradients(tg_ml_cost, tvars)
-    ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
+        ml_grads = tf.gradients(tg_ml_cost, ml_tvars)
+    ml_op = ml_opt_func.apply_gradients(zip(ml_grads, ml_tvars), global_step=global_step)
 
     tg_rl_cost = tf.reduce_mean(tg.rl_cost)
-    rl_grads = tf.gradients(tg_rl_cost, tvars)
-    rl_op = rl_opt_func.apply_gradients(zip(rl_grads, tvars), global_step=global_step)
+    rl_grads = tf.gradients(tg_rl_cost, rl_tvars)
+    rl_op = rl_opt_func.apply_gradients(zip(rl_grads, rl_tvars))
     
     tf.add_to_collection('fast_action', args.fast_action)
     tf.add_to_collection('fast_action', args.n_fast_action)
@@ -247,35 +247,40 @@ def main(_):
                 n_batch = x.shape[0]
                 _n_exp += n_batch
 
-                new_x, new_y, actions, actions_1hot, new_x_mask = gen_supervision(x, x_mask, y, args)
-                
+                # train jump prediction part
+                new_x, _, actions, _, new_x_mask = gen_supervision(x, x_mask, y, args)                
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
-
-                feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
-                    tg.seq_jump_data: actions}
+                feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_jump_data: actions}
                 feed_init_state(feed_dict, tg.init_state, zero_state)
+                _tr_rl_cost, _ = sess.run([tg.rl_cost, rl_op], feed_dict=feed_dict)
 
-                _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \
-                    sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op, tg.pred_idx], feed_dict=feed_dict)
-        
-                tr_ce_sum += _tr_ml_cost.sum()
-                tr_ce_count += new_x_mask.sum()
                 tr_ce2_sum += _tr_rl_cost.sum()
                 tr_ce2_count += new_x_mask[:,:-1].sum()
+
+                _tr_ce2_summary, = sess.run([tr_ce2_summary],
+                        feed_dict={tr_ce2: _tr_rl_cost.sum() / new_x_mask[:,:-1].sum()})
+
+                # generate jumps from the model 
+                new_x, new_y, actions_1hot, label_probs, new_x_mask, output_image = gen_episode_supervised(x, y, x_mask, sess, test_graph, 
+                    args.fast_action, args.n_fast_action)
+
+                feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y}
+                feed_init_state(feed_dict, tg.init_state, zero_state)
+
+                # train label prediction part
+                _tr_ml_cost, _, pred_idx = sess.run([tg.ml_cost, ml_op, tg.pred_idx], feed_dict=feed_dict)
+
+                tr_ce_sum += _tr_ml_cost.sum()
+                tr_ce_count += new_x_mask.sum()
 
                 pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx.reshape([n_batch, -1]))
                 tr_acc_sum += ((pred_idx == y) * x_mask).sum()
                 tr_acc_count += x_mask.sum()
 
-                # visualization
-                actions_1hot2, label_probs, mask, output_image = skip_rnn_forward_supervised(x, x_mask, sess, test_graph, 
-                    args.fast_action, args.n_fast_action, y)
-
-                _tr_ce_summary, _tr_fer_summary, _tr_ce2_summary, _tr_image_summary = \
-                    sess.run([tr_ce_summary, tr_fer_summary, tr_ce2_summary, tr_image_summary],
+                _tr_ce_summary, _tr_fer_summary, _tr_image_summary = \
+                    sess.run([tr_ce_summary, tr_fer_summary, tr_image_summary],
                         feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(), 
                             tr_fer: ((pred_idx == y) * x_mask).sum() / x_mask.sum(), 
-                            tr_ce2: _tr_rl_cost.sum() / new_x_mask[:,:-1].sum(),
                             tr_image: output_image})
                 summary_writer.add_summary(_tr_ce_summary, global_step.eval())
                 summary_writer.add_summary(_tr_fer_summary, global_step.eval())

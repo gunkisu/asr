@@ -568,14 +568,14 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         prev_step_idx = prev_step_idx_list[idx]
         prev_pred_idx = prev_pred_idx_list[idx]
         action_size = cur_step_idx - prev_step_idx
-#        ref_labels = y[prev_step_idx:cur_step_idx, idx]
+        ref_labels = [prev_step_idx:cur_step_idx, idx]
 
-        ref_labels = y[prev_step_idx:prev_step_idx+n_action, idx]
+#        ref_labels = y[prev_step_idx:prev_step_idx+n_action, idx]
 
         match_count = 0
         miss_count = 0
-        target_label = prev_pred_idx
-#        target_label = ref_labels[0] # focus on only segmentation
+#        target_label = prev_pred_idx
+        target_label = ref_labels[0] # focus on only segmentation
 
         for l in ref_labels:
             if l == target_label: match_count += 1
@@ -2035,6 +2035,125 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fas
     new_max_seq_len, mask = gen_mask_from(update_pos)
     return transpose_all([actions_1hot[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask])
 
+def gen_episode_supervised(x, y, x_mask, sess, test_graph, fast_action, n_fast_action):
+
+    # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
+    x = np.transpose(x, [1,0,2])
+    x_mask = np.transpose(x_mask, [1,0])
+    y = np.transpose(y, [1,0])
+
+    n_class = test_graph.step_label_probs.shape[-1].value
+    n_hidden = test_graph.step_last_state[0].c.shape[-1].value
+    n_action = test_graph.step_action_probs.shape[-1].value
+    n_layer = len(test_graph.step_last_state)
+
+    n_seq, n_batch, n_feat = x.shape
+    seq_lens = x_mask.sum(axis=0, dtype=np.int32)
+    max_seq_len = max(seq_lens)
+
+    prev_state = np.zeros([n_batch, n_layer, 2, n_hidden])
+
+    action_counters = [0]*n_batch
+    update_pos = [0]*n_batch
+    sample_done = [] # indices of examples fully processed
+
+    new_x = np.zeros([max_seq_len, n_batch, n_feat])
+    new_y = np.zeros([max_seq_len, n_batch])
+    label_probs = np.zeros([max_seq_len, n_batch, n_class])
+
+    actions_1hot = np.zeros([max_seq_len, n_batch, n_action])
+
+    # for visualization
+    actions_taken = np.zeros([max_seq_len, n_batch, n_action])
+
+    # for each step (index j)
+    for j, (x_step, y_step) in enumerate(itertools.izip(x,y)):
+        _x_step, _y_step, _prev_state, target_indices = \
+            filter_last(x_step, y_step, prev_state, j, seq_lens, sample_done)
+
+        if len(_x_step):
+            feed_dict={test_graph.step_x_data: _x_step}
+            feed_prev_state(feed_dict, test_graph.init_state, _prev_state)
+
+            step_label_likelihood_j, new_prev_state = \
+                sess.run([test_graph.step_label_probs, test_graph.step_last_state], feed_dict=feed_dict)
+
+            new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
+
+            fill(new_x, _x_step, target_indices, update_pos)
+            fill(new_y, _y_step, target_indices, update_pos)
+            fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
+            update_prev_state(prev_state, new_prev_state, target_indices)
+         
+            advance_pos(update_pos, target_indices)
+            sample_done.extend(target_indices)
+
+        _x_step, _y_step, _prev_state, target_indices = \
+            filter_action_end(x_step, y_step, prev_state, j, action_counters, sample_done)
+
+        if len(_x_step):
+            feed_dict={test_graph.step_x_data: _x_step}
+            feed_prev_state(feed_dict, test_graph.init_state, _prev_state)
+
+            action_idx, step_label_likelihood_j, new_prev_state = \
+                sess.run([test_graph.step_pred_idx, test_graph.step_label_probs, test_graph.step_last_state],
+                    feed_dict=feed_dict)
+
+            new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
+            action_1hot = np.eye(n_action)[action_idx.flatten()]
+
+            fill(new_x, _x_step, target_indices, update_pos)
+            fill(new_y, _y_step, target_indices, update_pos)
+            fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
+            fill(actions_1hot, action_1hot, target_indices, update_pos)
+
+            # visualization
+            for i, s_idx in enumerate(target_indices):
+                actions_taken[j, s_idx] = action_1hot[i]
+
+            update_prev_state(prev_state, new_prev_state, target_indices)
+
+            update_action_counters2(action_counters, action_idx.flatten(), 
+                target_indices, n_action, fast_action, n_fast_action)
+
+            advance_pos(update_pos, target_indices)
+        else:
+            update_action_counters2(action_counters, [], [], n_action, fast_action, n_fast_action)
+
+    new_max_seq_len, mask = gen_mask_from(update_pos)
+    
+    outp = transpose_all([new_x[:new_max_seq_len], new_y[:new_max_seq_len], actions_1hot[:new_max_seq_len-1], 
+        label_probs[:new_max_seq_len], mask])
+
+    # visualization
+    full_action_samples = np.transpose(actions_taken, [1, 2, 0])
+    full_action_samples = np.expand_dims(full_action_samples, axis=-1)
+    # make it thicker
+    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1) 
+    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=2)
+
+    y = to_label_change(y, n_class)
+
+    full_label_data = np.expand_dims(y, axis=-1)
+    full_label_data = np.transpose(full_label_data, [1, 2, 0])
+    full_label_data = np.expand_dims(full_label_data, axis=-1)
+    # make it thicker
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=1) 
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
+    full_label_data /= float(n_class)
+
+    output_image = np.concatenate([np.concatenate([full_label_data,
+                                                   np.zeros_like(full_label_data),
+                                                   np.zeros_like(full_label_data)], axis=-1),
+                                   np.concatenate([np.zeros_like(full_action_samples),
+                                                   full_action_samples,
+                                                   np.zeros_like(full_action_samples)], axis=-1)],
+                                   axis=1)
+
+    outp += [output_image,]
+    
+    return outp
+
 def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast_action, y=None):
     # y for visualization
 
@@ -2058,6 +2177,7 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast
     sample_done = [] # indices of examples fully processed
 
     new_x = np.zeros([max_seq_len, n_batch, n_feat])
+    new_y = np.zeros([max_seq_len, n_batch])
     label_probs = np.zeros([max_seq_len, n_batch, n_class])
 
     actions_1hot = np.zeros([max_seq_len, n_batch, n_action])
@@ -2119,7 +2239,8 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast
 
     new_max_seq_len, mask = gen_mask_from(update_pos)
     
-    outp = transpose_all([actions_1hot[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask])
+    outp = transpose_all([actions_1hot[:new_max_seq_len-1], 
+        label_probs[:new_max_seq_len], mask])
 
     if y is not None: # visualization request
         full_action_samples = np.transpose(actions_taken, [1, 2, 0])
@@ -2225,7 +2346,7 @@ def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args, fin
 
     return advantages, discounted_rewards_arr
 
-def compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args, final_cost=False):
+def compute_advantage_hidden(new_x, new_x_mask, rewards, new_reward_mask, vf, args, final_cost=False):
     # shape: n_batch, n_seq, n_feat or n_batch, n_seq
 
     reward_mask_1d = new_reward_mask.reshape([-1])
