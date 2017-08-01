@@ -568,9 +568,9 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         prev_step_idx = prev_step_idx_list[idx]
         prev_pred_idx = prev_pred_idx_list[idx]
         action_size = cur_step_idx - prev_step_idx
-        ref_labels = [prev_step_idx:cur_step_idx, idx]
+#        ref_labels = y[prev_step_idx:cur_step_idx, idx]
 
-#        ref_labels = y[prev_step_idx:prev_step_idx+n_action, idx]
+        ref_labels = y[prev_step_idx:prev_step_idx+n_action, idx]
 
         match_count = 0
         miss_count = 0
@@ -580,13 +580,8 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         for l in ref_labels:
             if l == target_label: match_count += 1
             else: break
-
-        if match_count == action_size:
-            r = 1
-        else:
-            r = -1
         
-        reward_list[reward_update_pos[idx], idx] = r
+        reward_list[reward_update_pos[idx], idx] = -abs(match_count - action_size)
         reward_target_indices.append(idx)
 
     return reward_target_indices
@@ -2035,6 +2030,33 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fas
     new_max_seq_len, mask = gen_mask_from(update_pos)
     return transpose_all([actions_1hot[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask])
 
+def gen_output_image(actions_taken, y, n_class):
+    full_action_samples = np.transpose(actions_taken, [1, 2, 0])
+    full_action_samples = np.expand_dims(full_action_samples, axis=-1)
+    # make it thicker
+    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1) 
+    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=2)
+
+    y = to_label_change(y, n_class)
+
+    full_label_data = np.expand_dims(y, axis=-1)
+    full_label_data = np.transpose(full_label_data, [1, 2, 0])
+    full_label_data = np.expand_dims(full_label_data, axis=-1)
+    # make it thicker
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=1) 
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
+    full_label_data /= float(n_class)
+
+    output_image = np.concatenate([np.concatenate([full_label_data,
+                                                   np.zeros_like(full_label_data),
+                                                   np.zeros_like(full_label_data)], axis=-1),
+                                   np.concatenate([np.zeros_like(full_action_samples),
+                                                   full_action_samples,
+                                                   np.zeros_like(full_action_samples)], axis=-1)],
+                                   axis=1)
+
+    return output_image
+
 def gen_episode_supervised(x, y, x_mask, sess, test_graph, fast_action, n_fast_action):
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
@@ -2125,31 +2147,7 @@ def gen_episode_supervised(x, y, x_mask, sess, test_graph, fast_action, n_fast_a
     outp = transpose_all([new_x[:new_max_seq_len], new_y[:new_max_seq_len], actions_1hot[:new_max_seq_len-1], 
         label_probs[:new_max_seq_len], mask])
 
-    # visualization
-    full_action_samples = np.transpose(actions_taken, [1, 2, 0])
-    full_action_samples = np.expand_dims(full_action_samples, axis=-1)
-    # make it thicker
-    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1) 
-    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=2)
-
-    y = to_label_change(y, n_class)
-
-    full_label_data = np.expand_dims(y, axis=-1)
-    full_label_data = np.transpose(full_label_data, [1, 2, 0])
-    full_label_data = np.expand_dims(full_label_data, axis=-1)
-    # make it thicker
-    full_label_data = np.repeat(full_label_data, repeats=5, axis=1) 
-    full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
-    full_label_data /= float(n_class)
-
-    output_image = np.concatenate([np.concatenate([full_label_data,
-                                                   np.zeros_like(full_label_data),
-                                                   np.zeros_like(full_label_data)], axis=-1),
-                                   np.concatenate([np.zeros_like(full_action_samples),
-                                                   full_action_samples,
-                                                   np.zeros_like(full_action_samples)], axis=-1)],
-                                   axis=1)
-
+    output_image = gen_output_image(actions_taken, y, n_class)
     outp += [output_image,]
     
     return outp
@@ -2243,31 +2241,8 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast
         label_probs[:new_max_seq_len], mask])
 
     if y is not None: # visualization request
-        full_action_samples = np.transpose(actions_taken, [1, 2, 0])
-        full_action_samples = np.expand_dims(full_action_samples, axis=-1)
-        # make it thicker
-        full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1) 
-        full_action_samples = np.repeat(full_action_samples, repeats=5, axis=2)
-
         y = np.transpose(y, [1,0])
-        y = to_label_change(y, n_class)
-
-        full_label_data = np.expand_dims(y, axis=-1)
-        full_label_data = np.transpose(full_label_data, [1, 2, 0])
-        full_label_data = np.expand_dims(full_label_data, axis=-1)
-        # make it thicker
-        full_label_data = np.repeat(full_label_data, repeats=5, axis=1) 
-        full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
-        full_label_data /= float(n_class)
-
-        output_image = np.concatenate([np.concatenate([full_label_data,
-                                                       np.zeros_like(full_label_data),
-                                                       np.zeros_like(full_label_data)], axis=-1),
-                                       np.concatenate([np.zeros_like(full_action_samples),
-                                                       full_action_samples,
-                                                       np.zeros_like(full_action_samples)], axis=-1)],
-                                       axis=1)
-
+        output_image = gen_output_image(actions_taken, y, n_class)
         outp += [output_image,]
     
     return outp

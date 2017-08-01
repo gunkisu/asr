@@ -48,6 +48,7 @@ flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
 flags.DEFINE_boolean('no-copy', False, '')
 flags.DEFINE_boolean('no-length-sort', False, '')
+flags.DEFINE_boolean('no-sampling', False, '')
 flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
 flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
 flags.DEFINE_string('train-dataset', 'train_si284', '')
@@ -247,45 +248,88 @@ def main(_):
                 n_batch = x.shape[0]
                 _n_exp += n_batch
 
-                # train jump prediction part
-                new_x, _, actions, _, new_x_mask = gen_supervision(x, x_mask, y, args)                
-                zero_state = gen_zero_state(n_batch, args.n_hidden)
-                feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_jump_data: actions}
-                feed_init_state(feed_dict, tg.init_state, zero_state)
-                _tr_rl_cost, _ = sess.run([tg.rl_cost, rl_op], feed_dict=feed_dict)
 
-                tr_ce2_sum += _tr_rl_cost.sum()
-                tr_ce2_count += new_x_mask[:,:-1].sum()
+                if args.no_sampling:
+                    new_x, new_y, actions, actions_1hot, new_x_mask = gen_supervision(x, x_mask, y, args)
+                    
+                    zero_state = gen_zero_state(n_batch, args.n_hidden)
 
-                _tr_ce2_summary, = sess.run([tr_ce2_summary],
-                        feed_dict={tr_ce2: _tr_rl_cost.sum() / new_x_mask[:,:-1].sum()})
+                    feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
+                        tg.seq_jump_data: actions}
+                    feed_init_state(feed_dict, tg.init_state, zero_state)
 
-                # generate jumps from the model 
-                new_x, new_y, actions_1hot, label_probs, new_x_mask, output_image = gen_episode_supervised(x, y, x_mask, sess, test_graph, 
-                    args.fast_action, args.n_fast_action)
+                    _tr_ml_cost, _tr_rl_cost, _, _ = \
+                        sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op], feed_dict=feed_dict)
+            
+                    tr_ce_sum += _tr_ml_cost.sum()
+                    tr_ce_count += new_x_mask.sum()
+                    tr_ce2_sum += _tr_rl_cost.sum()
+                    tr_ce2_count += new_x_mask[:,:-1].sum()
 
-                feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y}
-                feed_init_state(feed_dict, tg.init_state, zero_state)
+                    actions_1hot, label_probs, new_mask, output_image = \
+                        skip_rnn_forward_supervised(x, x_mask, sess, test_graph, 
+                        args.fast_action, args.n_fast_action, y)
+                    
+                    pred_idx = expand_output(actions_1hot, x_mask, new_mask, label_probs.argmax(axis=-1))
+                    tr_acc_sum += ((pred_idx == y) * x_mask).sum()
+                    tr_acc_count += x_mask.sum()
 
-                # train label prediction part
-                _tr_ml_cost, _, pred_idx = sess.run([tg.ml_cost, ml_op, tg.pred_idx], feed_dict=feed_dict)
+                    _tr_ce_summary, _tr_fer_summary, _tr_ce2_summary, _tr_image_summary = \
+                        sess.run([tr_ce_summary, tr_fer_summary, tr_ce2_summary, tr_image_summary],
+                            feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(), 
+                                tr_fer: 1 - ((pred_idx == y) * x_mask).sum() / x_mask.sum(), 
+                                tr_ce2: _tr_rl_cost.sum() / new_x_mask[:,:-1].sum(),
+                                tr_image: output_image})
+                    summary_writer.add_summary(_tr_ce_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_fer_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_ce2_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_image_summary, global_step.eval())
+                
+                else:
 
-                tr_ce_sum += _tr_ml_cost.sum()
-                tr_ce_count += new_x_mask.sum()
+                    # train jump prediction part
+                    new_x, _, actions, _, new_x_mask = gen_supervision(x, x_mask, y, args)                
+                    zero_state = gen_zero_state(n_batch, args.n_hidden)
+                    feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_jump_data: actions}
+                    feed_init_state(feed_dict, tg.init_state, zero_state)
+                    _tr_rl_cost, _ = sess.run([tg.rl_cost, rl_op], feed_dict=feed_dict)
 
-                pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx.reshape([n_batch, -1]))
-                tr_acc_sum += ((pred_idx == y) * x_mask).sum()
-                tr_acc_count += x_mask.sum()
+                    tr_ce2_sum += _tr_rl_cost.sum()
+                    tr_ce2_count += new_x_mask[:,:-1].sum()
 
-                _tr_ce_summary, _tr_fer_summary, _tr_image_summary = \
-                    sess.run([tr_ce_summary, tr_fer_summary, tr_image_summary],
-                        feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(), 
-                            tr_fer: ((pred_idx == y) * x_mask).sum() / x_mask.sum(), 
-                            tr_image: output_image})
-                summary_writer.add_summary(_tr_ce_summary, global_step.eval())
-                summary_writer.add_summary(_tr_fer_summary, global_step.eval())
-                summary_writer.add_summary(_tr_ce2_summary, global_step.eval())
-                summary_writer.add_summary(_tr_image_summary, global_step.eval())
+                    _tr_ce2_summary, = sess.run([tr_ce2_summary],
+                            feed_dict={tr_ce2: _tr_rl_cost.sum() / new_x_mask[:,:-1].sum()})
+
+                    # generate jumps from the model 
+                    new_x, new_y, actions_1hot, label_probs, new_x_mask, output_image = gen_episode_supervised(x, y, x_mask, sess, test_graph, 
+                        args.fast_action, args.n_fast_action)
+
+                    feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y}
+                    feed_init_state(feed_dict, tg.init_state, zero_state)
+
+                    # train label prediction part
+                    _tr_ml_cost, _ = sess.run([tg.ml_cost, ml_op], feed_dict=feed_dict)
+
+                    tr_ce_sum += _tr_ml_cost.sum()
+                    tr_ce_count += new_x_mask.sum()
+
+                    actions_1hot, label_probs, new_mask, output_image = \
+                        skip_rnn_forward_supervised(x, x_mask, sess, test_graph, 
+                        args.fast_action, args.n_fast_action, y)
+                    
+                    pred_idx = expand_output(actions_1hot, x_mask, new_mask, label_probs.argmax(axis=-1))
+                    tr_acc_sum += ((pred_idx == y) * x_mask).sum()
+                    tr_acc_count += x_mask.sum()
+
+                    _tr_ce_summary, _tr_fer_summary, _tr_image_summary = \
+                        sess.run([tr_ce_summary, tr_fer_summary, tr_image_summary],
+                            feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(), 
+                                tr_fer: 1 - ((pred_idx == y) * x_mask).sum() / x_mask.sum(), 
+                                tr_image: output_image})
+                    summary_writer.add_summary(_tr_ce_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_fer_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_ce2_summary, global_step.eval())
+                    summary_writer.add_summary(_tr_image_summary, global_step.eval())
 
                 if global_step.eval() % args.display_freq == 0:
                     avg_tr_ce = tr_ce_sum / tr_ce_count
@@ -315,7 +359,7 @@ def main(_):
                 x, x_mask, _, _, y, _ = batch
                 n_batch = x.shape[0]
 
-                actions_1hot2, label_probs, new_mask, output_image = \
+                actions_1hot, label_probs, new_mask, output_image = \
                     skip_rnn_forward_supervised(x, x_mask, sess, test_graph, 
                     args.fast_action, args.n_fast_action, y)
                 
