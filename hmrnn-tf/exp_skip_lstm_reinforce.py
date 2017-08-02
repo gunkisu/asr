@@ -357,7 +357,7 @@ def main(_):
 
                 val_rl_costs.append(_val_rl_cost.sum() / new_reward_mask.sum())
                 val_action_entropies.append(action_entropies.sum() / new_reward_mask.sum())
-                val_rewards.append(rewards.sum())
+                val_rewards.append(rewards.sum() / new_reward_mask.sum())
 
             avg_val_ce = val_ce_sum / val_ce_count
             avg_val_fer = 1. - val_acc_sum / val_acc_count
