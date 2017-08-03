@@ -3,10 +3,10 @@ THEANO_FLAGS='device=cpu'
 cd ~/song/kaldi/egs/wsj/s5
 source ./path.sh
 
-# skip lstm
-#dir=exp/hyperud/decode_bd_tgpr_dev93_skip_lstm_a2
-#model=~/song/asr/skip_lstm_a2/best_model.ckpt-32732.meta
-#forward=~/song/asr/bin/forward_skip_lstm.py 
+# skip lstm with reinforce
+dir=exp/hyperud/decode_bd_tgpr_dev93_skip_lstm_reinforce_a7
+model=~/song/asr/skip_lstm_reinforce_a7/best_model.ckpt-11690.meta
+forward=~/song/asr/bin/forward_skip_lstm_reinforce.py
 
 # fixed skip lstm
 #dir=exp/hyperud/decode_bd_tgpr_dev93_fixed_skip_s1
@@ -14,9 +14,9 @@ source ./path.sh
 #forward=~/song/asr/bin/forward_fixed_skip_lstm.py 
 
 # skip lstm supervised
-dir=exp/hyperud/decode_bd_tgpr_dev93_skip_lstm_supervised_a3
-model=~/song/asr/skip_lstm_supervised_a3/best_model.ckpt-56112.meta
-forward=~/song/asr/bin/forward_skip_lstm_supervised.py 
+#dir=exp/hyperud/decode_bd_tgpr_dev93_skip_lstm_supervised_a5
+#model=~/song/asr/skip_lstm_supervised_a5/best_model.ckpt-7014.meta
+#forward=~/song/asr/bin/forward_skip_lstm_supervised.py 
 
 n_batch=1
 
