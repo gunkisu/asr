@@ -39,6 +39,7 @@ flags.DEFINE_integer('n-input', 123, 'Number of RNN hidden units')
 flags.DEFINE_integer('n-layer', 1, 'Number of RNN hidden layers')
 flags.DEFINE_integer('n-hidden', 1024, 'Number of RNN hidden units')
 flags.DEFINE_integer('n-class', 3436, 'Number of target symbols')
+flags.DEFINE_integer('n-embedding', 100, 'Embedding size')
 flags.DEFINE_integer('n-action', 3, 'Number of actions (max skim size)')
 flags.DEFINE_integer('n-fast-action', 10, 'Number of steps to skip in the fast action mode')
 flags.DEFINE_integer('base-seed', 20170309, 'Base random seed') 
@@ -58,10 +59,10 @@ flags.DEFINE_string('test-dataset', 'test_eval92', '')
 flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
 
 tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',
-    'seq_y_data', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
+    'seq_y_data', 'seq_y_data_for_action', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
 
 sg_fields = ['step_h_state', 'step_last_state', 'step_label_probs', 'step_action_probs',
-    'step_action_samples', 'step_x_data', 'init_state', 'action_entropy']
+    'step_action_samples', 'step_x_data', 'step_y_data_for_action', 'init_state', 'action_entropy', 'sample_y']
 
 TrainGraph = namedtuple('TrainGraph', ' '.join(tg_fields))
 SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
@@ -69,10 +70,11 @@ SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
 def build_graph(args):
     with tf.device(args.device):
         # n_batch, n_seq, n_feat
-        seq_x_data = tf.placeholder(dtype=tf.float32, shape=(None, None, args.n_input))
-        seq_x_mask = tf.placeholder(dtype=tf.float32, shape=(None, None))
-        seq_y_data = tf.placeholder(dtype=tf.int32, shape=(None, None))
-
+        seq_x_data = tf.placeholder(tf.float32, shape=(None, None, args.n_input))
+        seq_x_mask = tf.placeholder(tf.float32, shape=(None, None))
+        seq_y_data = tf.placeholder(tf.int32, shape=(None, None))
+        seq_y_data_for_action = tf.placeholder(tf.int32, shape=(None,None))
+        
         init_state = tuple( lstm_state(args.n_hidden, l) for l in range(args.n_layer))
 
         seq_action = tf.placeholder(tf.float32, shape=(None, None, args.n_action))
@@ -80,6 +82,12 @@ def build_graph(args):
         seq_action_mask = tf.placeholder(tf.float32, shape=(None, None))
         
         step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
+
+        embedding = tf.get_variable("embedding", [args.n_class, args.n_embedding], dtype=tf.float32)
+        step_y_data_for_action = tf.placeholder(tf.int32, shape=(None,))
+        seq_y_input = tf.nn.embedding_lookup(embedding, seq_y_data_for_action)
+
+        sample_y = tf.placeholder(tf.bool)
 
     def lstm_cell():
         return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
@@ -95,10 +103,16 @@ def build_graph(args):
     # sampling graph
     step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
 
+    # no need to do stop_gradient because training is not done for the sampling graph
     step_label_logits = _label_logit(step_h_state, 'label_logit')
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
+    step_y_input_answer = tf.nn.embedding_lookup(embedding, step_y_data_for_action)
 
-    step_action_logits = _action_logit(step_h_state, 'action_logit')
+    step_y_1hot_pred = tf.argmax(step_label_probs, axis=-1)
+    step_y_input_pred = tf.nn.embedding_lookup(embedding, step_y_1hot_pred)
+    step_y_input = tf.where(sample_y, step_y_input_pred, step_y_input_answer)
+
+    step_action_logits = _action_logit([step_h_state, step_y_input], 'action_logit')
     step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
     step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
     step_action_entropy = categorical_ent(step_action_probs)
@@ -109,7 +123,7 @@ def build_graph(args):
 
     seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')
 
-    y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=FLAGS.n_class)
+    y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=args.n_class)
 
     ml_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_label_logits, 
         labels=y_1hot)
@@ -117,11 +131,12 @@ def build_graph(args):
 
     pred_idx = tf.argmax(seq_label_logits, axis=1)
 
-    seq_hid_3d_rl = seq_hid_3d[:,:-1,:]
+    seq_hid_3d_rl = seq_hid_3d[:,:-1,:] # 
     seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
     seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
-    seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
+    seq_y_input_2d = tf.reshape(seq_y_input[:,:-1:], [-1, args.n_embedding])
+    seq_action_logits = _action_logit([seq_hid_2d_rl, seq_y_input_2d], 'action_logit')
     seq_action_probs = tf.nn.softmax(seq_action_logits)
 
     action_prob_entropy = categorical_ent(seq_action_probs)
@@ -134,10 +149,10 @@ def build_graph(args):
     rl_cost = -tf.reduce_sum(rl_cost*tf.reshape(seq_action_mask, [-1]))
 
     train_graph = TrainGraph(ml_cost, rl_cost, seq_x_data, seq_x_mask, 
-        seq_y_data, init_state, seq_action, seq_advantage, seq_action_mask, pred_idx)
+        seq_y_data, seq_y_data_for_action, init_state, seq_action, seq_advantage, seq_action_mask, pred_idx)
 
     sample_graph = SampleGraph(step_h_state, step_last_state, step_label_probs,
-        step_action_probs, step_action_samples, step_x_data, init_state, step_action_entropy)
+        step_action_probs, step_action_samples, step_x_data, step_y_data_for_action, init_state, step_action_entropy, sample_y)
 
     return train_graph, sample_graph
 
@@ -171,8 +186,6 @@ def main(_):
 
     tvars = tf.trainable_variables()
     print([tvar.name for tvar in tvars])
-    ml_vars = [tvar for tvar in tvars if "action_logit" not in tvar.name]
-    rl_vars = [tvar for tvar in tvars if "action_logit" in tvar.name]
 
     ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.learning_rate,
                                                                              beta1=0.9, beta2=0.99)
@@ -180,16 +193,16 @@ def main(_):
                                                                              beta1=0.9, beta2=0.99)
 
     if args.grad_clip:
-        ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, ml_vars),
+        ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, tvars),
                                                                             clip_norm=1.0)
     else:
-        ml_grads = tf.gradients(tg_ml_cost, ml_vars)
-    ml_op = ml_opt_func.apply_gradients(zip(ml_grads, ml_vars), global_step=global_step)
+        ml_grads = tf.gradients(tg_ml_cost, tvars)
+    ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
 
     tg_rl_cost = tf.reduce_mean(tg.rl_cost)
-    rl_grads = tf.gradients(tg_rl_cost, rl_vars)
+    rl_grads = tf.gradients(tg_rl_cost, tvars)
     # do not increase global step -- ml op increases it 
-    rl_op = rl_opt_func.apply_gradients(zip(rl_grads, rl_vars))
+    rl_op = rl_opt_func.apply_gradients(zip(rl_grads, tvars))
     
     tf.add_to_collection('fast_action', args.fast_action)
     tf.add_to_collection('fast_action', args.n_fast_action)
@@ -269,7 +282,7 @@ def main(_):
 
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
                     tg.seq_action: actions_1hot, tg.seq_advantage: advantages, 
-                    tg.seq_action_mask: new_reward_mask}
+                    tg.seq_action_mask: new_reward_mask, tg.seq_y_data_for_action: new_y}
                 feed_init_state(feed_dict, tg.init_state, zero_state)
 
                 _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \
@@ -334,15 +347,16 @@ def main(_):
                 x, x_mask, _, _, y, _ = batch
                 n_batch = x.shape[0]
 
-                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, _ = \
-                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
+                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image, new_y_sample = \
+                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, sample_y=True)
+
                 advantages, _ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
 
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
                     tg.seq_action: actions_1hot, tg.seq_advantage: advantages, 
-                    tg.seq_action_mask: new_reward_mask}
+                    tg.seq_action_mask: new_reward_mask, tg.seq_y_data_for_action: new_y_sample}
                 feed_init_state(feed_dict, tg.init_state, zero_state)
 
                 _val_ml_cost, _val_rl_cost, pred_idx = sess.run([tg.ml_cost, tg.rl_cost, tg.pred_idx],

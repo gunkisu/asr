@@ -941,7 +941,7 @@ def to_label_change(y, n_class):
     return label_change
 
 def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, 
-    fill_function=fill_seg_match_reward):
+    fill_function=fill_seg_match_reward, sample_y=False):
 
     sg = sample_graph
 
@@ -964,6 +964,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
 
     new_x = np.zeros([max_seq_len, n_batch, n_feat])
     new_y = np.zeros([max_seq_len, n_batch])
+    new_y_sample = np.zeros([max_seq_len, n_batch])
     actions = np.zeros([max_seq_len-1, n_batch, args.n_action])
     rewards = np.zeros([max_seq_len-1, n_batch])
     action_entropies = np.zeros([max_seq_len-1, n_batch])
@@ -979,7 +980,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
 
         if len(_x_step):
 
-            feed_dict={sg.step_x_data: _x_step}
+            feed_dict={sg.step_x_data: _x_step, sg.step_y_data_for_action: _y_step, sg.sample_y: sample_y}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
             step_label_likelihood_j, new_prev_state = \
@@ -992,6 +993,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
+            fill(new_y_sample, step_label_idx, target_indices, update_pos)
 
             reward_target_indices = fill_function(rewards, y, j, 
                 prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action, args.alpha, args.beta)
@@ -1005,15 +1007,15 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
             filter_action_end(x_step, y_step, prev_state, j, action_counters, sample_done)
 
         if len(_x_step):
-
-            feed_dict={sg.step_x_data: _x_step}
+        
+            feed_dict={sg.step_x_data: _x_step, sg.step_y_data_for_action: _y_step, sg.sample_y: sample_y}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
-
+           
             action_idx, step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy = \
                 sess.run([sg.step_action_samples, sg.step_action_probs, sg.step_label_probs,
                     sg.step_last_state, sg.action_entropy],
                     feed_dict=feed_dict)
-
+            
             step_label_idx = step_label_likelihood_j.argmax(axis=1)
 
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
@@ -1021,6 +1023,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
+            fill(new_y_sample, step_label_idx, target_indices, update_pos)
             fill(action_entropies, action_entropy, target_indices, update_pos)
             fill(actions, action_one_hot, target_indices, update_pos)
 
@@ -1045,36 +1048,20 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
 
     max_seq_len, mask, max_reward_seq_len, reward_mask = gen_mask2(update_pos, reward_update_pos, n_batch)
 
-    full_action_samples = np.transpose(full_action_samples, [1, 2, 0])
-    full_action_samples = np.expand_dims(full_action_samples, axis=-1)
-    # make it thicker
-    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1) 
-    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=2)
-
-    y = to_label_change(y, args.n_class)
-
-    full_label_data = np.expand_dims(y, axis=-1)
-    full_label_data = np.transpose(full_label_data, [1, 2, 0])
-    full_label_data = np.expand_dims(full_label_data, axis=-1)
-    # make it thicker
-    full_label_data = np.repeat(full_label_data, repeats=5, axis=1) 
-    full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
-    full_label_data /= float(args.n_class)
-
-    output_image = np.concatenate([np.concatenate([full_label_data,
-                                                   np.zeros_like(full_label_data),
-                                                   np.zeros_like(full_label_data)], axis=-1),
-                                   np.concatenate([np.zeros_like(full_action_samples),
-                                                   full_action_samples,
-                                                   np.zeros_like(full_action_samples)], axis=-1)],
-                                  axis=1)
-    return transpose_all([new_x[:max_seq_len],
-                         new_y[:max_seq_len],
+    outp = transpose_all([new_x[:max_seq_len],
+                         new_y[:max_seq_len],                         
                          actions[:max_seq_len-1],
                          rewards[:max_reward_seq_len],
                          action_entropies[:max_seq_len-1],
                          mask,
-                         reward_mask]) + [output_image,]
+                         reward_mask])
+
+    output_image = gen_output_image(full_action_samples, y, args.n_class)
+    outp.append(output_image)
+
+    if sample_y:
+        outp.extend(transpose_all([new_y_sample[:max_seq_len]]))
+    return outp
 
 def get_seg_len(ref_labels):
     start_label = ref_labels[0]
