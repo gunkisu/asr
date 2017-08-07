@@ -17,7 +17,6 @@ from collections import namedtuple
 from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import get_gpuname
 from mixer import gen_episode_with_seg_reward
 from mixer import LinearVF, compute_advantage, compute_advantage_hidden
 from mixer import categorical_ent, expand_output
