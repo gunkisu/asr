@@ -1,9 +1,9 @@
 #!/usr/bin/env python
+from __future__ import print_function
 
 import os
 import socket
 import sys
-sys.path.insert(0, '..')
 
 from itertools import islice
 
@@ -23,38 +23,9 @@ from mixer import lstm_state, gen_zero_state, feed_init_state
 from model import LinearCell
 
 from data.fuel_utils import create_ivector_datastream
-from libs.utils import sync_data, StopWatch
+import utils
 
-flags = tf.app.flags
-FLAGS = flags.FLAGS
-flags.DEFINE_float('learning-rate', 0.01, 'Initial learning rate')
-flags.DEFINE_float('rl-learning-rate', 0.01, 'Initial learning rate for RL')
-flags.DEFINE_integer('min-after-cache', 1024, 'Size of mini-batch')
-flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
-flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
-flags.DEFINE_integer('display-freq', 100, 'Display frequency')
-flags.DEFINE_integer('n-input', 123, 'Number of RNN hidden units')
-flags.DEFINE_integer('n-layer', 1, 'Number of RNN hidden layers')
-flags.DEFINE_integer('n-hidden', 1024, 'Number of RNN hidden units')
-flags.DEFINE_integer('n-class', 3436, 'Number of target symbols')
-flags.DEFINE_integer('n-action', 3, 'Number of actions (max skim size)')
-flags.DEFINE_integer('n-fast-action', 10, 'Number of steps to skip in the fast action mode')
-flags.DEFINE_integer('base-seed', 20170309, 'Base random seed') 
-flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
-flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
-flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
-flags.DEFINE_boolean('fast-action', False, 'If true, operate in the fast action mode')
-flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
-flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
-flags.DEFINE_boolean('no-copy', False, '')
-flags.DEFINE_boolean('no-length-sort', False, '')
-flags.DEFINE_boolean('no-sampling', False, '')
-flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
-flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
-flags.DEFINE_string('train-dataset', 'train_si284', '')
-flags.DEFINE_string('valid-dataset', 'test_dev93', '')
-flags.DEFINE_string('test-dataset', 'test_eval92', '')
-flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
+from libs.utils import sync_data, StopWatch
 
 TrainGraph = namedtuple('TrainGraph', 
     'ml_cost rl_cost seq_x_data seq_x_mask seq_y_data seq_jump_data init_state pred_idx')
@@ -131,17 +102,13 @@ def build_graph(args):
 
     return train_graph, test_graph
 
-def main(_):
+if __name__ == '__main__':
     print(' '.join(sys.argv))
-    args = FLAGS
-    print(args.__flags)
-    print('Hostname: {}'.format(socket.gethostname()))
-    print('GPU: {}'.format(get_gpuname()))
 
-    if not args.start_from_ckpt:
-        if tf.gfile.Exists(args.log_dir):
-            tf.gfile.DeleteRecursively(args.log_dir)
-        tf.gfile.MakeDirs(args.log_dir)
+    args = utils.get_argparser().parse_args()
+    print(args)
+    utils.prepare_dir(args)
+    utils.print_host_info()
 
     tf.get_variable_scope()._reuse = None
 
@@ -149,7 +116,7 @@ def main(_):
     tf.set_random_seed(_seed)
     np.random.seed(_seed)
 
-    prefix_name = os.path.join(args.log_dir, 'model')
+    prefix_name = os.path.join(args.logdir, 'model')
     file_name = '%s.npz' % prefix_name
 
     eval_summary = OrderedDict()
@@ -161,31 +128,20 @@ def main(_):
 
     tvars = tf.trainable_variables()
     print([tvar.name for tvar in tvars])
-    ml_tvars = [tvar for tvar in tvars if "action_logit" not in tvar.name]
-    rl_tvars = [tvar for tvar in tvars if "action_logit" in tvar.name]
 
-    ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.learning_rate,
-                                                                             beta1=0.9, beta2=0.99)
-    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.rl_learning_rate,
-                                                                             beta1=0.9, beta2=0.99)
+    ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.learning_rate, beta1=0.9, beta2=0.99)
+    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.rl_learning_rate, beta1=0.9, beta2=0.99)
 
-    if args.grad_clip:
-        ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, ml_tvars), clip_norm=1.0)
-    else:
-        ml_grads = tf.gradients(tg_ml_cost, ml_tvars)
-    ml_op = ml_opt_func.apply_gradients(zip(ml_grads, ml_tvars), global_step=global_step)
+    ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, tvars), clip_norm=1.0)
+    ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
 
     tg_rl_cost = tf.reduce_mean(tg.rl_cost)
-    rl_grads = tf.gradients(tg_rl_cost, rl_tvars)
-    rl_op = rl_opt_func.apply_gradients(zip(rl_grads, rl_tvars))
+    rl_grads = tf.gradients(tg_rl_cost, tvars)
+    rl_op = rl_opt_func.apply_gradients(zip(rl_grads, tvars))
     
-    tf.add_to_collection('fast_action', args.fast_action)
-    tf.add_to_collection('fast_action', args.n_fast_action)
-
-    sync_data(args)
-    datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
-    train_set, valid_set, test_set = [create_ivector_datastream(path=args.data_path, which_set=dataset, 
-            batch_size=args.n_batch, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort) for dataset in datasets]
+    tf.add_to_collection('n_fast_action', args.n_fast_action)
+    
+    train_set, valid_set, test_set = utils.prepare_dataset(args)
 
     init_op = tf.global_variables_initializer()
     save_op = tf.train.Saver(max_to_keep=5)
@@ -216,11 +172,11 @@ def main(_):
         sess.run(init_op)
 
         if args.start_from_ckpt:
-            save_op = tf.train.import_meta_graph(os.path.join(args.log_dir, 'model.ckpt.meta'))
-            save_op.restore(sess, os.path.join(args.log_dir, 'model.ckpt'))
+            save_op = tf.train.import_meta_graph(os.path.join(args.logdir, 'model.ckpt.meta'))
+            save_op.restore(sess, os.path.join(args.logdir, 'model.ckpt'))
             print("Restore from the last checkpoint. Restarting from %d step." % global_step.eval())
 
-        summary_writer = tf.summary.FileWriter(args.log_dir, sess.graph, flush_secs=5.0)
+        summary_writer = tf.summary.FileWriter(args.logdir, sess.graph, flush_secs=5.0)
 
         tr_ce_sum = 0.; tr_ce_count = 0
         tr_acc_sum = 0; tr_acc_count = 0
@@ -249,87 +205,40 @@ def main(_):
                 _n_exp += n_batch
 
 
-                if args.no_sampling:
-                    new_x, new_y, actions, actions_1hot, new_x_mask = gen_supervision(x, x_mask, y, args)
-                    
-                    zero_state = gen_zero_state(n_batch, args.n_hidden)
-
-                    feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
-                        tg.seq_jump_data: actions}
-                    feed_init_state(feed_dict, tg.init_state, zero_state)
-
-                    _tr_ml_cost, _tr_rl_cost, _, _ = \
-                        sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op], feed_dict=feed_dict)
-            
-                    tr_ce_sum += _tr_ml_cost.sum()
-                    tr_ce_count += new_x_mask.sum()
-                    tr_ce2_sum += _tr_rl_cost.sum()
-                    tr_ce2_count += new_x_mask[:,:-1].sum()
-
-                    actions_1hot, label_probs, new_mask, output_image = \
-                        skip_rnn_forward_supervised(x, x_mask, sess, test_graph, 
-                        args.fast_action, args.n_fast_action, y)
-                    
-                    pred_idx = expand_output(actions_1hot, x_mask, new_mask, label_probs.argmax(axis=-1))
-                    tr_acc_sum += ((pred_idx == y) * x_mask).sum()
-                    tr_acc_count += x_mask.sum()
-
-                    _tr_ce_summary, _tr_fer_summary, _tr_ce2_summary, _tr_image_summary = \
-                        sess.run([tr_ce_summary, tr_fer_summary, tr_ce2_summary, tr_image_summary],
-                            feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(), 
-                                tr_fer: 1 - ((pred_idx == y) * x_mask).sum() / x_mask.sum(), 
-                                tr_ce2: _tr_rl_cost.sum() / new_x_mask[:,:-1].sum(),
-                                tr_image: output_image})
-                    summary_writer.add_summary(_tr_ce_summary, global_step.eval())
-                    summary_writer.add_summary(_tr_fer_summary, global_step.eval())
-                    summary_writer.add_summary(_tr_ce2_summary, global_step.eval())
-                    summary_writer.add_summary(_tr_image_summary, global_step.eval())
+                new_x, new_y, actions, actions_1hot, new_x_mask = gen_supervision(x, x_mask, y, args)
                 
-                else:
+                zero_state = gen_zero_state(n_batch, args.n_hidden)
 
-                    # train jump prediction part
-                    new_x, _, actions, _, new_x_mask = gen_supervision(x, x_mask, y, args)                
-                    zero_state = gen_zero_state(n_batch, args.n_hidden)
-                    feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_jump_data: actions}
-                    feed_init_state(feed_dict, tg.init_state, zero_state)
-                    _tr_rl_cost, _ = sess.run([tg.rl_cost, rl_op], feed_dict=feed_dict)
+                feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
+                    tg.seq_jump_data: actions}
+                feed_init_state(feed_dict, tg.init_state, zero_state)
 
-                    tr_ce2_sum += _tr_rl_cost.sum()
-                    tr_ce2_count += new_x_mask[:,:-1].sum()
+                _tr_ml_cost, _tr_rl_cost, _, _ = \
+                    sess.run([tg.ml_cost, tg.rl_cost, ml_op, rl_op], feed_dict=feed_dict)
+        
+                tr_ce_sum += _tr_ml_cost.sum()
+                tr_ce_count += new_x_mask.sum()
+                tr_ce2_sum += _tr_rl_cost.sum()
+                tr_ce2_count += new_x_mask[:,:-1].sum()
 
-                    _tr_ce2_summary, = sess.run([tr_ce2_summary],
-                            feed_dict={tr_ce2: _tr_rl_cost.sum() / new_x_mask[:,:-1].sum()})
+                actions_1hot, label_probs, new_mask, output_image = \
+                    skip_rnn_forward_supervised(x, x_mask, sess, test_graph, args.n_fast_action, y)
+                
+                pred_idx = expand_output(actions_1hot, x_mask, new_mask, label_probs.argmax(axis=-1))
+                tr_acc_sum += ((pred_idx == y) * x_mask).sum()
+                tr_acc_count += x_mask.sum()
 
-                    # generate jumps from the model 
-                    new_x, new_y, actions_1hot, label_probs, new_x_mask, output_image = gen_episode_supervised(x, y, x_mask, sess, test_graph, 
-                        args.fast_action, args.n_fast_action)
-
-                    feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y}
-                    feed_init_state(feed_dict, tg.init_state, zero_state)
-
-                    # train label prediction part
-                    _tr_ml_cost, _ = sess.run([tg.ml_cost, ml_op], feed_dict=feed_dict)
-
-                    tr_ce_sum += _tr_ml_cost.sum()
-                    tr_ce_count += new_x_mask.sum()
-
-                    actions_1hot, label_probs, new_mask, output_image = \
-                        skip_rnn_forward_supervised(x, x_mask, sess, test_graph, 
-                        args.fast_action, args.n_fast_action, y)
-                    
-                    pred_idx = expand_output(actions_1hot, x_mask, new_mask, label_probs.argmax(axis=-1))
-                    tr_acc_sum += ((pred_idx == y) * x_mask).sum()
-                    tr_acc_count += x_mask.sum()
-
-                    _tr_ce_summary, _tr_fer_summary, _tr_image_summary = \
-                        sess.run([tr_ce_summary, tr_fer_summary, tr_image_summary],
-                            feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(), 
-                                tr_fer: 1 - ((pred_idx == y) * x_mask).sum() / x_mask.sum(), 
-                                tr_image: output_image})
-                    summary_writer.add_summary(_tr_ce_summary, global_step.eval())
-                    summary_writer.add_summary(_tr_fer_summary, global_step.eval())
-                    summary_writer.add_summary(_tr_ce2_summary, global_step.eval())
-                    summary_writer.add_summary(_tr_image_summary, global_step.eval())
+                _tr_ce_summary, _tr_fer_summary, _tr_ce2_summary, _tr_image_summary = \
+                    sess.run([tr_ce_summary, tr_fer_summary, tr_ce2_summary, tr_image_summary],
+                        feed_dict={tr_ce: _tr_ml_cost.sum() / new_x_mask.sum(), 
+                            tr_fer: 1 - ((pred_idx == y) * x_mask).sum() / x_mask.sum(), 
+                            tr_ce2: _tr_rl_cost.sum() / new_x_mask[:,:-1].sum(),
+                            tr_image: output_image})
+                summary_writer.add_summary(_tr_ce_summary, global_step.eval())
+                summary_writer.add_summary(_tr_fer_summary, global_step.eval())
+                summary_writer.add_summary(_tr_ce2_summary, global_step.eval())
+                summary_writer.add_summary(_tr_image_summary, global_step.eval())
+            
 
                 if global_step.eval() % args.display_freq == 0:
                     avg_tr_ce = tr_ce_sum / tr_ce_count
@@ -360,8 +269,7 @@ def main(_):
                 n_batch = x.shape[0]
 
                 actions_1hot, label_probs, new_mask, output_image = \
-                    skip_rnn_forward_supervised(x, x_mask, sess, test_graph, 
-                    args.fast_action, args.n_fast_action, y)
+                    skip_rnn_forward_supervised(x, x_mask, sess, test_graph, args.n_fast_action, y)
                 
                 pred_idx = expand_output(actions_1hot, x_mask, new_mask, label_probs.argmax(axis=-1))
                 val_acc_sum += ((pred_idx == y) * x_mask).sum()
@@ -384,11 +292,11 @@ def main(_):
             # Save model
             if avg_val_fer < _best_score:
                 _best_score = avg_val_fer
-                best_ckpt = best_save_op.save(sess, os.path.join(args.log_dir,
+                best_ckpt = best_save_op.save(sess, os.path.join(args.logdir,
                                                                                                                  "best_model.ckpt"),
                                                                             global_step=global_step)
                 print("Best checkpoint stored in: %s" % best_ckpt)
-            ckpt = save_op.save(sess, os.path.join(args.log_dir, "model.ckpt"),
+            ckpt = save_op.save(sess, os.path.join(args.logdir, "model.ckpt"),
                                                     global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
 
@@ -398,10 +306,6 @@ def main(_):
         summary_writer.close()
 
         print("Optimization Finished.")
-
-if __name__ == '__main__':
-    tf.app.run()
-
 
 
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 
 import os
 import socket
@@ -24,9 +25,9 @@ from mixer import lstm_state, gen_zero_state, feed_init_state
 from model import LinearCell
 
 from data.fuel_utils import create_ivector_datastream
-from libs.utils import sync_data, StopWatch
+import utils
 
-from utils import get_args
+from libs.utils import sync_data, StopWatch
 
 
 tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',
@@ -127,19 +128,14 @@ def build_graph(args):
 
     return train_graph, sample_graph
 
-def main():
+
+if __name__ == '__main__':
     print(' '.join(sys.argv))
 
-    args = get_args()
+    args = utils.get_argparser().parse_args()
     print(args)
-
-    print('Hostname: {}'.format(socket.gethostname()))
-    print('GPU: {}'.format(get_gpuname()))
-
-    if not args.start_from_ckpt:
-        if tf.gfile.Exists(args.log_dir):
-            tf.gfile.DeleteRecursively(args.log_dir)
-        tf.gfile.MakeDirs(args.log_dir)
+    utils.prepare_dir(args) 
+    utils.print_host_info()
 
     tf.get_variable_scope()._reuse = None
 
@@ -147,7 +143,7 @@ def main():
     tf.set_random_seed(_seed)
     np.random.seed(_seed)
 
-    prefix_name = os.path.join(args.log_dir, 'model')
+    prefix_name = os.path.join(args.logdir, 'model')
     file_name = '%s.npz' % prefix_name
 
     eval_summary = OrderedDict()
@@ -160,16 +156,10 @@ def main():
     tvars = tf.trainable_variables()
     print([tvar.name for tvar in tvars])
 
-    ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.learning_rate,
-                                                                             beta1=0.9, beta2=0.99)
-    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.rl_learning_rate,
-                                                                             beta1=0.9, beta2=0.99)
+    ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.learning_rate, beta1=0.9, beta2=0.99)
+    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.rl_learning_rate, beta1=0.9, beta2=0.99)
 
-    if args.grad_clip:
-        ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, tvars),
-                                                                            clip_norm=1.0)
-    else:
-        ml_grads = tf.gradients(tg_ml_cost, tvars)
+    ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, tvars), clip_norm=1.0)
     ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
 
     tg_rl_cost = tf.reduce_mean(tg.rl_cost)
@@ -179,10 +169,7 @@ def main():
     
     tf.add_to_collection('n_fast_action', args.n_fast_action)
 
-    sync_data(args)
-    datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
-    train_set, valid_set, test_set = [create_ivector_datastream(path=args.data_path, which_set=dataset, 
-            batch_size=args.n_batch, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort) for dataset in datasets]
+    train_set, valid_set, test_set = utils.prepare_dataset(args)
 
     init_op = tf.global_variables_initializer()
     save_op = tf.train.Saver(max_to_keep=5)
@@ -212,11 +199,11 @@ def main():
         sess.run(init_op)
 
         if args.start_from_ckpt:
-            save_op = tf.train.import_meta_graph(os.path.join(args.log_dir, 'model.ckpt.meta'))
-            save_op.restore(sess, os.path.join(args.log_dir, 'model.ckpt'))
+            save_op = tf.train.import_meta_graph(os.path.join(args.logdir, 'model.ckpt.meta'))
+            save_op.restore(sess, os.path.join(args.logdir, 'model.ckpt'))
             print("Restore from the last checkpoint. Restarting from %d step." % global_step.eval())
 
-        summary_writer = tf.summary.FileWriter(args.log_dir, sess.graph, flush_secs=5.0)
+        summary_writer = tf.summary.FileWriter(args.logdir, sess.graph, flush_secs=5.0)
 
         tr_ce_sum = 0.; tr_ce_count = 0
         tr_acc_sum = 0; tr_acc_count = 0
@@ -368,11 +355,11 @@ def main():
             # Save model
             if avg_val_ce < _best_score:
                 _best_score = avg_val_ce
-                best_ckpt = best_save_op.save(sess, os.path.join(args.log_dir,
+                best_ckpt = best_save_op.save(sess, os.path.join(args.logdir,
                                                                                                                  "best_model.ckpt"),
                                                                             global_step=global_step)
                 print("Best checkpoint stored in: %s" % best_ckpt)
-            ckpt = save_op.save(sess, os.path.join(args.log_dir, "model.ckpt"),
+            ckpt = save_op.save(sess, os.path.join(args.logdir, "model.ckpt"),
                                                     global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
 
@@ -383,8 +370,6 @@ def main():
 
         print("Optimization Finished.")
 
-if __name__ == '__main__':
-    main()
 
 
 

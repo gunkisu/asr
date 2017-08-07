@@ -7,12 +7,6 @@ import subprocess
 
 from tensorflow.python.framework import ops
 
-def get_gpuname():
-  p = subprocess.Popen("nvidia-smi -q | grep 'Product Name'", shell=True, stdout=subprocess.PIPE)
-  out = p.stdout.read()
-  gpuname = out.split(':')[1].strip()
-  return gpuname
-
 def gen_zero_state(n_batch, n_units):
     return np.zeros([n_batch, n_units], dtype=np.float32)
 
@@ -1100,7 +1094,7 @@ def gen_supervision(x, x_mask, y, args):
             best_actions = []
             for idx in target_indices:
                 max_jump = args.n_fast_action if args.n_fast_action > 0 else args.n_action
-                upto = min(j+max_jump, seq_lens[idx])
+                upto = int(min(j+max_jump, seq_lens[idx]))
                 ref_labels = y[j:upto, idx]
                 seg_len = get_seg_len(ref_labels)
                 best_actions.append(seg_len - 1)
@@ -2307,7 +2301,6 @@ def compute_advantage_hidden(new_x, new_x_mask, rewards, new_reward_mask, vf, ar
     # shape: [n_batch, n_seq, n_feat] or [n_batch, n_seq] 
     
     reward_mask_1d = new_reward_mask.reshape([-1])
-    rewards_1d = rewards.reshape([-1])[reward_mask_1d==1.]
     discounted_rewards = []
     for reward, mask in zip(rewards, new_reward_mask):
         this_len = int(mask.sum())
