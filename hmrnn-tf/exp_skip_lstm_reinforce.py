@@ -3,7 +3,7 @@
 import os
 import socket
 import sys
-sys.path.insert(0, '..')
+import argparse
 
 from itertools import islice
 
@@ -17,7 +17,7 @@ from mixer import insert_item2dict
 from mixer import save_npz2
 from mixer import get_gpuname
 from mixer import gen_episode_with_seg_reward
-from mixer import LinearVF, compute_advantage
+from mixer import LinearVF, compute_advantage, compute_advantage_hidden
 from mixer import categorical_ent, expand_output
 from mixer import lstm_state, gen_zero_state, feed_init_state
 from model import LinearCell
@@ -25,37 +25,37 @@ from model import LinearCell
 from data.fuel_utils import create_ivector_datastream
 from libs.utils import sync_data, StopWatch
 
-flags = tf.app.flags
-FLAGS = flags.FLAGS
-flags.DEFINE_float('learning-rate', 0.001, 'Initial learning rate')
-flags.DEFINE_float('rl-learning-rate', 0.01, 'Initial learning rate for RL')
-flags.DEFINE_float('beta', 1.0, 'beta in reward computation')
-flags.DEFINE_float('alpha', 1.0, 'alpha in reward computation')
-flags.DEFINE_integer('min-after-cache', 1024, 'Size of mini-batch')
-flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
-flags.DEFINE_integer('n-epoch', 200, 'Maximum number of epochs')
-flags.DEFINE_integer('display-freq', 100, 'Display frequency')
-flags.DEFINE_integer('n-input', 123, 'Number of RNN hidden units')
-flags.DEFINE_integer('n-layer', 1, 'Number of RNN hidden layers')
-flags.DEFINE_integer('n-hidden', 1024, 'Number of RNN hidden units')
-flags.DEFINE_integer('n-class', 3436, 'Number of target symbols')
-flags.DEFINE_integer('n-embedding', 100, 'Embedding size')
-flags.DEFINE_integer('n-action', 3, 'Number of actions (max skim size)')
-flags.DEFINE_integer('n-fast-action', 0, 'Number of steps to skip in the fast action mode')
-flags.DEFINE_integer('base-seed', 20170309, 'Base random seed') 
-flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
-flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
-flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
-flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
-flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
-flags.DEFINE_boolean('no-copy', False, '')
-flags.DEFINE_boolean('no-length-sort', False, '')
-flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
-flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
-flags.DEFINE_string('train-dataset', 'train_si284', '')
-flags.DEFINE_string('valid-dataset', 'test_dev93', '')
-flags.DEFINE_string('test-dataset', 'test_eval92', '')
-flags.DEFINE_float('discount-gamma', 0.99, 'discount_factor')
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--learning-rate', default=0.01, type=float, help='Initial learning rate')
+    parser.add_argument('--rl-learning-rate', default=0.01, type=float, help='Initial learning rate for RL')
+    parser.add_argument('--min-after-cache', default=1024, type=int, help='Size of mini-batch')
+    parser.add_argument('--n-batch', default=16, type=int, help='Size of mini-batch')
+    parser.add_argument('--n-epoch', default=100, type=int, help='Maximum number of epochs')
+    parser.add_argument('--display-freq', default=50, type=int, help='Display frequency')
+    parser.add_argument('--n-input', default=123, type=int, help='Number of RNN hidden units')
+    parser.add_argument('--n-layer', default=1, type=int, help='Number of RNN hidden layers')
+    parser.add_argument('--n-hidden', default=512, type=int, help='Number of RNN hidden units')
+    parser.add_argument('--n-class', default=3436, type=int, help='Number of target symbols')
+    parser.add_argument('--n-embedding', default=32, type=int, help='Embedding size')
+    parser.add_argument('--n-action', default=6, type=int, help='Number of actions (max skim size)')
+    parser.add_argument('--n-fast-action', default=0, type=int, help='Number of steps to skip in the fast action mode')
+    parser.add_argument('--base-seed', default=20170309, type=int, help='Base random seed') 
+    parser.add_argument('--add-seed', default=0, type=int, help='Add this amount to the base random seed')
+    parser.add_argument('--start-from-ckpt', action='store_true', help='If true, start from a ckpt')
+    parser.add_argument('--grad-clip', action='store_true', help='If true, clip the gradients')
+    parser.add_argument('--device', default='gpu', help='Simply set either `cpu` or `gpu`')
+    parser.add_argument('--log-dir', default='skip_lstm_wsj', help='Directory path to files')
+    parser.add_argument('--no-copy', action='store_true' ,help='Do not copy the dataset to a local disk')
+    parser.add_argument('--no-length-sort', action='store_true', help='Do not sort the dataset by sequence lengths')
+    parser.add_argument('--tmpdir', default='/Tmp/songinch/data/speech', help='Local temporary directory to store the dataset')
+    parser.add_argument('--data-path', default='/u/songinch/song/data/speech/wsj_fbank123.h5', help='Location of the dataset')
+    parser.add_argument('--train-dataset', default='train_si284', help='Training dataset')
+    parser.add_argument('--valid-dataset', default='test_dev93', help='Validation dataset')
+    parser.add_argument('--test-dataset', default='test_eval92', help='Test dataset')
+    parser.add_argument('--discount-gamma', default=0.99, type=float, help='Discount factor')
+
+    return parser.parse_args()
 
 tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',
     'seq_y_data', 'seq_y_data_for_action', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
@@ -155,10 +155,12 @@ def build_graph(args):
 
     return train_graph, sample_graph
 
-def main(_):
+def main():
     print(' '.join(sys.argv))
-    args = FLAGS
-    print(args.__flags)
+
+    args = get_args()
+    print(args)
+
     print('Hostname: {}'.format(socket.gethostname()))
     print('GPU: {}'.format(get_gpuname()))
 
@@ -274,6 +276,7 @@ def main(_):
 
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
+
                 advantages,_ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
@@ -409,7 +412,7 @@ def main(_):
         print("Optimization Finished.")
 
 if __name__ == '__main__':
-    tf.app.run()
+    main()
 
 
 

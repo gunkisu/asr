@@ -558,7 +558,7 @@ def fill_aggr_reward(reward_list,
     return reward_target_indices
 
 def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
-        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action, n_fast_action, alpha=1.0, beta=1.0):
+        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action, n_fast_action):
     reward_target_indices = []
 
     for idx in target_indices:
@@ -987,7 +987,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y
             fill(new_y_sample, step_label_idx, target_indices, update_pos)
 
             reward_target_indices = fill_seg_match_reward(rewards, y, j, 
-                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action, args.n_fast_action, args.alpha, args.beta)
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action, args.n_fast_action)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
@@ -1022,7 +1022,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y
 
             reward_target_indices = fill_seg_match_reward(rewards, y, j,
                 prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, 
-                args.n_action, args.n_fast_action, args.alpha, args.beta)
+                args.n_action, args.n_fast_action)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
@@ -2304,8 +2304,8 @@ def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args, fin
     return advantages, discounted_rewards_arr
 
 def compute_advantage_hidden(new_x, new_x_mask, rewards, new_reward_mask, vf, args, final_cost=False):
-    # shape: n_batch, n_seq, n_feat or n_batch, n_seq
-
+    # shape: [n_batch, n_seq, n_feat] or [n_batch, n_seq] 
+    
     reward_mask_1d = new_reward_mask.reshape([-1])
     rewards_1d = rewards.reshape([-1])[reward_mask_1d==1.]
     discounted_rewards = []
