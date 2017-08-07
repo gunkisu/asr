@@ -12,6 +12,7 @@ import tensorflow as tf
 
 from collections import OrderedDict
 from collections import namedtuple
+
 from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
@@ -25,37 +26,8 @@ from model import LinearCell
 from data.fuel_utils import create_ivector_datastream
 from libs.utils import sync_data, StopWatch
 
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--learning-rate', default=0.01, type=float, help='Initial learning rate')
-    parser.add_argument('--rl-learning-rate', default=0.01, type=float, help='Initial learning rate for RL')
-    parser.add_argument('--min-after-cache', default=1024, type=int, help='Size of mini-batch')
-    parser.add_argument('--n-batch', default=16, type=int, help='Size of mini-batch')
-    parser.add_argument('--n-epoch', default=100, type=int, help='Maximum number of epochs')
-    parser.add_argument('--display-freq', default=50, type=int, help='Display frequency')
-    parser.add_argument('--n-input', default=123, type=int, help='Number of RNN hidden units')
-    parser.add_argument('--n-layer', default=1, type=int, help='Number of RNN hidden layers')
-    parser.add_argument('--n-hidden', default=512, type=int, help='Number of RNN hidden units')
-    parser.add_argument('--n-class', default=3436, type=int, help='Number of target symbols')
-    parser.add_argument('--n-embedding', default=32, type=int, help='Embedding size')
-    parser.add_argument('--n-action', default=6, type=int, help='Number of actions (max skim size)')
-    parser.add_argument('--n-fast-action', default=0, type=int, help='Number of steps to skip in the fast action mode')
-    parser.add_argument('--base-seed', default=20170309, type=int, help='Base random seed') 
-    parser.add_argument('--add-seed', default=0, type=int, help='Add this amount to the base random seed')
-    parser.add_argument('--start-from-ckpt', action='store_true', help='If true, start from a ckpt')
-    parser.add_argument('--grad-clip', action='store_true', help='If true, clip the gradients')
-    parser.add_argument('--device', default='gpu', help='Simply set either `cpu` or `gpu`')
-    parser.add_argument('--log-dir', default='skip_lstm_wsj', help='Directory path to files')
-    parser.add_argument('--no-copy', action='store_true' ,help='Do not copy the dataset to a local disk')
-    parser.add_argument('--no-length-sort', action='store_true', help='Do not sort the dataset by sequence lengths')
-    parser.add_argument('--tmpdir', default='/Tmp/songinch/data/speech', help='Local temporary directory to store the dataset')
-    parser.add_argument('--data-path', default='/u/songinch/song/data/speech/wsj_fbank123.h5', help='Location of the dataset')
-    parser.add_argument('--train-dataset', default='train_si284', help='Training dataset')
-    parser.add_argument('--valid-dataset', default='test_dev93', help='Validation dataset')
-    parser.add_argument('--test-dataset', default='test_eval92', help='Test dataset')
-    parser.add_argument('--discount-gamma', default=0.99, type=float, help='Discount factor')
+from utils import get_args
 
-    return parser.parse_args()
 
 tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',
     'seq_y_data', 'seq_y_data_for_action', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
