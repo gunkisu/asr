@@ -1932,7 +1932,7 @@ def fixed_skip_forward(x, x_mask, sess, test_graph):
 
     return transpose_all([label_probs[:max_seq_len]])
 
-def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fast_action):
+def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action):
     sg = sample_graph
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
@@ -1956,7 +1956,9 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fas
 
     new_x = np.zeros([max_seq_len, n_batch, n_feat])
     label_probs = np.zeros([max_seq_len, n_batch, n_class])
-    actions_1hot = np.zeros([max_seq_len-1, n_batch, n_action]) 
+    actions_1hot = np.zeros([max_seq_len-1, n_batch, n_action])
+    
+    step_y_data_for_action = np.zeros([n_batch], dtype=np.int32)
 
     # for each step (index j)
     for j, x_step in enumerate(x):
@@ -1964,7 +1966,7 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fas
             filter_last_forward(x_step, prev_state, j, seq_lens, sample_done)
 
         if len(_x_step):
-            feed_dict={sg.step_x_data: _x_step}
+            feed_dict={sg.step_x_data: _x_step, sg.sample_y: True, sg.step_y_data_for_action: step_y_data_for_action}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
             step_label_likelihood_j, new_prev_state = \
@@ -1983,7 +1985,7 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fas
             filter_action_end_forward(x_step, prev_state, j, action_counters, sample_done)
 
         if len(_x_step):
-            feed_dict={sg.step_x_data: _x_step}
+            feed_dict={sg.step_x_data: _x_step, sg.sample_y: True, sg.step_y_data_for_action: step_y_data_for_action}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
             action_idx, step_label_likelihood_j, new_prev_state = \
@@ -2037,7 +2039,7 @@ def gen_output_image(actions_taken, y, n_class):
 
     return output_image
 
-def gen_episode_supervised(x, y, x_mask, sess, test_graph, fast_action, n_fast_action):
+def gen_episode_supervised(x, y, x_mask, sess, test_graph, n_fast_action):
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
     x = np.transpose(x, [1,0,2])
@@ -2132,7 +2134,7 @@ def gen_episode_supervised(x, y, x_mask, sess, test_graph, fast_action, n_fast_a
     
     return outp
 
-def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast_action, y=None):
+def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, n_fast_action, y=None):
     # y for visualization
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat

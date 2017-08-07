@@ -83,10 +83,10 @@ def build_graph(args):
         step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
 
         embedding = tf.get_variable("embedding", [args.n_class, args.n_embedding], dtype=tf.float32)
-        step_y_data_for_action = tf.placeholder(tf.int32, shape=(None,))
+        step_y_data_for_action = tf.placeholder(tf.int32, shape=(None,), name='step_y_data_for_action')
         seq_y_input = tf.nn.embedding_lookup(embedding, seq_y_data_for_action)
 
-        sample_y = tf.placeholder(tf.bool)
+        sample_y = tf.placeholder(tf.bool, name='sample_y')
 
     def lstm_cell():
         return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
@@ -203,7 +203,7 @@ def main(_):
     # do not increase global step -- ml op increases it 
     rl_op = rl_opt_func.apply_gradients(zip(rl_grads, tvars))
     
-    tf.add_to_collection('fast_action', args.n_fast_action)
+    tf.add_to_collection('n_fast_action', args.n_fast_action)
 
     sync_data(args)
     datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]

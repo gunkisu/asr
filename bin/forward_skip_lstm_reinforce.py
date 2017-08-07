@@ -30,7 +30,7 @@ flags.DEFINE_string('dataset', 'test_dev93', '')
 flags.DEFINE_string('wxfilename', 'ark:-', '')
 flags.DEFINE_string('metafile', 'best_model.ckpt-1000.meta', '')
 
-SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples step_action_probs step_last_state step_x_data init_state')
+SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples sample_y step_y_data_for_action step_action_probs step_last_state step_x_data init_state')
 
 def main(_):
     print(' '.join(sys.argv), file=sys.stderr)
@@ -54,7 +54,10 @@ def main(_):
         step_action_probs = sess.graph.get_tensor_by_name('step_action_probs:0')
         step_action_samples = sess.graph.get_tensor_by_name('step_action_samples/Multinomial:0')
         step_x_data = sess.graph.get_tensor_by_name('step_x_data:0')
-        fast_action, n_fast_action = sess.graph.get_collection('fast_action')
+        n_fast_action, = sess.graph.get_collection('fast_action')
+        
+        sample_y = sess.graph.get_tensor_by_name('sample_y:0')
+        step_y_data_for_action = sess.graph.get_tensor_by_name('step_y_data_for_action:0')
 
         cstates = [op.outputs[0] for op in sess.graph.get_operations() if 'cstate' in op.name]
         hstates = [op.outputs[0] for op in sess.graph.get_operations() if 'hstate' in op.name]
@@ -70,7 +73,7 @@ def main(_):
         for c, h in zip(last_cstates, last_hstates):
             step_last_state.append(tf.contrib.rnn.LSTMStateTuple(c, h))
 
-        sample_graph = SampleGraph(_step_label_probs, step_action_samples, step_action_probs, step_last_state, step_x_data, init_state)
+        sample_graph = SampleGraph(_step_label_probs, step_action_samples, sample_y, step_y_data_for_action, step_action_probs, step_last_state, step_x_data, init_state)
 
         writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 
@@ -85,7 +88,7 @@ def main(_):
             feat_lens = orig_x_mask.sum(axis=1, dtype=np.int32)
 
             actions_1hot, label_probs, new_mask = skip_rnn_forward_parallel2(
-                orig_x, orig_x_mask, sess, sample_graph, fast_action, n_fast_action)
+                orig_x, orig_x_mask, sess, sample_graph, n_fast_action)
 
             seq_label_probs = expand_output(actions_1hot, orig_x_mask, new_mask, label_probs)
 
