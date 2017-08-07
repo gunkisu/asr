@@ -558,7 +558,7 @@ def fill_aggr_reward(reward_list,
     return reward_target_indices
 
 def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
-        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action, alpha=1.0, beta=1.0):
+        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action, n_fast_action, alpha=1.0, beta=1.0):
     reward_target_indices = []
 
     for idx in target_indices:
@@ -570,8 +570,9 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         action_size = cur_step_idx - prev_step_idx
 #        ref_labels = y[prev_step_idx:cur_step_idx, idx]
 
-        ref_labels = y[prev_step_idx:prev_step_idx+n_action, idx]
-
+        max_jump = n_fast_action if n_fast_action > 0 else n_action
+        ref_labels = y[prev_step_idx:prev_step_idx+max_jump, idx]
+        
         match_count = 0
         miss_count = 0
 #        target_label = prev_pred_idx
@@ -646,22 +647,10 @@ def update_prev_state(prev_state, new_prev_state, target_indices):
     for ps, i in zip(new_prev_state, target_indices):
         prev_state[i] = ps
 
-def update_action_counters(action_counters, action_idx, target_indices, args):
+def update_action_counters2(action_counters, action_idx, target_indices, n_action, n_fast_action):
     new_ac = list(action_counters)
     for ai, i in zip(action_idx, target_indices):
-        if args.fast_action and ai == args.n_action - 1:
-            new_ac[i] = args.n_fast_action
-        else:
-            new_ac[i] = ai+1
-
-    # proceed to the next step
-    new_ac = [ac-1 for ac in new_ac]
-    action_counters[:] = new_ac
-
-def update_action_counters2(action_counters, action_idx, target_indices, n_action, fast_action, n_fast_action):
-    new_ac = list(action_counters)
-    for ai, i in zip(action_idx, target_indices):
-        if fast_action and ai == n_action - 1:
+        if n_fast_action > 0 and ai == n_action - 1:
             new_ac[i] = n_fast_action
         else:
             new_ac[i] = ai+1
@@ -669,6 +658,9 @@ def update_action_counters2(action_counters, action_idx, target_indices, n_actio
     # proceed to the next step
     new_ac = [ac-1 for ac in new_ac]
     action_counters[:] = new_ac
+
+def update_action_counters(action_counters, action_idx, target_indices, args):
+    update_action_counters2(action_counters, action_idx, target_indices, args.n_action, args.n_fast_action)   
 
 def gen_mask2(update_pos, reward_update_pos, batch_size):
     max_seq_len = max(update_pos)
@@ -940,8 +932,7 @@ def to_label_change(y, n_class):
 
     return label_change
 
-def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, 
-    fill_function=fill_seg_match_reward, sample_y=False):
+def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y=False):
 
     sg = sample_graph
 
@@ -995,8 +986,8 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
             fill(new_y, _y_step, target_indices, update_pos)
             fill(new_y_sample, step_label_idx, target_indices, update_pos)
 
-            reward_target_indices = fill_function(rewards, y, j, 
-                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action, args.alpha, args.beta)
+            reward_target_indices = fill_seg_match_reward(rewards, y, j, 
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action, args.n_fast_action, args.alpha, args.beta)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
@@ -1029,8 +1020,9 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args,
 
             update_action_counters(action_counters, action_idx.flatten(), target_indices, args)
 
-            reward_target_indices = fill_function(rewards, y, j,
-                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action, args.alpha, args.beta)
+            reward_target_indices = fill_seg_match_reward(rewards, y, j,
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, 
+                args.n_action, args.n_fast_action, args.alpha, args.beta)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
@@ -1107,8 +1099,9 @@ def gen_supervision(x, x_mask, y, args):
         if len(_x_step):
             best_actions = []
             for idx in target_indices:
-                upto = min(j+args.n_action, seq_lens[idx])
-                ref_labels = y[j:j+args.n_action, idx]
+                max_jump = args.n_fast_action if args.n_fast_action > 0 else args.n_action
+                upto = min(j+max_jump, seq_lens[idx])
+                ref_labels = y[j:upto, idx]
                 seg_len = get_seg_len(ref_labels)
                 best_actions.append(seg_len - 1)
         
@@ -1830,7 +1823,7 @@ def skip_rnn_act_parallel(x,
 
 
 
-def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, fast_action, n_fast_action):
+def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, n_fast_action):
     sg = sample_graph
 
     n_class = sample_graph.step_label_probs.shape[-1].value
@@ -1893,11 +1886,11 @@ def skip_rnn_forward_parallel(x, x_mask, sess, sample_graph, fast_action, n_fast
             update_prev_state(prev_state, new_prev_state, target_indices)
 
             update_action_counters2(action_counters, action_idx.flatten(), 
-                target_indices, n_action, fast_action, n_fast_action)
+                target_indices, n_action, n_fast_action)
 
             advance_pos(update_pos, target_indices)
         else:
-            update_action_counters2(action_counters, [], [], n_action, args.fast_action, args.n_fast_action)
+            update_action_counters2(action_counters, [], [], n_action, n_fast_action)
 
     new_max_seq_len, mask = gen_mask_from(update_pos)
     return transpose_all([actions_1hot[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask])
@@ -2008,11 +2001,11 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, fast_action, n_fas
             update_prev_state(prev_state, new_prev_state, target_indices)
 
             update_action_counters2(action_counters, action_idx.flatten(), 
-                target_indices, n_action, fast_action, n_fast_action)
+                target_indices, n_action, n_fast_action)
 
             advance_pos(update_pos, target_indices)
         else:
-            update_action_counters2(action_counters, [], [], n_action, fast_action, n_fast_action)
+            update_action_counters2(action_counters, [], [], n_action, n_fast_action)
 
     new_max_seq_len, mask = gen_mask_from(update_pos)
     return transpose_all([actions_1hot[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask])
@@ -2123,11 +2116,11 @@ def gen_episode_supervised(x, y, x_mask, sess, test_graph, fast_action, n_fast_a
             update_prev_state(prev_state, new_prev_state, target_indices)
 
             update_action_counters2(action_counters, action_idx.flatten(), 
-                target_indices, n_action, fast_action, n_fast_action)
+                target_indices, n_action, n_fast_action)
 
             advance_pos(update_pos, target_indices)
         else:
-            update_action_counters2(action_counters, [], [], n_action, fast_action, n_fast_action)
+            update_action_counters2(action_counters, [], [], n_action, n_fast_action)
 
     new_max_seq_len, mask = gen_mask_from(update_pos)
     
@@ -2216,11 +2209,11 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, fast_action, n_fast
             update_prev_state(prev_state, new_prev_state, target_indices)
 
             update_action_counters2(action_counters, action_idx.flatten(), 
-                target_indices, n_action, fast_action, n_fast_action)
+                target_indices, n_action, n_fast_action)
 
             advance_pos(update_pos, target_indices)
         else:
-            update_action_counters2(action_counters, [], [], n_action, fast_action, n_fast_action)
+            update_action_counters2(action_counters, [], [], n_action, n_fast_action)
 
     new_max_seq_len, mask = gen_mask_from(update_pos)
     
@@ -2383,14 +2376,13 @@ def expand_label_probs(actions_1hot, orig_x_mask, label_probs):
 
     return new_label_probs
 
-def expand_output(actions_1hot, mask, new_mask, output):
-    # Does not support fast action yet
+def expand_output(actions_1hot, mask, new_mask, output, n_fast_action=0):
     shape = list(mask.shape)
     if len(output.shape) > 2:
         shape.append(output.shape[-1])
 
     new_output = np.zeros(shape)
-
+    n_action = actions_1hot.shape[-1]
     skip_info = np.argmax(actions_1hot, axis=2) + 1 # number of repeats
     new_seq_lens = new_mask.sum(axis=1, dtype=np.int32)
     seq_lens = mask.sum(axis=1, dtype=np.int32)
@@ -2401,6 +2393,9 @@ def expand_output(actions_1hot, mask, new_mask, output):
         start_idx = 0
 
         for s_step, p_step in itertools.izip(s[:new_slen-1], p[:new_slen-1]):
+            if n_fast_action > 0 and s_step == n_action: 
+                s_step = n_fast_action
+
             end_idx = min(start_idx+s_step, slen-1)
             new_output[i,start_idx:end_idx] = p_step
             start_idx += s_step

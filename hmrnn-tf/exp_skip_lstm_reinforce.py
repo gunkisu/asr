@@ -41,12 +41,11 @@ flags.DEFINE_integer('n-hidden', 1024, 'Number of RNN hidden units')
 flags.DEFINE_integer('n-class', 3436, 'Number of target symbols')
 flags.DEFINE_integer('n-embedding', 100, 'Embedding size')
 flags.DEFINE_integer('n-action', 3, 'Number of actions (max skim size)')
-flags.DEFINE_integer('n-fast-action', 10, 'Number of steps to skip in the fast action mode')
+flags.DEFINE_integer('n-fast-action', 0, 'Number of steps to skip in the fast action mode')
 flags.DEFINE_integer('base-seed', 20170309, 'Base random seed') 
 flags.DEFINE_integer('add-seed', 0, 'Add this amount to the base random seed')
 flags.DEFINE_boolean('start-from-ckpt', False, 'If true, start from a ckpt')
 flags.DEFINE_boolean('grad-clip', True, 'If true, clip the gradients')
-flags.DEFINE_boolean('fast-action', False, 'If true, operate in the fast action mode')
 flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
 flags.DEFINE_string('log-dir', 'skip_lstm_wsj', 'Directory path to files')
 flags.DEFINE_boolean('no-copy', False, '')
@@ -204,7 +203,6 @@ def main(_):
     # do not increase global step -- ml op increases it 
     rl_op = rl_opt_func.apply_gradients(zip(rl_grads, tvars))
     
-    tf.add_to_collection('fast_action', args.fast_action)
     tf.add_to_collection('fast_action', args.n_fast_action)
 
     sync_data(args)
@@ -291,7 +289,7 @@ def main(_):
                 tr_ce_sum += _tr_ml_cost.sum()
                 tr_ce_count += new_x_mask.sum()
 
-                pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx.reshape([n_batch, -1]))
+                pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx.reshape([n_batch, -1]), args.n_fast_action)
                 tr_acc_sum += ((pred_idx == y) * x_mask).sum()
                 tr_acc_count += x_mask.sum()
 
@@ -365,7 +363,7 @@ def main(_):
                 val_ce_sum += _val_ml_cost.sum()
                 val_ce_count += new_x_mask.sum()
 
-                pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx.reshape([n_batch, -1]))
+                pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx.reshape([n_batch, -1]), args.n_fast_action)
                 val_acc_sum += ((pred_idx == y) * x_mask).sum()
                 val_acc_count += x_mask.sum()
 
