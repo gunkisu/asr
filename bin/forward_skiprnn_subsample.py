@@ -79,6 +79,9 @@ def main(_):
                 valid_len = int(feat_lens[out_idx])
                 uttid = uttid.encode('ascii')
                 writer.write(uttid, np.log(output[:valid_len] + 1e-8))
+            
+            if args.show_progress: 
+                print('.', file=sys.stderr, end='')
 
         print('', file=sys.stderr)
         print('Done', file=sys.stderr)

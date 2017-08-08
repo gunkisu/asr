@@ -18,7 +18,7 @@ from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
 from mixer import gen_episode_with_seg_reward
-from mixer import LinearVF, compute_advantage, compute_advantage_hidden
+from mixer import LinearVF, compute_advantage2
 from mixer import categorical_ent, expand_output
 from mixer import lstm_state, gen_zero_state, feed_init_state
 from model import LinearCell
@@ -27,7 +27,6 @@ from data.fuel_utils import create_ivector_datastream
 import utils
 
 from libs.utils import sync_data, StopWatch
-
 
 tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',
     'seq_y_data', 'seq_y_data_for_action', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
@@ -83,7 +82,11 @@ def build_graph(args):
     step_y_input_pred = tf.nn.embedding_lookup(embedding, step_y_1hot_pred)
     step_y_input = tf.where(sample_y, step_y_input_pred, step_y_input_answer)
 
-    step_action_logits = _action_logit([step_h_state, step_y_input], 'action_logit')
+    if args.n_embedding > 0:
+        step_action_logits = _action_logit([step_h_state, step_y_input], 'action_logit')
+    else:
+        step_action_logits = _action_logit(step_h_state, 'action_logit')
+
     step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
     step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
     step_action_entropy = categorical_ent(step_action_probs)
@@ -102,7 +105,7 @@ def build_graph(args):
 
     pred_idx = tf.argmax(seq_label_logits, axis=1)
 
-    seq_hid_3d_rl = seq_hid_3d[:,:-1,:] # 
+    seq_hid_3d_rl = seq_hid_3d[:,:-1,:] 
     seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
     seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
@@ -114,6 +117,7 @@ def build_graph(args):
     action_prob_entropy *= tf.reshape(seq_action_mask, [-1])
     action_prob_entropy = tf.reduce_sum(action_prob_entropy)/tf.reduce_sum(seq_action_mask)
 
+    # Optimizing over the surrogate function 
     rl_cost = tf.reduce_sum(tf.log(seq_action_probs+1e-8) \
         * tf.reshape(seq_action, [-1,args.n_action]), axis=-1)
     rl_cost *= tf.reshape(seq_advantage, [-1])
@@ -126,7 +130,6 @@ def build_graph(args):
         step_action_probs, step_action_samples, step_x_data, step_y_data_for_action, init_state, step_action_entropy, sample_y)
 
     return train_graph, sample_graph
-
 
 if __name__ == '__main__':
     print(' '.join(sys.argv))
@@ -167,6 +170,7 @@ if __name__ == '__main__':
     rl_op = rl_opt_func.apply_gradients(zip(rl_grads, tvars))
     
     tf.add_to_collection('n_fast_action', args.n_fast_action)
+    tf.add_to_collection('n_embedding', args.n_embedding)
 
     train_set, valid_set, test_set = utils.prepare_dataset(args)
 
@@ -235,13 +239,16 @@ if __name__ == '__main__':
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
 
-                advantages,_ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+                advantages = compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
 
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
                     tg.seq_action: actions_1hot, tg.seq_advantage: advantages, 
-                    tg.seq_action_mask: new_reward_mask, tg.seq_y_data_for_action: new_y}
+                    tg.seq_action_mask: new_reward_mask}
+                if args.n_embedding > 0 :
+                    feed_dict[tg.seq_y_data_for_action] = new_y
+
                 feed_init_state(feed_dict, tg.init_state, zero_state)
 
                 _tr_ml_cost, _tr_rl_cost, _, _, pred_idx = \
@@ -309,13 +316,17 @@ if __name__ == '__main__':
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image, new_y_sample = \
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, sample_y=True)
 
-                advantages, _ = compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+                advantages = compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
 
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
                     tg.seq_action: actions_1hot, tg.seq_advantage: advantages, 
-                    tg.seq_action_mask: new_reward_mask, tg.seq_y_data_for_action: new_y_sample}
+                    tg.seq_action_mask: new_reward_mask}
+
+                if args.n_embedding > 0:
+                    feed_dict[tg.seq_y_data_for_action] = new_y_sample
+
                 feed_init_state(feed_dict, tg.init_state, zero_state)
 
                 _val_ml_cost, _val_rl_cost, pred_idx = sess.run([tg.ml_cost, tg.rl_cost, tg.pred_idx],

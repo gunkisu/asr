@@ -2,6 +2,7 @@
 from __future__ import print_function
 import os
 import sys
+sys.path.insert(0, '..')
 
 from itertools import islice
 
@@ -10,22 +11,31 @@ import tensorflow as tf
 
 from collections import OrderedDict
 from collections import namedtuple
-from skiprnn2.mixer import skip_rnn_forward_parallel2, expand_output, match_c, match_h
+from skiprnn.mixer import skip_rnn_forward_supervised, expand_output, match_c, match_h
 
 from data.fuel_utils import create_ivector_test_datastream, get_uttid_stream, create_ivector_test_datastream_with_targets
 from libs.utils import sync_data, skip_frames_fixed, StopWatch
 
-import skiprnn2.utils as utils
-
 import kaldi_io
 
-SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples sample_y step_y_data_for_action step_action_probs step_last_state step_x_data init_state')
+flags = tf.app.flags
+FLAGS = flags.FLAGS
+flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
+flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
+flags.DEFINE_boolean('no-copy', True, '')
+flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
+flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
+flags.DEFINE_string('dataset', 'test_dev93', '')
+flags.DEFINE_string('wxfilename', 'ark:-', '')
+flags.DEFINE_string('metafile', 'best_model.ckpt-1000.meta', '')
+
+TestGraph = namedtuple('TestGraph', 
+    'step_last_state step_label_probs step_action_probs step_pred_idx step_x_data init_state')
 
 def main(_):
     print(' '.join(sys.argv), file=sys.stderr)
-
-    args = utils.get_forward_argparser().parse_args()
-    print(args, file=sys.stderr)
+    args = FLAGS
+    print(args.__flags, file=sys.stderr)
 
     sync_data(args)
     test_set = create_ivector_test_datastream(args.data_path, args.dataset, args.n_batch)
@@ -42,14 +52,9 @@ def main(_):
 
         _step_label_probs = sess.graph.get_tensor_by_name('step_label_probs:0')
         step_action_probs = sess.graph.get_tensor_by_name('step_action_probs:0')
-        step_action_samples = sess.graph.get_tensor_by_name('step_action_samples/Multinomial:0')
         step_x_data = sess.graph.get_tensor_by_name('step_x_data:0')
-        n_fast_action, = sess.graph.get_collection('n_fast_action')
-        n_embedding, = sess.graph.get_collection('n_embedding')
-        
-        sample_y = sess.graph.get_tensor_by_name('sample_y:0')
-        step_y_data_for_action = sess.graph.get_tensor_by_name('step_y_data_for_action:0')
-
+        fast_action, n_fast_action = sess.graph.get_collection('fast_action')
+        step_pred_idx = sess.graph.get_tensor_by_name('step_pred_idx:0')
 
         cstates = [op.outputs[0] for op in sess.graph.get_operations() if 'cstate' in op.name]
         hstates = [op.outputs[0] for op in sess.graph.get_operations() if 'hstate' in op.name]
@@ -65,7 +70,7 @@ def main(_):
         for c, h in zip(last_cstates, last_hstates):
             step_last_state.append(tf.contrib.rnn.LSTMStateTuple(c, h))
 
-        sample_graph = SampleGraph(_step_label_probs, step_action_samples, sample_y, step_y_data_for_action, step_action_probs, step_last_state, step_x_data, init_state)
+        test_graph = TestGraph(step_last_state, _step_label_probs, step_action_probs, step_pred_idx, step_x_data, init_state)
 
         writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 
@@ -79,15 +84,17 @@ def main(_):
 
             feat_lens = orig_x_mask.sum(axis=1, dtype=np.int32)
 
-            actions_1hot, label_probs, new_mask = skip_rnn_forward_parallel2(
-                orig_x, orig_x_mask, sess, sample_graph, n_fast_action, n_embedding)
-
+            import ipdb; ipdb.set_trace()
+            actions_1hot, label_probs, new_mask = skip_rnn_forward_supervised(
+                orig_x, orig_x_mask, sess, test_graph, fast_action, n_fast_action)
             seq_label_probs = expand_output(actions_1hot, orig_x_mask, new_mask, label_probs)
 
             for out_idx, (output, uttid) in enumerate(zip(seq_label_probs, uttid_batch)):
                 valid_len = feat_lens[out_idx]
                 uttid = uttid.encode('ascii')
                 writer.write(uttid, np.log(output[:valid_len] + 1e-8))
+
+            print('.', file=sys.stderr, end='')
 
         print('', file=sys.stderr)
         print('Done', file=sys.stderr)

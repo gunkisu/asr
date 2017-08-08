@@ -241,8 +241,8 @@ class LinearVF(object):
         self.reg_coeff = 1e-5
         self.num_iter = num_iter
 
-    def _features(self, X):
-        o = X.astype('float32')
+    def _features(self, x):
+        o = x.astype('float32')
         return np.concatenate([o, o**2, o**3])
 
     def get_featmat(self, X):
@@ -263,8 +263,11 @@ class LinearVF(object):
             reg_coeff *= 10
 
     def predict(self, X):
+        # [n_batch * n_seq, n_feat]
+        
         if self.coeffs is None: 
-            return np.zeros(X.shape[0])
+            return np.zeros(X.shape[0]) # zeros of [n_batch * n_seq]
+
         return self.get_featmat(X).dot(self.coeffs)
 
 def skip_rnn_act(x, x_mask, y, sess, sample_graph, args):
@@ -1926,7 +1929,7 @@ def fixed_skip_forward(x, x_mask, sess, test_graph):
 
     return transpose_all([label_probs[:max_seq_len]])
 
-def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action):
+def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, n_embedding):
     sg = sample_graph
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
@@ -1960,7 +1963,9 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action):
             filter_last_forward(x_step, prev_state, j, seq_lens, sample_done)
 
         if len(_x_step):
-            feed_dict={sg.step_x_data: _x_step, sg.sample_y: True, sg.step_y_data_for_action: step_y_data_for_action}
+            feed_dict={sg.step_x_data: _x_step}
+            if n_embedding > 0:
+                feed_dict.update({sg.sample_y: True, sg.step_y_data_for_action: step_y_data_for_action})
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
             step_label_likelihood_j, new_prev_state = \
@@ -1979,7 +1984,9 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action):
             filter_action_end_forward(x_step, prev_state, j, action_counters, sample_done)
 
         if len(_x_step):
-            feed_dict={sg.step_x_data: _x_step, sg.sample_y: True, sg.step_y_data_for_action: step_y_data_for_action}
+            feed_dict={sg.step_x_data: _x_step}
+            if n_embedding > 0:
+                feed_dict.update({sg.sample_y: True, sg.step_y_data_for_action: step_y_data_for_action})
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
             action_idx, step_label_likelihood_j, new_prev_state = \
@@ -2297,39 +2304,52 @@ def compute_advantage(new_x, new_x_mask, rewards, new_reward_mask, vf, args, fin
 
     return advantages, discounted_rewards_arr
 
-def compute_advantage_hidden(new_x, new_x_mask, rewards, new_reward_mask, vf, args, final_cost=False):
-    # shape: [n_batch, n_seq, n_feat] or [n_batch, n_seq] 
-    
-    reward_mask_1d = new_reward_mask.reshape([-1])
-    discounted_rewards = []
+
+def _compute_discounted_rewards(rewards, new_reward_mask, discount_gamma):
+    discounted_rewards = [] # Rt [n_batch, n_seq]
+
     for reward, mask in zip(rewards, new_reward_mask):
+        # for each sample
         this_len = int(mask.sum())
-        discounted_reward = discount(reward[:this_len], args.discount_gamma)
-        if final_cost:
-            discounted_reward = np.ones_like(discounted_reward)*discounted_reward[0]
+        discounted_reward = discount(reward[:this_len], discount_gamma)
         discounted_rewards.append(discounted_reward)
+    
+    return discounted_rewards
 
-    reshape_new_x = new_x.reshape([-1, new_x.shape[2]])
-    baseline_1d = vf.predict(reshape_new_x)
-    baseline_2d = baseline_1d.reshape([new_x.shape[0], -1]) * new_x_mask
-
+def _compute_advantages(new_x, new_x_mask, vf, rewards, discounted_rewards, new_reward_mask):
+    reshape_new_x = new_x.reshape([-1, new_x.shape[-1]]) # [n_batch * n_seq, n_hidden]
+    baseline_1d = vf.predict(reshape_new_x) # [n_batch * n_seq]
+    baseline_2d = baseline_1d.reshape([new_x.shape[0], -1]) * new_x_mask # [n_batch, n_seq]
     advantages = np.zeros_like(rewards)
-    discounted_rewards_arr = np.zeros_like(rewards)
     for i, (delta, mask) in enumerate(zip(baseline_2d, new_reward_mask)):
         this_len = int(mask.sum())
         advantages[i, :this_len] = discounted_rewards[i] - delta[:this_len]
-        discounted_rewards_arr[i, :this_len] = discounted_rewards[i]
 
-    advantages_1d = advantages.reshape([-1])[reward_mask_1d==1.]
-    advantages = ((advantages - advantages_1d.mean()) / (advantages_1d.std()+1e-8)) * new_reward_mask
+    return advantages
 
-    valid_x_indices= np.where(new_reward_mask==1.)
-    valid_new_x = new_x[valid_x_indices]
+def _normalize_advantages(advantages, new_reward_mask):
+    reward_mask_1d = new_reward_mask.reshape([-1]) # n_batch * n_seq
+
+    advantages_1d = advantages.reshape([-1])[reward_mask_1d==1.] # [n_batch * n_seq]
+    advantages = ((advantages - advantages_1d.mean()) / (advantages_1d.std()+1e-8)) \
+        * new_reward_mask
+
+    return advantages
+
+def compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args):
+    # shape: [n_batch, n_seq, n_hidden] or [n_batch, n_seq] 
+    import ipdb; ipdb.set_trace()
+    
+    discounted_rewards = _compute_discounted_rewards(rewards, new_reward_mask, args.discount_gamma)
+    advantages = _compute_advantages(new_x, new_x_mask, vf, rewards, discounted_rewards, new_reward_mask) # [n_batch, n_seq]
+    advantages = _normalize_advantages(advantages, new_reward_mask)
+
+    valid_h_indices= np.where(new_reward_mask==1.)
+    valid_new_x = new_x[valid_h_indices]
     discounted_rewards_1d = np.concatenate(discounted_rewards, axis=0)
     vf.fit(valid_new_x, discounted_rewards_1d)
 
-    return advantages, discounted_rewards_arr
-
+    return advantages
 
 def discount(x, gamma):
     assert x.ndim >= 1
