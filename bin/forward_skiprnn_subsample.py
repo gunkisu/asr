@@ -4,37 +4,24 @@ import sys
 import os
 import numpy as np
 import tensorflow as tf
-
 import glob
-
 from collections import namedtuple, OrderedDict
+from itertools import islice
+
 
 from data.fuel_utils import create_ivector_test_datastream, get_uttid_stream
 from libs.utils import sync_data, skip_frames_fixed, StopWatch
-
-from skiprnn.mixer import gen_zero_state, feed_init_state, fixed_skip_forward, match_c, match_h
-
-from itertools import islice
-
+from skiprnn2.mixer import gen_zero_state, feed_init_state, fixed_skip_forward, match_c, match_h
+import skiprnn2.utils as utils
 import kaldi_io
-
-flags = tf.app.flags
-FLAGS = flags.FLAGS
-flags.DEFINE_integer('n-batch', 64, 'Size of mini-batch')
-flags.DEFINE_string('device', 'gpu', 'Simply set either `cpu` or `gpu`')
-flags.DEFINE_boolean('no-copy', True, '') # test set is typically small
-flags.DEFINE_string('tmpdir', '/Tmp/songinch/data/speech', '')
-flags.DEFINE_string('data-path', '/u/songinch/song/data/speech/wsj_fbank123.h5', '')
-flags.DEFINE_string('dataset', 'test_dev93', '')
-flags.DEFINE_string('wxfilename', 'ark:-', '')
-flags.DEFINE_string('metafile', 'best_model.ckpt-1000.meta', '')
 
 TestGraph = namedtuple('TestGraph', 'step_x_data init_state step_last_state step_label_probs')
 
 def main(_):
     print(' '.join(sys.argv), file=sys.stderr)
-    args = FLAGS
-    print(args.__flags, file=sys.stderr)
+
+    args = utils.get_forward_argparser().parse_args()
+    print(args, file=sys.stderr)
 
     sync_data(args)
     test_set = create_ivector_test_datastream(args.data_path, args.dataset, args.n_batch)
@@ -92,8 +79,6 @@ def main(_):
                 valid_len = int(feat_lens[out_idx])
                 uttid = uttid.encode('ascii')
                 writer.write(uttid, np.log(output[:valid_len] + 1e-8))
-
-            print('.', file=sys.stderr, end='')
 
         print('', file=sys.stderr)
         print('Done', file=sys.stderr)

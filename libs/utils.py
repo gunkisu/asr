@@ -146,14 +146,10 @@ def uid_find(jobid, log_dir='SMART_DISPATCH_LOGS'):
     return ''
 
 def sync_data(args):
-    sw = StopWatch()
     if not args.no_copy:
-        print('Copying data to local machine...')
-        sw.reset()
         rsync = Rsync(args.tmpdir)
         rsync.sync(args.data_path)
         args.data_path = os.path.join(args.tmpdir, os.path.basename(args.data_path))
-        sw.print_elapsed()
 
 def load_or_init_model(network_params, args):
     pretrain_update_params_val = None
