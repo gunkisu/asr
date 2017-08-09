@@ -5,6 +5,7 @@ import socket
 import tensorflow as tf
 import subprocess
 import os
+from collections import namedtuple
 
 from data.fuel_utils import create_ivector_datastream
 from libs.utils import sync_data
@@ -39,7 +40,6 @@ def get_argparser():
     parser.add_argument('--n-fast-action', default=0, type=int, help='Number of steps to skip in the fast action mode')
     parser.add_argument('--base-seed', default=20170309, type=int, help='Base random seed') 
     parser.add_argument('--add-seed', default=0, type=int, help='Add this amount to the base random seed')
-    parser.add_argument('--start-from-ckpt', action='store_true', help='If true, start from a ckpt')
     parser.add_argument('--logdir', default='skiprnn_test', help='Directory path to files')
     parser.add_argument('--train-dataset', default='train_si284', help='Training dataset')
     parser.add_argument('--valid-dataset', default='test_dev93', help='Validation dataset')
@@ -62,16 +62,15 @@ def get_forward_argparser():
     return parser
 
 def prepare_dir(args):
-    if not args.start_from_ckpt:
-        if tf.gfile.Exists(args.logdir):
-            tf.gfile.DeleteRecursively(args.logdir)
-        tf.gfile.MakeDirs(args.logdir)
+    if tf.gfile.Exists(args.logdir):
+        tf.gfile.DeleteRecursively(args.logdir)
+    tf.gfile.MakeDirs(args.logdir)
 
 def get_gpuname():
-  p = subprocess.Popen("nvidia-smi -q | grep 'Product Name'", shell=True, stdout=subprocess.PIPE)
-  out = p.stdout.read()
-  gpuname = out.split(':')[1].strip()
-  return gpuname
+    p = subprocess.Popen("nvidia-smi -q | grep 'Product Name'", shell=True, stdout=subprocess.PIPE)
+    out = p.stdout.read()
+    gpuname = out.split(':')[1].strip()
+    return gpuname
 
 def print_host_info():
     print('Hostname: {}'.format(socket.gethostname()))
@@ -83,3 +82,44 @@ def prepare_dataset(args):
     return [create_ivector_datastream(path=args.data_path, which_set=dataset, 
             batch_size=args.n_batch, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort) for dataset in datasets]
 
+class Accumulator:
+    def __init__(self):
+        self.reset()
+    
+    def add(self, v, c):
+        self.sum += v
+        self.count += c
+
+        self.last_sum = v
+        self.last_count = c
+
+    def avg(self):
+        return self.sum / self.count
+    
+    def last_avg(self):
+        return self.last_sum / self.last_count
+
+    def reset(self):
+        self.sum = 0.
+        self.count = 0
+
+        self.last_sum = 0.
+        self.last_count = 0
+
+    def __repr__(self):
+        return 'Accumulator(sum={}, count={}, last_sum={}, last_count={})'.format(self.sum, self.count, self.last_sum, self.last_count)
+
+def get_summary(summary_kinds):
+    SummaryEntry = namedtuple('SummaryEntry', 'ph s') # placeholder and summary
+    Summary = namedtuple('Summary', summary_kinds)
+
+    tmp = []
+    for sk in summary_kinds:
+        ph = tf.placeholder(tf.float32)
+        if 'image' in sk:
+            tmp.append(SummaryEntry(ph, tf.summary.image(sk, ph)))
+        else:
+            tmp.append(SummaryEntry(ph, tf.summary.scalar(sk, ph)))
+    summary = Summary._make(tmp)
+    
+    return summary

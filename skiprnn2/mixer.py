@@ -1080,6 +1080,8 @@ def gen_supervision(x, x_mask, y, args):
     actions = np.zeros([max_seq_len-1, n_batch])
     actions_1hot = np.zeros([max_seq_len-1, n_batch, args.n_action])
 
+    full_action_samples = np.zeros([max_seq_len, n_batch, args.n_action])
+
     # for each time step (index j)
     for j, (x_step, y_step) in enumerate(itertools.izip(x, y)):
         _x_step, _y_step, target_indices = filter_last2(x_step, y_step, j, seq_lens, sample_done)
@@ -1111,15 +1113,25 @@ def gen_supervision(x, x_mask, y, args):
             update_action_counters(action_counters, best_actions, target_indices, args)
 
             advance_pos(update_pos, target_indices)
+                
+            # For visualization
+            for i, s_idx in enumerate(target_indices):
+                full_action_samples[j, s_idx] = action_one_hot[i]
+        
         else:
             update_action_counters(action_counters, [], [], args)
 
     max_seq_len, mask = gen_mask3(update_pos, n_batch)
-
-    return transpose_all([new_x[:max_seq_len],
-                         new_y[:max_seq_len],
-                         actions[:max_seq_len-1], actions_1hot[:max_seq_len-1],
+    outp = transpose_all([new_x[:max_seq_len],
+                         new_y[:max_seq_len],                         
+                         actions[:max_seq_len-1],
+                         actions_1hot[:max_seq_len-1],
                          mask])
+
+
+    output_image = gen_output_image(full_action_samples, y, args.n_class)
+    outp.append(output_image)
+    return outp
 
 def aggr_ml_skip_rnn_act_parallel(x,
                                   x_mask,
