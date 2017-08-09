@@ -2338,8 +2338,6 @@ def _normalize_advantages(advantages, new_reward_mask):
 
 def compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args):
     # shape: [n_batch, n_seq, n_hidden] or [n_batch, n_seq] 
-    import ipdb; ipdb.set_trace()
-    
     discounted_rewards = _compute_discounted_rewards(rewards, new_reward_mask, args.discount_gamma)
     advantages = _compute_advantages(new_x, new_x_mask, vf, rewards, discounted_rewards, new_reward_mask) # [n_batch, n_seq]
     advantages = _normalize_advantages(advantages, new_reward_mask)
