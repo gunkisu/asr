@@ -76,8 +76,8 @@ def build_graph(args):
     # no need to do stop_gradient because training is not done for the sampling graph
     step_label_logits = _label_logit(step_h_state, 'label_logit')
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
-    step_y_input_answer = tf.nn.embedding_lookup(embedding, step_y_data_for_action)
 
+    step_y_input_answer = tf.nn.embedding_lookup(embedding, step_y_data_for_action)
     step_y_1hot_pred = tf.argmax(step_label_probs, axis=-1)
     step_y_input_pred = tf.nn.embedding_lookup(embedding, step_y_1hot_pred)
     step_y_input = tf.where(sample_y, step_y_input_pred, step_y_input_answer)
@@ -110,7 +110,12 @@ def build_graph(args):
     seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
     seq_y_input_2d = tf.reshape(seq_y_input[:,:-1:], [-1, args.n_embedding])
-    seq_action_logits = _action_logit([seq_hid_2d_rl, seq_y_input_2d], 'action_logit')
+
+    if args.n_embedding > 0:
+        seq_action_logits = _action_logit([seq_hid_2d_rl, seq_y_input_2d], 'action_logit')
+    else:
+        seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
+        
     seq_action_probs = tf.nn.softmax(seq_action_logits)
 
     action_prob_entropy = categorical_ent(seq_action_probs)
