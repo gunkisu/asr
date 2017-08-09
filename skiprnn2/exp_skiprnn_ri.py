@@ -158,8 +158,8 @@ if __name__ == '__main__':
     tvars = tf.trainable_variables()
     print([tvar.name for tvar in tvars])
 
-    ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.learning_rate, beta1=0.9, beta2=0.99)
-    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.rl_learning_rate, beta1=0.9, beta2=0.99)
+    ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr, beta1=0.9, beta2=0.99)
+    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr2, beta1=0.9, beta2=0.99)
 
     ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, tvars), clip_norm=1.0)
     ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)

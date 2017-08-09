@@ -26,8 +26,8 @@ def get_argparser():
     add_general_args(parser)
     add_datapath_args(parser)
     
-    parser.add_argument('--learning-rate', default=0.01, type=float, help='Initial learning rate')
-    parser.add_argument('--rl-learning-rate', default=0.01, type=float, help='Initial learning rate for RL')
+    parser.add_argument('--lr', default=0.001, type=float, help='Initial learning rate')
+    parser.add_argument('--lr2', default=0.001, type=float, help='Initial learning rate for RL')
     parser.add_argument('--n-epoch', default=100, type=int, help='Maximum number of epochs')
     parser.add_argument('--display-freq', default=50, type=int, help='Display frequency')
     parser.add_argument('--n-input', default=123, type=int, help='Number of RNN hidden units')
