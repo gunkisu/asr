@@ -5,80 +5,16 @@ import sys
 import os
 import numpy as np
 import tensorflow as tf
+from itertools import islice
 
-from mixer import gen_mask
-from mixer import nats2bits
-from mixer import insert_item2dict
-from mixer import lstm_state
-from model import LinearCell
-from mixer import save_npz2, gen_zero_state, feed_init_state
-
-from collections import namedtuple, OrderedDict
+from mixer import gen_zero_state, feed_init_state
 
 from data.fuel_utils import create_ivector_datastream
 from libs.utils import sync_data, skip_frames_fixed, StopWatch
 
-from itertools import islice
-
+from utils import Accumulator
 import utils
-
-TrainGraph = namedtuple('TrainGraph', 'ml_cost seq_x_data seq_x_mask seq_y_data init_state pred_idx seq_label_probs')
-TestGraph = namedtuple('TestGraph', 'step_x_data init_state step_last_state step_label_probs')
-
-StopWatchSet = namedtuple('StopWatchSet', 'epoch disp eval per')
-
-def build_graph(args):
-    with tf.device(args.device):
-        # n_batch, n_seq, n_feat
-        seq_x_data = tf.placeholder(dtype=tf.float32, shape=(None, None, args.n_input), name='seq_x_data')
-        seq_x_mask = tf.placeholder(dtype=tf.float32, shape=(None, None), name='seq_x_mask')
-        seq_y_data = tf.placeholder(dtype=tf.int32, shape=(None, None))
-
-        init_state = tuple( lstm_state(args.n_hidden, l) for l in range(args.n_layer))
-
-        step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
-
-    with tf.variable_scope('rnn'):
-        def lstm_cell():
-            return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
-           
-        cell = tf.contrib.rnn.MultiRNNCell([lstm_cell() for _ in range(args.n_layer)])
-
-    with tf.variable_scope('label'):
-        _label_logit = LinearCell(num_units=args.n_class)
-
-    # training graph
-    seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
-    seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden])
-
-    seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')   
-
-    y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=args.n_class)
-
-    ml_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_label_logits, 
-        labels=y_1hot)
-    ml_cost = tf.reduce_sum(ml_cost*tf.reshape(seq_x_mask, [-1]))
-
-    pred_idx = tf.argmax(seq_label_logits, axis=1)
-
-    seq_label_probs = tf.nn.softmax(seq_label_logits, name='seq_label_probs')
-
-    # testing graph
-    step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
-    step_label_logits = _label_logit(step_h_state, 'label_logit')
-    step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
-
-    train_graph = TrainGraph(ml_cost,
-                                                     seq_x_data,
-                                                     seq_x_mask,
-                                                     seq_y_data,
-                                                     init_state,
-                                                     pred_idx,
-                                                     seq_label_probs)
-
-    test_graph = TestGraph(step_x_data, init_state, step_last_state, step_label_probs)
-
-    return train_graph, test_graph
+import graph_builder
    
 if __name__ == '__main__':
     print(' '.join(sys.argv))
@@ -96,12 +32,7 @@ if __name__ == '__main__':
     tf.set_random_seed(_seed)
     np.random.seed(_seed)
 
-    prefix_name = os.path.join(args.logdir, 'model')
-    file_name = '%s.npz' % prefix_name
-
-    eval_summary = OrderedDict() # 
-
-    tg, test_graph = build_graph(args)
+    tg, test_graph = graph_builder.build_graph_subsample(args)
     tg_ml_cost = tf.reduce_mean(tg.ml_cost)
 
     global_step = tf.Variable(0, trainable=False, name="global_step")
@@ -122,44 +53,34 @@ if __name__ == '__main__':
     save_op = tf.train.Saver(max_to_keep=5)
     best_save_op = tf.train.Saver(max_to_keep=5)
 
-    with tf.name_scope("per_step_eval"):
-        tr_ce = tf.placeholder(tf.float32)
-        tr_ce_summary = tf.summary.scalar("tr_ce", tr_ce)
-
-    with tf.name_scope("per_epoch_eval"):
-        best_val_ce = tf.placeholder(tf.float32)
-        val_ce = tf.placeholder(tf.float32)
-        best_val_ce_summary = tf.summary.scalar("best_valid_ce", best_val_ce)
-        val_ce_summary = tf.summary.scalar("valid_ce", val_ce)
+    with tf.name_scope("tr_eval"):
+        tr_summary = utils.get_summary('ce cr'.split())
+    with tf.name_scope("val_eval"):
+        val_summary = utils.get_summary('ce cr fer'.split())
 
     with tf.Session() as sess:
         sess.run(init_op)
-
-        if args.start_from_ckpt:
-            save_op = tf.train.import_meta_graph(os.path.join(args.logdir, 'model.ckpt.meta'))
-            save_op.restore(sess, os.path.join(args.logdir, 'model.ckpt'))
-            print("Restore from the last checkpoint. "
-                        "Restarting from %d step." % global_step.eval())
-
         summary_writer = tf.summary.FileWriter(args.logdir, sess.graph, flush_secs=5.0)
 
-        tr_ce_sum = 0.
-        tr_ce_count = 0
-        tr_acc_sum = 0
-        tr_acc_count = 0
+        # ce, accuracy, compression ratio
+        accu_list = [Accumulator() for i in range(3)]
+        ce, ac, cr = accu_list 
+
         _best_score = np.iinfo(np.int32).max
 
-        sw = StopWatchSet(StopWatch(), StopWatch(), StopWatch(), StopWatch())
+        epoch_sw, disp_sw, eval_sw = StopWatch(), StopWatch(), StopWatch()
+
         # For each epoch 
         for _epoch in xrange(args.n_epoch):
             _n_exp = 0
 
-            sw.epoch.reset()
-            sw.disp.reset()
+            epoch_sw.reset(); disp_sw.reset()
 
             print('--')
             print('Epoch {} training'.format(_epoch+1))
-            
+
+            for accu in accu_list: accu.reset()                    
+
             # For each batch 
             for batch in train_set.get_epoch_iterator():
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
@@ -174,47 +95,31 @@ if __name__ == '__main__':
                     feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask, tg.seq_y_data: y}
                     feed_init_state(feed_dict, tg.init_state, zero_state)
 
-                    _tr_ml_cost, _pred_idx, _ = sess.run([tg.ml_cost, tg.pred_idx, ml_op],
-                                     feed_dict=feed_dict)
+                    ml_cost, _ = sess.run([tg.ml_cost, ml_op], feed_dict=feed_dict)
+                    orig_count, comp_count = orig_x_mask.sum(), x_mask.sum()
+                    
+                    ce.add(ml_cost.sum(), comp_count)
+                    cr.add(float(comp_count)/orig_count, 1)
 
-                    tr_ce_sum += _tr_ml_cost.sum()
-                    tr_ce_count += x_mask.sum()
-                    _tr_ce_summary, = sess.run([tr_ce_summary], feed_dict={tr_ce: _tr_ml_cost.sum() / x_mask.sum()})
-                    summary_writer.add_summary(_tr_ce_summary, global_step.eval())
+                    summaries = sess.run([s.s for s in tr_summary],
+                        feed_dict={tr_summary.ce.ph: ce.last_avg(), tr_summary.cr.ph: cr.avg()})
+                    for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
 
-                    _, n_seq = orig_y.shape
-                    _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
-                    _pred_idx = _pred_idx[:,:n_seq]
-
-                    tr_acc_sum += ((_pred_idx == orig_y) * orig_x_mask).sum()
-                    tr_acc_count += orig_x_mask.sum()
-                                 
                 if global_step.eval() % args.display_freq == 0:
-                    avg_tr_ce = tr_ce_sum / tr_ce_count
-                    avg_tr_fer = 1. - float(tr_acc_sum) / tr_acc_count
-
-                    print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} fer={:.2f} time_taken={:.2f}".format(
-                            _epoch, global_step.eval(), avg_tr_ce, avg_tr_fer, sw.disp.elapsed()))
-
-                    tr_ce_sum = 0.
-                    tr_ce_count = 0
-                    tr_acc_sum = 0
-                    tr_acc_count = 0
-                    sw.disp.reset()
+                    print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} compression={:.2f} time_taken={:.2f}".format(
+                            _epoch, global_step.eval(), ce.avg(), cr.avg(), disp_sw.elapsed()))
+                    for accu in accu_list: accu.reset()                    
+                    disp_sw.reset()
 
             print('--')
             print('End of epoch {}'.format(_epoch+1))
-            sw.epoch.print_elapsed()
+            epoch_sw.print_elapsed()
 
             print('Testing')
 
             # Evaluate the model on the validation set
-            val_ce_sum = 0.
-            val_ce_count = 0
-            val_acc_sum = 0
-            val_acc_count = 0
-
-            sw.eval.reset()
+            for accu in accu_list: accu.reset()                    
+            eval_sw.reset()
             for batch in valid_set.get_epoch_iterator():
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
                  
@@ -227,46 +132,32 @@ if __name__ == '__main__':
                     feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask, tg.seq_y_data: y}
                     feed_init_state(feed_dict, tg.init_state, zero_state)
 
-                    _val_ml_cost, _pred_idx = sess.run([tg.ml_cost, tg.pred_idx],
-                                    feed_dict=feed_dict)
+                    ml_cost, pred_idx = sess.run([tg.ml_cost, tg.pred_idx], feed_dict=feed_dict)
+                    orig_count, comp_count = orig_x_mask.sum(), x_mask.sum()
                     
-                    val_ce_sum += _val_ml_cost.sum()
-                    val_ce_count += x_mask.sum()
-
                     _, n_seq = orig_y.shape
-                    _pred_idx = _pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
-                    _pred_idx = _pred_idx[:,:n_seq]
+                    pred_idx = pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
+                    pred_idx = pred_idx[:,:n_seq]
 
-                    val_acc_sum += ((_pred_idx == orig_y) * orig_x_mask).sum()
-                    val_acc_count += orig_x_mask.sum()
+                    ce.add(ml_cost.sum(), comp_count)
+                    cr.add(float(comp_count)/orig_count, 1)
+                    ac.add(((pred_idx == orig_y) * orig_x_mask).sum(), orig_count)
 
-            avg_val_ce = val_ce_sum / val_ce_count
-            avg_val_fer = 1. - float(val_acc_sum) / val_acc_count
+            avg_fer = 1-ac.avg()
+            print("VALID: epoch={} ml_cost(ce/frame)={:.2f} fer={:.2f} compression={:.2f} time_taken={:.2f}".format(
+                    _epoch, ce.avg(), avg_fer, cr.avg(), eval_sw.elapsed()))
 
-            print("VALID: epoch={} ml_cost(ce/frame)={:.2f} fer={:.2f} time_taken={:.2f}".format(
-                    _epoch, avg_val_ce, avg_val_fer, sw.eval.elapsed()))
-
-            _val_ce_summary, = sess.run([val_ce_summary], feed_dict={val_ce: avg_val_ce}) 
-            summary_writer.add_summary(_val_ce_summary, global_step.eval())
-            
-            insert_item2dict(eval_summary, 'val_ce', avg_val_ce)
-            insert_item2dict(eval_summary, 'time', sw.eval.elapsed())
-            save_npz2(file_name, eval_summary)
+            summaries = sess.run([s.s for s in val_summary],
+                feed_dict={val_summary.ce.ph: ce.avg(), val_summary.cr.ph: cr.avg(),
+                    val_summary.fer.ph: avg_fer})
+            for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
 
             # Save model
-            if avg_val_ce < _best_score:
-                _best_score = avg_val_ce
-                best_ckpt = best_save_op.save(sess, os.path.join(args.logdir,
-                                                                                                                 "best_model.ckpt"),
-                                                                            global_step=global_step)
+            if avg_fer < _best_score:
+                _best_score = avg_fer
+                best_ckpt = best_save_op.save(sess, os.path.join(args.logdir, "best_model.ckpt"), global_step=global_step)
                 print("Best checkpoint stored in: %s" % best_ckpt)
-            ckpt = save_op.save(sess, os.path.join(args.logdir, "model.ckpt"),
-                                                    global_step=global_step)
+            ckpt = save_op.save(sess, os.path.join(args.logdir, "model.ckpt"), global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
 
-            _best_val_ce_summary, = sess.run([best_val_ce_summary],
-                                                                feed_dict={best_val_ce: _best_score})
-            summary_writer.add_summary(_best_val_ce_summary, global_step.eval())
         summary_writer.close()
-
-        print("Optimization Finished.")

@@ -89,7 +89,7 @@ if __name__ == '__main__':
 
         _best_score = np.iinfo(np.int32).max
 
-        epoch_sw, disp_sw, eval_sw, per_sw = StopWatch(), StopWatch(), StopWatch(), StopWatch()
+        epoch_sw, disp_sw, eval_sw = StopWatch(), StopWatch(), StopWatch()
         
         # For each epoch 
         for _epoch in xrange(args.n_epoch):
@@ -186,8 +186,8 @@ if __name__ == '__main__':
                     _epoch, ce.avg(), rl.avg(), avg_fer, rw.avg(), ae.avg(), cr.avg(), eval_sw.elapsed()))
 
             summaries = sess.run([s.s for s in val_summary],
-                feed_dict={val_summary.ce.ph: ce.last_avg(), val_summary.fer.ph: avg_fer, 
-                    val_summary.rl.ph: rl.last_avg(), val_summary.image.ph: output_image, val_summary.cr.ph: cr.avg()})
+                feed_dict={val_summary.ce.ph: ce.avg(), val_summary.fer.ph: avg_fer, 
+                    val_summary.rl.ph: rl.avg(), val_summary.image.ph: output_image, val_summary.cr.ph: cr.avg()})
             for s in summaries: summary_writer.add_summary(s, global_step.eval())
                     
             # Save model
@@ -199,6 +199,3 @@ if __name__ == '__main__':
             print("Checkpoint stored in: %s" % ckpt)
 
         summary_writer.close()
-
-        print("Optimization Finished.")
-

@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
         _best_score = np.iinfo(np.int32).max
 
-        epoch_sw, disp_sw, eval_sw, per_sw = StopWatch(), StopWatch(), StopWatch(), StopWatch()
+        epoch_sw, disp_sw, eval_sw = StopWatch(), StopWatch(), StopWatch()
         
         # For each epoch 
         for _epoch in xrange(args.n_epoch):
@@ -175,7 +175,5 @@ if __name__ == '__main__':
             print("Checkpoint stored in: %s" % ckpt)
 
         summary_writer.close()
-        print("Optimization Finished.")
-
 
 
