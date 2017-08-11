@@ -2144,7 +2144,15 @@ def choose_actions(best_actions, pred_actions, args):
     for b, p in zip(best_actions, pred_actions):
         new_actions.append(choose(args.epsilon, b, p))
     return np.asarray(new_actions)
- 
+
+def get_random_pred_actions(target_indices, args):
+    random_pred_actions = []
+
+    for i in target_indices:
+        random_pred_actions.append(random.randint(0, args.n_action-1))
+
+    return np.asarray(random_pred_actions)
+
 def gen_supervision_scheduled_sampling(x, y, x_mask, sess, test_graph, args):
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
@@ -2204,6 +2212,10 @@ def gen_supervision_scheduled_sampling(x, y, x_mask, sess, test_graph, args):
 
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
             best_actions = get_best_actions(target_indices, j, seq_lens, args, y)
+            
+            if args.use_random_prediction:
+                pred_actions = get_random_pred_actions(target_indices, args)
+            
             actions_chosen = choose_actions(best_actions, pred_actions, args)            
             supervision_action_1hot = np.eye(args.n_action)[best_actions.flatten()]
             real_action_1hot = np.eye(args.n_action)[actions_chosen.flatten()]

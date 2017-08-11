@@ -4,7 +4,7 @@ import argparse
 import socket
 import tensorflow as tf
 import subprocess
-import os
+import os, errno
 from collections import namedtuple
 
 from data.fuel_utils import create_ivector_datastream
@@ -124,3 +124,17 @@ def get_summary(summary_kinds):
     summary = Summary._make(tmp)
     
     return summary
+
+
+def symlink_force(target, link_name):
+    try:
+        os.symlink(target, link_name)
+    except OSError, e:
+        if e.errno == errno.EEXIST:
+            os.remove(link_name)
+            os.symlink(target, link_name)
+        else:
+            raise e
+
+def link_to_best_model(best_ckpt, args):
+    symlink_force('{}.meta'.format(best_ckpt), os.path.join(args.logdir, 'best_model.meta'))

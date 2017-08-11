@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser = utils.get_argparser()
     parser.add_argument('--epsilon', default=1.0, type=float, help="Scheduled sampling rate")
     parser.add_argument('--use-scheduled-sampling', action='store_true', help="Use scheduled sampling")
+    parser.add_argument('--use-random-prediction', action='store_true', help="Use random predictions instead of model predictions")
 
     args = parser.parse_args()
     print(args)
@@ -179,6 +180,7 @@ if __name__ == '__main__':
                 best_ckpt = best_save_op.save(sess, os.path.join(args.logdir, "best_model.ckpt"), 
                     global_step=global_step)
                 print("Best checkpoint stored in: %s" % best_ckpt)
+                utils.link_to_best_model(best_ckpt, args)
             ckpt = save_op.save(sess, os.path.join(args.logdir, "model.ckpt"), global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
 
