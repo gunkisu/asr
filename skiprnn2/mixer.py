@@ -1097,6 +1097,7 @@ def gen_supervision(x, x_mask, y, args):
 
         if len(_x_step):
             best_actions = []
+
             for idx in target_indices:
                 max_jump = args.n_fast_action if args.n_fast_action > 0 else args.n_action
                 upto = int(min(j+max_jump, seq_lens[idx]))
@@ -1104,6 +1105,84 @@ def gen_supervision(x, x_mask, y, args):
                 seg_len = get_seg_len(ref_labels)
                 best_actions.append(seg_len - 1)
         
+            fill(new_x, _x_step, target_indices, update_pos)
+            fill(new_y, _y_step, target_indices, update_pos)
+            fill(actions, best_actions, target_indices, update_pos)
+            action_one_hot = np.eye(args.n_action)[best_actions]
+            fill(actions_1hot, action_one_hot, target_indices, update_pos)
+            
+            update_action_counters(action_counters, best_actions, target_indices, args)
+
+            advance_pos(update_pos, target_indices)
+                
+            # For visualization
+            for i, s_idx in enumerate(target_indices):
+                full_action_samples[j, s_idx] = action_one_hot[i]
+        
+        else:
+            update_action_counters(action_counters, [], [], args)
+
+    max_seq_len, mask = gen_mask3(update_pos, n_batch)
+    outp = transpose_all([new_x[:max_seq_len],
+                         new_y[:max_seq_len],                         
+                         actions[:max_seq_len-1],
+                         actions_1hot[:max_seq_len-1],
+                         mask])
+
+
+    output_image = gen_output_image(full_action_samples, y, args.n_class)
+    outp.append(output_image)
+    return outp
+
+
+def get_best_actions(target_indices, j, seq_lens, args, y):
+    best_actions = []
+
+    for idx in target_indices:
+        max_jump = args.n_fast_action if args.n_fast_action > 0 else args.n_action
+        upto = int(min(j+max_jump, seq_lens[idx]))
+        ref_labels = y[j:upto, idx]
+        seg_len = get_seg_len(ref_labels)
+        best_actions.append(seg_len - 1)
+
+    return np.asarray(best_actions)
+
+def gen_supervision(x, x_mask, y, args):
+    x = np.transpose(x, [1,0,2])
+    x_mask = np.transpose(x_mask, [1,0])
+    y = np.transpose(y, [1,0])
+
+    n_seq, n_batch, n_feat = x.shape
+    seq_lens = x_mask.sum(axis=0)
+    max_seq_len = int(max(seq_lens))
+
+    action_counters = [0]*n_batch
+    update_pos = [0]*n_batch
+    sample_done = [] # indices of examples done processing
+
+    new_x = np.zeros([max_seq_len, n_batch, n_feat])
+    new_y = np.zeros([max_seq_len, n_batch])
+    actions = np.zeros([max_seq_len-1, n_batch])
+    actions_1hot = np.zeros([max_seq_len-1, n_batch, args.n_action])
+
+    full_action_samples = np.zeros([max_seq_len, n_batch, args.n_action])
+
+    # for each time step (index j)
+    for j, (x_step, y_step) in enumerate(itertools.izip(x, y)):
+        _x_step, _y_step, target_indices = filter_last2(x_step, y_step, j, seq_lens, sample_done)
+
+        if len(_x_step):
+            fill(new_x, _x_step, target_indices, update_pos)
+            fill(new_y, _y_step, target_indices, update_pos)
+
+            advance_pos(update_pos, target_indices)
+            sample_done.extend(target_indices)
+
+        _x_step, _y_step, target_indices = filter_action_end2(x_step, y_step, j, action_counters, sample_done)
+
+        if len(_x_step):
+            best_actions = get_best_actions(target_indices, j, seq_lens, args, y)
+
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
             fill(actions, best_actions, target_indices, update_pos)
@@ -2052,23 +2131,32 @@ def gen_output_image(actions_taken, y, n_class):
 
     return output_image
 
-def gen_episode_supervised(x, y, x_mask, sess, test_graph, n_fast_action):
+import random
+
+def choose(epsilon, a, b):
+    if random.random() < epsilon:
+        return a
+    else:
+        return b
+
+def choose_actions(best_actions, pred_actions, args):
+    new_actions = []
+    for b, p in zip(best_actions, pred_actions):
+        new_actions.append(choose(args.epsilon, b, p))
+    return np.asarray(new_actions)
+ 
+def gen_supervision_scheduled_sampling(x, y, x_mask, sess, test_graph, args):
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
     x = np.transpose(x, [1,0,2])
     x_mask = np.transpose(x_mask, [1,0])
     y = np.transpose(y, [1,0])
 
-    n_class = test_graph.step_label_probs.shape[-1].value
-    n_hidden = test_graph.step_last_state[0].c.shape[-1].value
-    n_action = test_graph.step_action_probs.shape[-1].value
-    n_layer = len(test_graph.step_last_state)
-
     n_seq, n_batch, n_feat = x.shape
     seq_lens = x_mask.sum(axis=0, dtype=np.int32)
     max_seq_len = max(seq_lens)
 
-    prev_state = np.zeros([n_batch, n_layer, 2, n_hidden])
+    prev_state = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
 
     action_counters = [0]*n_batch
     update_pos = [0]*n_batch
@@ -2076,12 +2164,11 @@ def gen_episode_supervised(x, y, x_mask, sess, test_graph, n_fast_action):
 
     new_x = np.zeros([max_seq_len, n_batch, n_feat])
     new_y = np.zeros([max_seq_len, n_batch])
-    label_probs = np.zeros([max_seq_len, n_batch, n_class])
 
-    actions_1hot = np.zeros([max_seq_len, n_batch, n_action])
+    actions_1hot = np.zeros([max_seq_len, n_batch, args.n_action])
 
     # for visualization
-    actions_taken = np.zeros([max_seq_len, n_batch, n_action])
+    actions_taken = np.zeros([max_seq_len, n_batch, args.n_action])
 
     # for each step (index j)
     for j, (x_step, y_step) in enumerate(itertools.izip(x,y)):
@@ -2099,7 +2186,6 @@ def gen_episode_supervised(x, y, x_mask, sess, test_graph, n_fast_action):
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
-            fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
             update_prev_state(prev_state, new_prev_state, target_indices)
          
             advance_pos(update_pos, target_indices)
@@ -2112,37 +2198,37 @@ def gen_episode_supervised(x, y, x_mask, sess, test_graph, n_fast_action):
             feed_dict={test_graph.step_x_data: _x_step}
             feed_prev_state(feed_dict, test_graph.init_state, _prev_state)
 
-            action_idx, step_label_likelihood_j, new_prev_state = \
+            pred_actions, step_label_likelihood_j, new_prev_state = \
                 sess.run([test_graph.step_pred_idx, test_graph.step_label_probs, test_graph.step_last_state],
                     feed_dict=feed_dict)
 
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
-            action_1hot = np.eye(n_action)[action_idx.flatten()]
+            best_actions = get_best_actions(target_indices, j, seq_lens, args, y)
+            actions_chosen = choose_actions(best_actions, pred_actions, args)            
+            supervision_action_1hot = np.eye(args.n_action)[best_actions.flatten()]
+            real_action_1hot = np.eye(args.n_action)[actions_chosen.flatten()]
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
-            fill(label_probs, step_label_likelihood_j, target_indices, update_pos)
-            fill(actions_1hot, action_1hot, target_indices, update_pos)
+            fill(actions_1hot, supervision_action_1hot, target_indices, update_pos)
 
             # visualization
             for i, s_idx in enumerate(target_indices):
-                actions_taken[j, s_idx] = action_1hot[i]
+                actions_taken[j, s_idx] = real_action_1hot[i]
 
             update_prev_state(prev_state, new_prev_state, target_indices)
 
-            update_action_counters2(action_counters, action_idx.flatten(), 
-                target_indices, n_action, n_fast_action)
+            update_action_counters2(action_counters, actions_chosen.flatten(), 
+                target_indices, args.n_action, args.n_fast_action)
 
             advance_pos(update_pos, target_indices)
         else:
-            update_action_counters2(action_counters, [], [], n_action, n_fast_action)
+            update_action_counters2(action_counters, [], [], args.n_action, args.n_fast_action)
 
     new_max_seq_len, mask = gen_mask_from(update_pos)
     
-    outp = transpose_all([new_x[:new_max_seq_len], new_y[:new_max_seq_len], actions_1hot[:new_max_seq_len-1], 
-        label_probs[:new_max_seq_len], mask])
-
-    output_image = gen_output_image(actions_taken, y, n_class)
+    outp = transpose_all([new_x[:new_max_seq_len], new_y[:new_max_seq_len], actions_1hot[:new_max_seq_len-1], mask])
+    output_image = gen_output_image(actions_taken, y, args.n_class)
     outp += [output_image,]
     
     return outp

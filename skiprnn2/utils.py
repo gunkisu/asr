@@ -17,8 +17,9 @@ def add_datapath_args(parser):
     parser.add_argument('--data-path', default='/u/songinch/song/data/speech/wsj_fbank123.h5', help='Location of the dataset')
     parser.add_argument('--tmpdir', default='/Tmp/songinch/data/speech', help='Local temporary directory to store the dataset')
 
+# Options shared by both training and testing
 def add_general_args(parser):
-    parser.add_argument('--n-batch', default=16, type=int, help='Size of mini-batch')
+    parser.add_argument('--n-batch', default=32, type=int, help='Size of mini-batch')
     parser.add_argument('--device', default='gpu', help='Simply set either `cpu` or `gpu`')
 
 def get_argparser():

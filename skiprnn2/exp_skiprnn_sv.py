@@ -15,7 +15,7 @@ from collections import namedtuple
 from mixer import gen_mask
 from mixer import insert_item2dict
 from mixer import save_npz2
-from mixer import gen_supervision, skip_rnn_forward_supervised
+from mixer import gen_supervision, gen_supervision_scheduled_sampling, skip_rnn_forward_supervised
 from mixer import LinearVF, compute_advantage
 from mixer import categorical_ent, expand_output
 from mixer import lstm_state, gen_zero_state, feed_init_state
@@ -32,7 +32,11 @@ import graph_builder
 if __name__ == '__main__':
     print(' '.join(sys.argv))
 
-    args = utils.get_argparser().parse_args()
+    parser = utils.get_argparser()
+    parser.add_argument('--epsilon', default=1.0, type=float, help="Scheduled sampling rate")
+    parser.add_argument('--use-scheduled-sampling', action='store_true', help="Use scheduled sampling")
+
+    args = parser.parse_args()
     print(args)
     utils.prepare_dir(args)
     utils.print_host_info()
@@ -104,8 +108,12 @@ if __name__ == '__main__':
                 n_batch = x.shape[0]
                 _n_exp += n_batch
 
-                # Supservised training
-                new_x, new_y, actions, actions_1hot, new_x_mask, output_image = gen_supervision(x, x_mask, y, args)
+                if args.use_scheduled_sampling:
+                    new_x, new_y, actions_1hot, new_x_mask, output_image = \
+                        gen_supervision_scheduled_sampling(x, y, x_mask, sess, test_graph, args)
+                    actions = actions_1hot.argmax(axis=-1)
+                else:
+                    new_x, new_y, actions, actions_1hot, new_x_mask, output_image = gen_supervision(x, x_mask, y, args)
                
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
