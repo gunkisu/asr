@@ -138,4 +138,4 @@ def symlink_force(target, link_name):
             raise e
 
 def link_to_best_model(best_ckpt, args):
-    symlink_force('{}.meta'.format(best_ckpt), os.path.join(args.logdir, 'best_model.meta'))
+    symlink_force(os.path.abspath('{}.meta'.format(best_ckpt)), os.path.join(args.logdir, 'best_model.meta'))
