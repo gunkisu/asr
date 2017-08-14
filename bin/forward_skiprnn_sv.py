@@ -10,7 +10,9 @@ import tensorflow as tf
 
 from collections import OrderedDict
 from collections import namedtuple
-from skiprnn.mixer import skip_rnn_forward_supervised, expand_output, match_c, match_h
+from skiprnn.mixer import skip_rnn_forward_supervised, expand_output
+
+from skiprnn2.graph_builder import match_c, match_h
 
 from data.fuel_utils import create_ivector_test_datastream, get_uttid_stream, create_ivector_test_datastream_with_targets
 from libs.utils import sync_data, skip_frames_fixed, StopWatch

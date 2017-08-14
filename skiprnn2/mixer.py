@@ -27,16 +27,6 @@ def feed_prev_state(feed_dict, init_state, new_state):
 
         feed_dict.update({ic: nc, ih: nh})
 
-def lstm_state(n_hidden, layer):
-    return tf.contrib.rnn.LSTMStateTuple(tf.placeholder(tf.float32, shape=(None, n_hidden), name='cstate_{}'.format(layer)), 
-        tf.placeholder(tf.float32, shape=(None, n_hidden), name='hstate_{}'.format(layer)))
-
-def match_c(opname):
-    return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/add_1' in opname
-
-def match_h(opname):
-    return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/mul_2' in opname
-
 # Misc
 def gen_mask(x, max_seq_len):
   n_step = x.shape[0]

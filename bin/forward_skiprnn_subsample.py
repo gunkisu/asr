@@ -8,10 +8,12 @@ import glob
 from collections import namedtuple, OrderedDict
 from itertools import islice
 
-
 from data.fuel_utils import create_ivector_test_datastream, get_uttid_stream
 from libs.utils import sync_data, skip_frames_fixed, StopWatch
-from skiprnn2.mixer import gen_zero_state, feed_init_state, fixed_skip_forward, match_c, match_h
+from skiprnn2.mixer import gen_zero_state, feed_init_state, fixed_skip_forward
+
+from skiprnn2.graph_builder import match_c, match_h
+
 import skiprnn2.utils as utils
 import kaldi_io
 
