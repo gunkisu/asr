@@ -35,6 +35,7 @@ def get_argparser():
     parser.add_argument('--n-input', default=123, type=int, help='Number of RNN hidden units')
     parser.add_argument('--n-layer', default=1, type=int, help='Number of RNN hidden layers')
     parser.add_argument('--n-hidden', default=1024, type=int, help='Number of RNN hidden units')
+    parser.add_argument('--n-proj', default=0, type=int, help='Number of hidden units in projection layers')
     parser.add_argument('--n-class', default=3436, type=int, help='Number of target symbols')
     parser.add_argument('--n-embedding', default=0, type=int, help='Embedding size')
     parser.add_argument('--n-action', default=6, type=int, help='Number of actions (max skim size)')

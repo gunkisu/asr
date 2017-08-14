@@ -32,8 +32,10 @@ import graph_builder
 
 if __name__ == '__main__':
     print(' '.join(sys.argv))
-
-    args = utils.get_argparser().parse_args()
+    
+    parser = utils.get_argparser()
+    parser.add_argument('--use-prediction', action='store_true', help='Use predictions when computing rewards')
+    args = parser.parse_args()
     print(args)
     utils.prepare_dir(args) 
     utils.print_host_info()

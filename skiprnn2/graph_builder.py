@@ -13,6 +13,12 @@ from mixer import categorical_ent, expand_output
 from mixer import lstm_state, gen_zero_state, feed_init_state
 from model import LinearCell
 
+def lstm_cell(args):
+    if args.n_proj > 0:
+        return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, num_proj=args.n_proj, forget_bias=0.0)
+    else:
+        return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
+
 def build_graph_ri(args):
     tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',
         'seq_y_data', 'seq_y_data_for_action', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
@@ -43,11 +49,8 @@ def build_graph_ri(args):
         seq_y_input = tf.nn.embedding_lookup(embedding, seq_y_data_for_action)
 
         sample_y = tf.placeholder(tf.bool, name='sample_y')
-
-    def lstm_cell():
-        return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
        
-    cell = tf.contrib.rnn.MultiRNNCell([lstm_cell() for _ in range(args.n_layer)])
+    cell = tf.contrib.rnn.MultiRNNCell([lstm_cell(args) for _ in range(args.n_layer)])
 
     with tf.variable_scope('label'):
         _label_logit = LinearCell(num_units=args.n_class)
@@ -121,8 +124,6 @@ def build_graph_ri(args):
 
     return train_graph, sample_graph
 
-
-
 def build_graph_sv(args):
     TrainGraph = namedtuple('TrainGraph', 
         'ml_cost rl_cost seq_x_data seq_x_mask seq_y_data seq_jump_data init_state pred_idx')
@@ -142,10 +143,7 @@ def build_graph_sv(args):
 
         step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
 
-    def lstm_cell():
-        return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
-       
-    cell = tf.contrib.rnn.MultiRNNCell([lstm_cell() for _ in range(args.n_layer)])
+    cell = tf.contrib.rnn.MultiRNNCell([lstm_cell(args) for _ in range(args.n_layer)])
 
     with tf.variable_scope('label'):
         _label_logit = LinearCell(num_units=args.n_class)
@@ -216,10 +214,7 @@ def build_graph_subsample(args):
         step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
 
     with tf.variable_scope('rnn'):
-        def lstm_cell():
-            return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
-           
-        cell = tf.contrib.rnn.MultiRNNCell([lstm_cell() for _ in range(args.n_layer)])
+        cell = tf.contrib.rnn.MultiRNNCell([lstm_cell(args) for _ in range(args.n_layer)])
 
     with tf.variable_scope('label'):
         _label_logit = LinearCell(num_units=args.n_class)

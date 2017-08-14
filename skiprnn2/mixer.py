@@ -555,7 +555,7 @@ def fill_aggr_reward(reward_list,
     return reward_target_indices
 
 def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
-        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action, n_fast_action):
+        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action, n_fast_action, use_prediction=False):
     reward_target_indices = []
 
     for idx in target_indices:
@@ -572,8 +572,10 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         
         match_count = 0
         miss_count = 0
-#        target_label = prev_pred_idx
-        target_label = ref_labels[0] # focus on only segmentation
+        if use_prediction:
+            target_label = prev_pred_idx
+        else:
+            target_label = ref_labels[0]
 
         for l in ref_labels:
             if l == target_label: match_count += 1
@@ -984,7 +986,8 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y
             fill(new_y_sample, step_label_idx, target_indices, update_pos)
 
             reward_target_indices = fill_seg_match_reward(rewards, y, j, 
-                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args.n_action, args.n_fast_action)
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, 
+                args.n_action, args.n_fast_action, args.use_prediction)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
@@ -1019,7 +1022,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y
 
             reward_target_indices = fill_seg_match_reward(rewards, y, j,
                 prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, 
-                args.n_action, args.n_fast_action)
+                args.n_action, args.n_fast_action, args.use_prediction)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
@@ -2104,7 +2107,11 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, n_e
     new_max_seq_len, mask = gen_mask_from(update_pos)
     return transpose_all([actions_1hot[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask])
 
-def gen_output_image(actions_taken, y, n_class):
+def gen_output_image(actions_taken, y, n_class, pred_idx=None):
+    # actions_taken: n_seq, n_batch, n_action
+    # y: n_seq, n_batch
+    # pred_idx: n_seq, n_batch
+
     full_action_samples = np.transpose(actions_taken, [1, 2, 0])
     full_action_samples = np.expand_dims(full_action_samples, axis=-1)
     # make it thicker
