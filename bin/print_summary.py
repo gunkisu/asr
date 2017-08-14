@@ -17,8 +17,9 @@ if __name__ == '__main__':
             if v.tag == args.summary_kind:
                 history.append(float(v.simple_value))
     
+    history = [(i, h) for i, h in enumerate(history, start=1)]
     if args.max or args.min:
-        history.sort()
+        history.sort(key=lambda x: x[-1])
 
     if args.max: 
         print(history[-1])
