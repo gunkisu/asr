@@ -45,6 +45,7 @@ if __name__ == '__main__':
     
     tf.add_to_collection('n_skip', args.n_skip)
     tf.add_to_collection('n_hidden', args.n_hidden)
+    tf.add_to_collection('n_delay', args.n_delay)
 
     train_set, valid_set, test_set = utils.prepare_dataset(args)
 
@@ -157,6 +158,7 @@ if __name__ == '__main__':
                 best_ckpt = best_save_op.save(sess, os.path.join(args.logdir, "best_model.ckpt"), global_step=global_step)
                 print("Best checkpoint stored in: %s" % best_ckpt)
                 utils.link_to_best_model(best_ckpt, args)
+
             ckpt = save_op.save(sess, os.path.join(args.logdir, "model.ckpt"), global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
 

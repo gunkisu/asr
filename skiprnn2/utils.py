@@ -48,6 +48,7 @@ def get_argparser():
     parser.add_argument('--test-dataset', default='test_eval92', help='Test dataset')
     parser.add_argument('--discount-gamma', default=0.99, type=float, help='Discount factor')
     parser.add_argument('--use-layer-norm', action='store_true', help='Apply layer normalization')
+    parser.add_argument('--n-delay', default=0, type=int, help='Label delay for unidirectional models')
     
     return parser
 
@@ -83,7 +84,8 @@ def prepare_dataset(args):
     sync_data(args)
     datasets = [args.train_dataset, args.valid_dataset, args.test_dataset]
     return [create_ivector_datastream(path=args.data_path, which_set=dataset, 
-            batch_size=args.n_batch, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort) for dataset in datasets]
+            batch_size=args.n_batch, min_after_cache=args.min_after_cache, length_sort=not args.no_length_sort,
+            delay=args.n_delay) for dataset in datasets]
 
 class Accumulator:
     def __init__(self):
@@ -144,3 +146,5 @@ def link_to_best_model(best_ckpt, args):
 def get_model_size(trainable_variables):
     return float(np.sum([np.prod(v.get_shape().as_list()) for v in trainable_variables])) / 1000000
 
+def delayed(output, seq_y_data, seq_x_mask, delay):
+    return output[:,delay:,:], seq_y_data[:,delay:], seq_x_mask[:,delay:]
