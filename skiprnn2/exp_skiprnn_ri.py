@@ -63,7 +63,6 @@ if __name__ == '__main__':
     rl_op = rl_opt_func.apply_gradients(zip(rl_grads, tvars))
     
     tf.add_to_collection('n_fast_action', args.n_fast_action)
-    tf.add_to_collection('n_embedding', args.n_embedding)
 
     train_set, valid_set, test_set = utils.prepare_dataset(args)
 
@@ -116,9 +115,7 @@ if __name__ == '__main__':
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
                     tg.seq_action: actions_1hot, tg.seq_advantage: advantages, 
                     tg.seq_action_mask: new_reward_mask}
-                if args.n_embedding > 0 :
-                    feed_dict[tg.seq_y_data_for_action] = new_y
-
+        
                 feed_init_state(feed_dict, tg.init_state, zero_state)
 
                 _tr_ml_cost, _tr_rl_cost, _, _ = \
@@ -156,8 +153,8 @@ if __name__ == '__main__':
                 x, x_mask, _, _, y, _ = batch
                 n_batch = x.shape[0]
 
-                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image, new_y_sample = \
-                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, sample_y=True)
+                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
+                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
                 orig_count, comp_count, rw_count = x_mask.sum(), new_x_mask.sum(), new_reward_mask.sum()
 
                 advantages = compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
@@ -166,8 +163,6 @@ if __name__ == '__main__':
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
                     tg.seq_action: actions_1hot, tg.seq_advantage: advantages, 
                     tg.seq_action_mask: new_reward_mask}
-                if args.n_embedding > 0:
-                    feed_dict[tg.seq_y_data_for_action] = new_y_sample
                 feed_init_state(feed_dict, tg.init_state, zero_state)
                 
                 ml_cost, rl_cost, pred_idx = sess.run([tg.ml_cost, tg.rl_cost, tg.pred_idx], feed_dict=feed_dict)

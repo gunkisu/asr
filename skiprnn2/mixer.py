@@ -921,7 +921,7 @@ def to_label_change(y, n_class):
 
     return label_change
 
-def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y=False):
+def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
 
     sg = sample_graph
 
@@ -944,7 +944,6 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y
 
     new_x = np.zeros([max_seq_len, n_batch, n_feat])
     new_y = np.zeros([max_seq_len, n_batch])
-    new_y_sample = np.zeros([max_seq_len, n_batch])
     actions = np.zeros([max_seq_len-1, n_batch, args.n_action])
     rewards = np.zeros([max_seq_len-1, n_batch])
     action_entropies = np.zeros([max_seq_len-1, n_batch])
@@ -960,7 +959,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y
 
         if len(_x_step):
 
-            feed_dict={sg.step_x_data: _x_step, sg.step_y_data_for_action: _y_step, sg.sample_y: sample_y}
+            feed_dict={sg.step_x_data: _x_step}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
             step_label_likelihood_j, new_prev_state = \
@@ -973,7 +972,6 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
-            fill(new_y_sample, step_label_idx, target_indices, update_pos)
 
             reward_target_indices = fill_seg_match_reward(rewards, y, j, 
                 prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, 
@@ -989,7 +987,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y
 
         if len(_x_step):
         
-            feed_dict={sg.step_x_data: _x_step, sg.step_y_data_for_action: _y_step, sg.sample_y: sample_y}
+            feed_dict={sg.step_x_data: _x_step}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
            
             action_idx, step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy = \
@@ -1004,7 +1002,6 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
-            fill(new_y_sample, step_label_idx, target_indices, update_pos)
             fill(action_entropies, action_entropy, target_indices, update_pos)
             fill(actions, action_one_hot, target_indices, update_pos)
 
@@ -1041,8 +1038,6 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sample_y
     output_image = gen_output_image(full_action_samples, y, args.n_class)
     outp.append(output_image)
 
-    if sample_y:
-        outp.extend(transpose_all([new_y_sample[:max_seq_len]]))
     return outp
 
 def get_seg_len(ref_labels):
@@ -2013,7 +2008,7 @@ def fixed_skip_forward(x, x_mask, sess, test_graph):
 
     return transpose_all([label_probs[:max_seq_len]])
 
-def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, n_embedding):
+def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action):
     sg = sample_graph
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
@@ -2039,8 +2034,6 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, n_e
     label_probs = np.zeros([max_seq_len, n_batch, n_class])
     actions_1hot = np.zeros([max_seq_len-1, n_batch, n_action])
     
-    step_y_data_for_action = np.zeros([n_batch], dtype=np.int32)
-
     # for each step (index j)
     for j, x_step in enumerate(x):
         _x_step, _prev_state, target_indices = \
@@ -2048,8 +2041,6 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, n_e
 
         if len(_x_step):
             feed_dict={sg.step_x_data: _x_step}
-            if n_embedding > 0:
-                feed_dict.update({sg.sample_y: True, sg.step_y_data_for_action: step_y_data_for_action})
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
             step_label_likelihood_j, new_prev_state = \
@@ -2069,8 +2060,6 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, n_e
 
         if len(_x_step):
             feed_dict={sg.step_x_data: _x_step}
-            if n_embedding > 0:
-                feed_dict.update({sg.sample_y: True, sg.step_y_data_for_action: step_y_data_for_action})
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
             action_idx, step_label_likelihood_j, new_prev_state = \

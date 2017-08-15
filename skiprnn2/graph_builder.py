@@ -32,10 +32,10 @@ def lstm_cell(args):
 
 def build_graph_ri(args):
     tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',
-        'seq_y_data', 'seq_y_data_for_action', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
+        'seq_y_data', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
 
     sg_fields = ['step_h_state', 'step_last_state', 'step_label_probs', 'step_action_probs',
-        'step_action_samples', 'step_x_data', 'step_y_data_for_action', 'init_state', 'action_entropy', 'sample_y']
+        'step_action_samples', 'step_x_data', 'init_state', 'action_entropy']
 
     TrainGraph = namedtuple('TrainGraph', ' '.join(tg_fields))
     SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
@@ -45,7 +45,6 @@ def build_graph_ri(args):
         seq_x_data = tf.placeholder(tf.float32, shape=(None, None, args.n_input))
         seq_x_mask = tf.placeholder(tf.float32, shape=(None, None))
         seq_y_data = tf.placeholder(tf.int32, shape=(None, None))
-        seq_y_data_for_action = tf.placeholder(tf.int32, shape=(None,None))
         
         init_state = lstm_init_state(args)
 
@@ -54,12 +53,6 @@ def build_graph_ri(args):
         seq_action_mask = tf.placeholder(tf.float32, shape=(None, None))
         
         step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
-
-        embedding = tf.get_variable("embedding", [args.n_class, args.n_embedding], dtype=tf.float32)
-        step_y_data_for_action = tf.placeholder(tf.int32, shape=(None,), name='step_y_data_for_action')
-        seq_y_input = tf.nn.embedding_lookup(embedding, seq_y_data_for_action)
-
-        sample_y = tf.placeholder(tf.bool, name='sample_y')
        
     cell = tf.contrib.rnn.MultiRNNCell([lstm_cell(args) for _ in range(args.n_layer)])
 
@@ -76,15 +69,7 @@ def build_graph_ri(args):
     step_label_logits = _label_logit(step_h_state, 'label_logit')
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
 
-    step_y_input_answer = tf.nn.embedding_lookup(embedding, step_y_data_for_action)
-    step_y_1hot_pred = tf.argmax(step_label_probs, axis=-1)
-    step_y_input_pred = tf.nn.embedding_lookup(embedding, step_y_1hot_pred)
-    step_y_input = tf.where(sample_y, step_y_input_pred, step_y_input_answer)
-
-    if args.n_embedding > 0:
-        step_action_logits = _action_logit([step_h_state, step_y_input], 'action_logit')
-    else:
-        step_action_logits = _action_logit(step_h_state, 'action_logit')
+    step_action_logits = _action_logit(step_h_state, 'action_logit')
 
     step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
     step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
@@ -108,12 +93,7 @@ def build_graph_ri(args):
     seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
     seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
-    seq_y_input_2d = tf.reshape(seq_y_input[:,:-1:], [-1, args.n_embedding])
-
-    if args.n_embedding > 0:
-        seq_action_logits = _action_logit([seq_hid_2d_rl, seq_y_input_2d], 'action_logit')
-    else:
-        seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
+    seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
         
     seq_action_probs = tf.nn.softmax(seq_action_logits)
 
@@ -128,10 +108,10 @@ def build_graph_ri(args):
     rl_cost = -tf.reduce_sum(rl_cost*tf.reshape(seq_action_mask, [-1]))
 
     train_graph = TrainGraph(ml_cost, rl_cost, seq_x_data, seq_x_mask, 
-        seq_y_data, seq_y_data_for_action, init_state, seq_action, seq_advantage, seq_action_mask, pred_idx)
+        seq_y_data, init_state, seq_action, seq_advantage, seq_action_mask, pred_idx)
 
     sample_graph = SampleGraph(step_h_state, step_last_state, step_label_probs,
-        step_action_probs, step_action_samples, step_x_data, step_y_data_for_action, init_state, step_action_entropy, sample_y)
+        step_action_probs, step_action_samples, step_x_data, init_state, step_action_entropy)
 
     return train_graph, sample_graph
 
@@ -140,7 +120,6 @@ def build_graph_sv(args):
         'ml_cost rl_cost seq_x_data seq_x_mask seq_y_data seq_jump_data init_state pred_idx')
     TestGraph = namedtuple('TestGraph', 
         'step_h_state step_last_state step_label_probs step_action_probs step_pred_idx step_x_data init_state')
-
 
     with tf.device(args.device):
         # n_batch, n_seq, n_feat
