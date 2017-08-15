@@ -49,13 +49,12 @@ if __name__ == '__main__':
     np.random.seed(_seed)
 
     tg, test_graph = graph_builder.build_graph_sv(args)
-
-    tg_ml_cost = tf.reduce_mean(tg.ml_cost)
-
-    global_step = tf.Variable(0, trainable=False, name="global_step")
-
     tvars = tf.trainable_variables()
     print([tvar.name for tvar in tvars])
+    print("Model size: {:.2f}M".format(utils.get_model_size(tvars)))
+
+    tg_ml_cost = tf.reduce_mean(tg.ml_cost)
+    global_step = tf.Variable(0, trainable=False, name="global_step")
 
     ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr, beta1=0.9, beta2=0.99)
     rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr2, beta1=0.9, beta2=0.99)

@@ -33,14 +33,13 @@ if __name__ == '__main__':
     np.random.seed(_seed)
 
     tg, test_graph = graph_builder.build_graph_subsample(args)
-    tg_ml_cost = tf.reduce_mean(tg.ml_cost)
-
-    global_step = tf.Variable(0, trainable=False, name="global_step")
-
     tvars = tf.trainable_variables()
+    print([tvar.name for tvar in tvars])
+    print("Model size: {:.2f}M".format(utils.get_model_size(tvars)))
 
+    tg_ml_cost = tf.reduce_mean(tg.ml_cost)
+    global_step = tf.Variable(0, trainable=False, name="global_step")
     ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr, beta1=0.9, beta2=0.99)
-
     ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, tvars), clip_norm=1.0)
     ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
     

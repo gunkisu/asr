@@ -7,6 +7,7 @@ import subprocess
 import os, errno
 from collections import namedtuple
 
+import numpy as np
 from data.fuel_utils import create_ivector_datastream
 from libs.utils import sync_data
 
@@ -140,3 +141,7 @@ def symlink_force(target, link_name):
 
 def link_to_best_model(best_ckpt, args):
     symlink_force(os.path.abspath('{}.meta'.format(best_ckpt)), os.path.join(args.logdir, 'best_model.meta'))
+
+def get_model_size(trainable_variables):
+    return float(np.sum([np.prod(v.get_shape().as_list()) for v in trainable_variables])) / 1000000
+
