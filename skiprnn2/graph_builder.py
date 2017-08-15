@@ -17,10 +17,14 @@ def match_h(opname):
     return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/mul_2' in opname
 
 def lstm_cell(args):
-    if args.n_proj > 0:
-        return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, num_proj=args.n_proj, forget_bias=0.0)
+    if args.use_layer_norm: 
+        return tf.contrib.rnn.LayerNormBasicLSTMCell(num_units=args.n_hidden, forget_bias=0.0)
+
     else:
-        return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
+        if args.n_proj > 0:
+            return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, num_proj=args.n_proj, forget_bias=0.0)
+        else:
+            return tf.contrib.rnn.LSTMCell(num_units=args.n_hidden, forget_bias=0.0)
 
 def build_graph_ri(args):
     tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',

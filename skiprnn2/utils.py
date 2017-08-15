@@ -47,6 +47,7 @@ def get_argparser():
     parser.add_argument('--valid-dataset', default='test_dev93', help='Validation dataset')
     parser.add_argument('--test-dataset', default='test_eval92', help='Test dataset')
     parser.add_argument('--discount-gamma', default=0.99, type=float, help='Discount factor')
+    parser.add_argument('--use-layer-norm', action='store_true', help='Apply layer normalization')
     
     return parser
 

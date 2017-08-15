@@ -14,13 +14,10 @@ import tensorflow as tf
 from collections import OrderedDict
 from collections import namedtuple
 
-from mixer import gen_mask
-from mixer import insert_item2dict
-from mixer import save_npz2
 from mixer import gen_episode_with_seg_reward
 from mixer import LinearVF, compute_advantage2
 from mixer import categorical_ent, expand_output
-from mixer import lstm_state, gen_zero_state, feed_init_state
+from mixer import gen_zero_state, feed_init_state
 from model import LinearCell
 
 from data.fuel_utils import create_ivector_datastream
