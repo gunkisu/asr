@@ -211,20 +211,14 @@ def build_graph_subsample(args):
 
     # training graph
     seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
-    if args.n_delay > 0:
-        seq_hid_3d, _seq_y_data, _seq_x_mask = utils.delayed(seq_hid_3d, seq_y_data, seq_x_mask, args.n_delay)
-        
-    else:
-        _seq_y_data, _seq_x_mask = seq_y_data, seq_x_mask
-
     seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden if args.n_proj == 0 else args.n_proj])
 
     seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')   
-    y_1hot = tf.one_hot(tf.reshape(_seq_y_data, [-1]), depth=args.n_class)
+    y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=args.n_class)
 
     ml_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_label_logits, 
         labels=y_1hot)
-    ml_cost = tf.reduce_sum(ml_cost*tf.reshape(_seq_x_mask, [-1]))
+    ml_cost = tf.reduce_sum(ml_cost*tf.reshape(seq_x_mask, [-1]))
 
     pred_idx = tf.argmax(seq_label_logits, axis=1)
 

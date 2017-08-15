@@ -45,7 +45,6 @@ if __name__ == '__main__':
     
     tf.add_to_collection('n_skip', args.n_skip)
     tf.add_to_collection('n_hidden', args.n_hidden)
-    tf.add_to_collection('n_delay', args.n_delay)
 
     train_set, valid_set, test_set = utils.prepare_dataset(args)
 

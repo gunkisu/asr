@@ -370,7 +370,6 @@ class AlignmentPadding(Transformer):
 
         return data.values()
 
-
 class Reshape(Transformer):
     """Reshapes data in the stream according to shape source."""
 
