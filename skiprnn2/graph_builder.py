@@ -6,9 +6,13 @@ from collections import namedtuple
 from mixer import categorical_ent
 from model import LinearCell
 
-def lstm_state(n_hidden, layer):
+def lstm_state(n_hidden, layer, n_proj):
+    
     return tf.contrib.rnn.LSTMStateTuple(tf.placeholder(tf.float32, shape=(None, n_hidden), name='cstate_{}'.format(layer)), 
-        tf.placeholder(tf.float32, shape=(None, n_hidden), name='hstate_{}'.format(layer)))
+        tf.placeholder(tf.float32, shape=(None, n_hidden if n_proj == 0 else n_proj), name='hstate_{}'.format(layer)))
+
+def lstm_init_state(args):
+    return tuple( lstm_state(args.n_hidden, l, args.n_proj) for l in range(args.n_layer))
 
 def match_c(opname):
     return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/add_1' in opname
@@ -43,7 +47,7 @@ def build_graph_ri(args):
         seq_y_data = tf.placeholder(tf.int32, shape=(None, None))
         seq_y_data_for_action = tf.placeholder(tf.int32, shape=(None,None))
         
-        init_state = tuple( lstm_state(args.n_hidden, l) for l in range(args.n_layer))
+        init_state = lstm_init_state(args)
 
         seq_action = tf.placeholder(tf.float32, shape=(None, None, args.n_action))
         seq_advantage = tf.placeholder(tf.float32, shape=(None, None))
@@ -144,7 +148,7 @@ def build_graph_sv(args):
         seq_x_mask = tf.placeholder(dtype=tf.float32, shape=(None, None))
         seq_y_data = tf.placeholder(dtype=tf.int32, shape=(None, None))
 
-        init_state = tuple( lstm_state(args.n_hidden, l) for l in range(args.n_layer))
+        init_state = lstm_init_state(args)
 
         seq_jump_data = tf.placeholder(dtype=tf.int32, shape=(None, None))
 
@@ -216,7 +220,7 @@ def build_graph_subsample(args):
         seq_x_mask = tf.placeholder(dtype=tf.float32, shape=(None, None), name='seq_x_mask')
         seq_y_data = tf.placeholder(dtype=tf.int32, shape=(None, None))
 
-        init_state = tuple( lstm_state(args.n_hidden, l) for l in range(args.n_layer))
+        init_state = lstm_init_state(args)
 
         step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
 
@@ -228,7 +232,7 @@ def build_graph_subsample(args):
 
     # training graph
     seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
-    seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden])
+    seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden if args.n_proj == 0 else args.n_proj])
 
     seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')   
 
