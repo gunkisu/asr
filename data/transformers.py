@@ -167,19 +167,15 @@ class DelayTransformer(Transformer):
         trans_data = []
 
         feat = batch[self._idx('features')]
-        new_feat = self._delayed_feat(feat)
+        trans_data.append(self._delayed_feat(feat))
 
         ivectors = batch[self._idx('ivectors')]
-        new_ivectors = self._delayed_feat(ivectors)
+        trans_data.append(self._delayed_feat(ivectors))
         
         targets = batch[self._idx('targets')]
-        new_targets = self._delayed_targets(targets)
-        
-        batch[self._idx('features')] = new_feat
-        batch[self._idx('ivectors')] = new_ivectors
-        batch[self._idx('targets')] = new_targets
+        trans_data.append(self._delayed_targets(targets))
 
-        return batch
+        return trans_data
 
 class FrameSkipTransformer(Transformer):
     '''Skip some of the elements'''
