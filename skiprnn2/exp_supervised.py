@@ -179,7 +179,6 @@ if __name__ == '__main__':
                 best_ckpt = best_save_op.save(sess, os.path.join(args.logdir, "best_model.ckpt"), 
                     global_step=global_step)
                 print("Best checkpoint stored in: %s" % best_ckpt)
-                utils.link_to_best_model(best_ckpt, args)
             ckpt = save_op.save(sess, os.path.join(args.logdir, "model.ckpt"), global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
 
