@@ -5,6 +5,8 @@ import socket
 import tensorflow as tf
 import subprocess
 import os, errno
+import glob
+import re
 from collections import namedtuple
 
 import numpy as np
@@ -52,7 +54,7 @@ def get_argparser():
     return parser
 
 def get_forward_argparser():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     add_general_args(parser)
     add_datapath_args(parser)    
@@ -146,3 +148,22 @@ def get_model_size(trainable_variables):
 
 def delayed(output, seq_y_data, seq_x_mask, delay):
     return output[:,delay:,:], seq_y_data[:,delay:], seq_x_mask[:,delay:]
+
+
+def find_model(metafile):
+    if os.path.isdir(metafile):
+        model_list = glob.glob(os.path.join(metafile, 'best_model.ckpt*meta*'))
+        pat = re.compile('ckpt-(\d+).meta')
+
+        tmp_model_list = []
+        for model in model_list:
+            m = pat.search(model)
+            if m:
+                tmp_model_list.append((int(m.group(1)), model))
+
+        tmp_model_list.sort(reverse=True)
+        iter_no, model = tmp_model_list[0]
+        return model
+    else:
+        return metafile
+        
