@@ -9,6 +9,7 @@ source ./path.sh
 dir=$1
 model=$2
 forward=$3
+dataset=$4
 
 # skiprnn trained by reinforce
 #dir=exp/hyperud/decode_bd_tgpr_dev93_skiprnn_ri_a6_fa20
@@ -28,5 +29,5 @@ forward=$3
 n_batch=1
 
 mkdir $dir
-python -u $forward --n-batch $n_batch --metafile $model --no-copy | latgen-faster-mapped --min-active=200 --max-active=7000 --max-mem=50000000 --beam=13.0 --lattice-beam=8.0 --acoustic-scale=0.1 --word-symbol-table=exp/tri4b/graph_bd_tgpr/words.txt exp/hyperud/final.mdl exp/tri4b/graph_bd_tgpr/HCLG.fst ark:- "ark:|gzip -c > $dir/lat.1.gz"
+python -u $forward --n-batch $n_batch --metafile $model --dataset $dataset --no-copy | latgen-faster-mapped --min-active=200 --max-active=7000 --max-mem=50000000 --beam=13.0 --lattice-beam=8.0 --acoustic-scale=0.1 --word-symbol-table=exp/tri4b/graph_bd_tgpr/words.txt exp/hyperud/final.mdl exp/tri4b/graph_bd_tgpr/HCLG.fst ark:- "ark:|gzip -c > $dir/lat.1.gz"
 
