@@ -37,8 +37,9 @@ if __name__ == '__main__':
     with tf.Session() as sess:
 
         print('Loading model...', file=sys.stderr)
-        save_op = tf.train.import_meta_graph(args.metafile)
-        save_op.restore(sess, args.metafile[:-5])
+        model = utils.find_model(args.metafile)
+        save_op = tf.train.import_meta_graph(model)
+        save_op.restore(sess, model[:-5])
 
         writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 
