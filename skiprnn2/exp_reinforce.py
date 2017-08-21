@@ -51,8 +51,8 @@ if __name__ == '__main__':
     tg_ml_cost = tf.reduce_mean(tg.ml_cost)
     global_step = tf.Variable(0, trainable=False, name="global_step")
     
-    ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr, beta1=0.9, beta2=0.99)
-    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr2, beta1=0.9, beta2=0.99)
+    ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr)
+    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr2)
 
     ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, tvars), clip_norm=1.0)
     ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
@@ -189,7 +189,8 @@ if __name__ == '__main__':
                 _best_score = avg_fer
                 best_ckpt = best_save_op.save(sess, os.path.join(args.logdir, "best_model.ckpt"), global_step=global_step)
                 print("Best checkpoint stored in: %s" % best_ckpt)
-                utils.link_to_best_model(best_ckpt, args)
+            else:
+
             ckpt = save_op.save(sess, os.path.join(args.logdir, "model.ckpt"), global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
 
