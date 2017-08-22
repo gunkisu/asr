@@ -545,7 +545,7 @@ def fill_aggr_reward(reward_list,
     return reward_target_indices
 
 def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
-        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, n_action, n_fast_action, use_prediction=False):
+        prev_step_idx_list, target_indices, reward_update_pos, ref_update_pos, args):
     reward_target_indices = []
 
     for idx in target_indices:
@@ -557,12 +557,12 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         action_size = cur_step_idx - prev_step_idx
 #        ref_labels = y[prev_step_idx:cur_step_idx, idx]
 
-        max_jump = n_fast_action if n_fast_action > 0 else n_action
+        max_jump = args.n_fast_action if args.n_fast_action > 0 else args.n_action
         ref_labels = y[prev_step_idx:prev_step_idx+max_jump, idx]
         
         match_count = 0
         miss_count = 0
-        if use_prediction:
+        if args.use_prediction:
             target_label = prev_pred_idx
         else:
             target_label = ref_labels[0]
@@ -571,7 +571,12 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
             if l == target_label: match_count += 1
             else: break
         
-        reward_list[reward_update_pos[idx], idx] = -abs(match_count - action_size)
+        diff = match_count - action_size
+        if diff > 0:
+            rw = -diff * args.alpha
+        else:
+            rw = diff
+        reward_list[reward_update_pos[idx], idx] = rw
         reward_target_indices.append(idx)
 
     return reward_target_indices
@@ -974,8 +979,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
             fill(new_y, _y_step, target_indices, update_pos)
 
             reward_target_indices = fill_seg_match_reward(rewards, y, j, 
-                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, 
-                args.n_action, args.n_fast_action, args.use_prediction)
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)
@@ -1008,8 +1012,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
             update_action_counters(action_counters, action_idx.flatten(), target_indices, args)
 
             reward_target_indices = fill_seg_match_reward(rewards, y, j,
-                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, 
-                args.n_action, args.n_fast_action, args.use_prediction)
+                prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args)
 
             advance_pos(update_pos, target_indices)
             advance_pos(reward_update_pos, reward_target_indices)

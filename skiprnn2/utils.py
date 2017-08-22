@@ -22,7 +22,7 @@ def add_datapath_args(parser):
 
 # Options shared by both training and testing
 def add_general_args(parser):
-    parser.add_argument('--n-batch', default=32, type=int, help='Size of mini-batch')
+    parser.add_argument('--n-batch', default=16, type=int, help='Size of mini-batch')
     parser.add_argument('--device', default='gpu', help='Simply set either `cpu` or `gpu`')
 
 def get_argparser():
@@ -34,15 +34,16 @@ def get_argparser():
     parser.add_argument('--lr', default=0.001, type=float, help='Initial learning rate')
     parser.add_argument('--lr2', default=0.001, type=float, help='Initial learning rate for RL')
     parser.add_argument('--factor', default=0.5, type=float, help='Learning rate scheduling factor')
-    parser.add_argument('--n-epoch', default=30, type=int, help='Maximum number of epochs')
+    parser.add_argument('--n-epoch', default=20, type=int, help='Maximum number of epochs')
     parser.add_argument('--display-freq', default=50, type=int, help='Display frequency')
     parser.add_argument('--n-input', default=123, type=int, help='Number of RNN hidden units')
-    parser.add_argument('--n-layer', default=4, type=int, help='Number of RNN hidden layers')
+    parser.add_argument('--n-layer', default=1, type=int, help='Number of RNN hidden layers')
     parser.add_argument('--n-hidden', default=512, type=int, help='Number of RNN hidden units')
     parser.add_argument('--n-proj', default=0, type=int, help='Number of hidden units in projection layers')
     parser.add_argument('--n-class', default=3436, type=int, help='Number of target symbols')
     parser.add_argument('--n-action', default=5, type=int, help='Number of actions (max skim size)')
     parser.add_argument('--n-fast-action', default=0, type=int, help='Number of steps to skip in the fast action mode')
+    parser.add_argument('--alpha', default=1.0, type=float, help='Panelty for excessive jumps with 1.0 being no panelty')
     parser.add_argument('--base-seed', default=20170309, type=int, help='Base random seed') 
     parser.add_argument('--add-seed', default=0, type=int, help='Add this amount to the base random seed')
     parser.add_argument('--logdir', default='skiprnn_test', help='Directory path to files')
@@ -173,4 +174,13 @@ def reduce_lr(lr, factor, sess):
         assign_op = tf.assign(lr, lr * factor)
         sess.run(assign_op)
 
-
+def win_iter(batch, win_size, right_context=0):
+    n_seq = batch[0].shape[1]
+    
+    for i in range(0, n_seq, win_size):
+        from_idx = i
+        to_idx = i+win_size+right_context
+        
+        yield (src[:,from_idx:to_idx] for src in batch)
+   
+    return
