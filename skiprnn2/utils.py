@@ -37,11 +37,11 @@ def get_argparser():
     parser.add_argument('--n-epoch', default=30, type=int, help='Maximum number of epochs')
     parser.add_argument('--display-freq', default=50, type=int, help='Display frequency')
     parser.add_argument('--n-input', default=123, type=int, help='Number of RNN hidden units')
-    parser.add_argument('--n-layer', default=1, type=int, help='Number of RNN hidden layers')
-    parser.add_argument('--n-hidden', default=1024, type=int, help='Number of RNN hidden units')
+    parser.add_argument('--n-layer', default=4, type=int, help='Number of RNN hidden layers')
+    parser.add_argument('--n-hidden', default=512, type=int, help='Number of RNN hidden units')
     parser.add_argument('--n-proj', default=0, type=int, help='Number of hidden units in projection layers')
     parser.add_argument('--n-class', default=3436, type=int, help='Number of target symbols')
-    parser.add_argument('--n-action', default=6, type=int, help='Number of actions (max skim size)')
+    parser.add_argument('--n-action', default=5, type=int, help='Number of actions (max skim size)')
     parser.add_argument('--n-fast-action', default=0, type=int, help='Number of steps to skip in the fast action mode')
     parser.add_argument('--base-seed', default=20170309, type=int, help='Base random seed') 
     parser.add_argument('--add-seed', default=0, type=int, help='Add this amount to the base random seed')
@@ -169,7 +169,8 @@ def find_model(metafile):
         return metafile
 
 def reduce_lr(lr, factor, sess):
-    assign_op = tf.assign(lr, lr * factor)
-    sess.run(assign_op)
+    if factor < 1.0:
+        assign_op = tf.assign(lr, lr * factor)
+        sess.run(assign_op)
 
 
