@@ -108,7 +108,7 @@ if __name__ == '__main__':
                     for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
 
                 if global_step.eval() % args.display_freq == 0:
-                    print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.2f} compression={:.2f} time_taken={:.2f}".format(
+                    print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.3f} compression={:.2f} time_taken={:.2f}".format(
                             _epoch, global_step.eval(), ce.avg(), cr.avg(), disp_sw.elapsed()))
                     for accu in accu_list: accu.reset()                    
                     disp_sw.reset()
@@ -146,7 +146,7 @@ if __name__ == '__main__':
                     ac.add(((pred_idx == orig_y) * orig_x_mask).sum(), orig_count)
 
             avg_fer = 1-ac.avg()
-            print("VALID: epoch={} ml_cost(ce/frame)={:.2f} fer={:.2f} compression={:.2f} time_taken={:.2f}".format(
+            print("VALID: epoch={} ml_cost(ce/frame)={:.3f} fer={:.3f} compression={:.2f} time_taken={:.2f}".format(
                     _epoch, ce.avg(), avg_fer, cr.avg(), eval_sw.elapsed()))
 
             summaries = sess.run([s.s for s in val_summary],
