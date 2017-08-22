@@ -159,9 +159,6 @@ if __name__ == '__main__':
                 _best_score = avg_fer
                 best_ckpt = best_save_op.save(sess, os.path.join(args.logdir, "best_model.ckpt"), global_step=global_step)
                 print("Best checkpoint stored in: %s" % best_ckpt)
-            else:
-                utils.reduce_lr(lr, args.factor, sess)
-                print("Learning rate for ML reduced to {}".format(lr.eval()))
 
             ckpt = save_op.save(sess, os.path.join(args.logdir, "model.ckpt"), global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
