@@ -50,9 +50,11 @@ if __name__ == '__main__':
     
     tg_ml_cost = tf.reduce_mean(tg.ml_cost)
     global_step = tf.Variable(0, trainable=False, name="global_step")
+    lr = tf.Variable(args.lr, trainable=False, name="lr")
+    lr2 = tf.Variable(args.lr2, trainable=False, name="lr2")
     
-    ml_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr)
-    rl_opt_func = tf.train.AdamOptimizer(learning_rate=args.lr2)
+    ml_opt_func = tf.train.AdamOptimizer(learning_rate=lr)
+    rl_opt_func = tf.train.AdamOptimizer(learning_rate=lr2)
 
     ml_grads, _ = tf.clip_by_global_norm(tf.gradients(tg_ml_cost, tvars), clip_norm=1.0)
     ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
@@ -190,7 +192,11 @@ if __name__ == '__main__':
                 best_ckpt = best_save_op.save(sess, os.path.join(args.logdir, "best_model.ckpt"), global_step=global_step)
                 print("Best checkpoint stored in: %s" % best_ckpt)
             else:
-
+                utils.reduce_lr(lr, args.factor, sess)
+                print("Learning rate for ML reduced to {}".format(lr.eval()))
+                utils.reduce_lr(lr2, args.factor, sess)
+                print("Learning rate for RL reduced to {}".format(lr2.eval()))
+                
             ckpt = save_op.save(sess, os.path.join(args.logdir, "model.ckpt"), global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
 
