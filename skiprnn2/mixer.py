@@ -637,9 +637,14 @@ def advance_pos(update_pos, target_indices):
     for i in target_indices:
         update_pos[i] += 1
 
-def update_prev_state(prev_state, new_prev_state, target_indices):
-    for ps, i in zip(new_prev_state, target_indices):
-        prev_state[i] = ps
+def update_prev_state(prev_state, new_prev_state, target_indices=None):
+    if target_indices:
+        for ps, i in zip(new_prev_state, target_indices):
+            prev_state[i] = ps
+    else:
+        for i, ps in enumerate(new_prev_state):
+            prev_state[i] = ps
+
 
 def update_action_counters2(action_counters, action_idx, target_indices, n_action, n_fast_action):
     new_ac = list(action_counters)

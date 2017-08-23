@@ -176,11 +176,14 @@ def reduce_lr(lr, factor, sess):
 
 def win_iter(batch, win_size, right_context=0):
     n_seq = batch[0].shape[1]
-    
-    for i in range(0, n_seq, win_size):
-        from_idx = i
-        to_idx = i+win_size+right_context
-        
-        yield (src[:,from_idx:to_idx] for src in batch)
+
+    if win_size == 0:
+        yield batch
+    else:
+        for i in range(0, n_seq, win_size):
+            from_idx = i
+            to_idx = i+win_size+right_context
+            
+            yield (src[:,from_idx:to_idx] for src in batch)
    
-    return
+

@@ -7,13 +7,22 @@ from mixer import categorical_ent
 from model import LinearCell
 import utils
 
-def lstm_state(n_hidden, layer, n_proj):
-    
-    return tf.contrib.rnn.LSTMStateTuple(tf.placeholder(tf.float32, shape=(None, n_hidden), name='cstate_{}'.format(layer)), 
-        tf.placeholder(tf.float32, shape=(None, n_hidden if n_proj == 0 else n_proj), name='hstate_{}'.format(layer)))
+def lstm_state(n_hidden, layer, n_proj, backward=False):
+    c_name = 'cstate_{}'.format(layer)
+    if backward:
+        c_name = '{}_bw'.format(c_name)
 
-def lstm_init_state(args):
-    return tuple( lstm_state(args.n_hidden, l, args.n_proj) for l in range(args.n_layer))
+    h_name = 'hstate_{}'.format(layer)
+    if backward:
+        h_name = '{}_bw'.format(h_name)
+
+    c = tf.placeholder(tf.float32, shape=(None, n_hidden), name=c_name)
+    h = tf.placeholder(tf.float32, shape=(None, n_hidden if n_proj == 0 else n_proj), name=h_name)
+
+    return tf.contrib.rnn.LSTMStateTuple(c, h)
+
+def lstm_init_state(args, backward=False):
+    return tuple( lstm_state(args.n_hidden, l, args.n_proj, backward) for l in range(args.n_layer))
 
 def match_c(opname):
     return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/add_1' in opname
@@ -234,3 +243,47 @@ def build_graph_subsample(args):
     test_graph = TestGraph(step_x_data, init_state, step_last_state, step_label_probs)
 
     return train_graph, test_graph
+
+def build_graph_subsample_tbptt(args):
+    TrainGraph = namedtuple('TrainGraph', 
+        'ml_cost seq_x_data seq_x_mask seq_y_data ' + \
+        'init_state_fw init_state_bw pred_idx seq_label_probs ' + \
+        'output_state_fw output_state_bw outputs')
+    
+    with tf.device(args.device):
+        # n_batch, n_seq, n_feat
+        seq_x_data = tf.placeholder(dtype=tf.float32, shape=(None, None, args.n_input), name='seq_x_data')
+        seq_x_mask = tf.placeholder(dtype=tf.float32, shape=(None, None), name='seq_x_mask')
+        seq_y_data = tf.placeholder(dtype=tf.int32, shape=(None, None))
+
+        init_state_fw = lstm_init_state(args, backward=False)
+        init_state_bw = lstm_init_state(args, backward=True)
+
+    with tf.variable_scope('rnn'):
+        cells_fw = [lstm_cell(args) for _ in range(args.n_layer)]
+        cells_bw = [lstm_cell(args) for _ in range(args.n_layer)]
+
+    with tf.variable_scope('label'):
+        _label_logit = LinearCell(num_units=args.n_class)
+
+    outputs, output_state_fw, output_state_bw = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(
+        cells_fw, cells_bw, seq_x_data, init_state_fw, init_state_bw, scope='rnn')
+    # outputs: n_batch, n_seq, n_hidden * 2
+    
+    seq_hid_2d = tf.reshape(outputs, [-1, args.n_hidden * 2 if args.n_proj == 0 else args.n_proj * 2])
+
+    seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')   
+    y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=args.n_class)
+
+    ml_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_label_logits, 
+        labels=y_1hot)
+    ml_cost = tf.reduce_sum(ml_cost*tf.reshape(seq_x_mask, [-1]))
+
+    pred_idx = tf.argmax(seq_label_logits, axis=1)
+
+    seq_label_probs = tf.nn.softmax(seq_label_logits, name='seq_label_probs')
+
+    train_graph = TrainGraph(ml_cost, seq_x_data, seq_x_mask, seq_y_data, init_state_fw, init_state_bw, 
+        pred_idx, seq_label_probs, output_state_fw, output_state_bw, outputs)
+
+    return train_graph

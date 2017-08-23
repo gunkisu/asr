@@ -11,6 +11,7 @@ from mixer import gen_zero_state, feed_init_state
 
 from data.fuel_utils import create_ivector_datastream
 from libs.utils import sync_data, skip_frames_fixed, StopWatch
+import mixer
 
 from utils import Accumulator
 import utils
@@ -21,6 +22,8 @@ if __name__ == '__main__':
 
     parser = utils.get_argparser()
     parser.add_argument('--n-skip', default=1, type=int, help='Number of frames to skip')
+    parser.add_argument('--n-step', default=20, type=int, help='Truncated BPTT steps')
+
     args = parser.parse_args()
     print(args)
     utils.prepare_dir(args)
@@ -32,7 +35,7 @@ if __name__ == '__main__':
     tf.set_random_seed(_seed)
     np.random.seed(_seed)
 
-    tg, test_graph = graph_builder.build_graph_subsample(args)
+    tg = graph_builder.build_graph_subsample_tbptt(args)
     tvars = tf.trainable_variables()
     print([tvar.name for tvar in tvars])
     print("Model size: {:.2f}M".format(utils.get_model_size(tvars)))
@@ -86,26 +89,39 @@ if __name__ == '__main__':
             # For each batch 
             for batch in train_set.get_epoch_iterator():
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
-                 
+
                 for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1):
-                    x, x_mask, y = sub_batch
-                    n_batch, _, _ = x.shape
+                    n_batch = sub_batch[0].shape[0] # add batch size
                     _n_exp += n_batch
 
-                    zero_state = gen_zero_state(n_batch, args.n_hidden)
+                    prev_state_fw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
+                    prev_state_bw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
 
-                    feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask, tg.seq_y_data: y}
-                    feed_init_state(feed_dict, tg.init_state, zero_state)
+                    for win_idx, win in enumerate(utils.win_iter(sub_batch, args.n_step), start=1):
+                        x, x_mask, y = win
 
-                    ml_cost, _ = sess.run([tg.ml_cost, ml_op], feed_dict=feed_dict)
-                    orig_count, comp_count = orig_x_mask.sum(), x_mask.sum()
-                    
-                    ce.add(ml_cost.sum(), comp_count)
-                    cr.add(float(comp_count)/orig_count, 1)
+                        feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask, tg.seq_y_data: y}
 
-                    summaries = sess.run([s.s for s in tr_summary],
-                        feed_dict={tr_summary.ce.ph: ce.last_avg(), tr_summary.cr.ph: cr.avg()})
-                    for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
+                        mixer.feed_prev_state(feed_dict, tg.init_state_fw, prev_state_fw)
+                        mixer.feed_prev_state(feed_dict, tg.init_state_bw, prev_state_bw)
+
+                        ml_cost, output_state_fw, output_state_bw, _ = \
+                            sess.run([tg.ml_cost, tg.output_state_fw, tg.output_state_bw, ml_op], feed_dict=feed_dict)
+
+                        output_state_fw = np.transpose(np.asarray(output_state_fw), [2,0,1,3])
+                        output_state_bw = np.transpose(np.asarray(output_state_bw), [2,0,1,3])
+
+                        mixer.update_prev_state(prev_state_fw, output_state_fw)
+                        mixer.update_prev_state(prev_state_bw, output_state_bw)
+
+                        orig_count, comp_count = orig_x_mask.sum(), x_mask.sum()
+                        
+                        ce.add(ml_cost.sum(), comp_count)
+                        cr.add(float(comp_count)/orig_count, 1)
+
+                        summaries = sess.run([s.s for s in tr_summary],
+                            feed_dict={tr_summary.ce.ph: ce.last_avg(), tr_summary.cr.ph: cr.avg()})
+                        for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
 
                 if global_step.eval() % args.display_freq == 0:
                     print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.3f} compression={:.2f} time_taken={:.2f}".format(
