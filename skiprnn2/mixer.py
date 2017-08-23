@@ -573,9 +573,9 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         
         diff = match_count - action_size
         if diff > 0:
-            rw = -diff * args.alpha
+            rw = -diff 
         else:
-            rw = diff
+            rw = diff * args.alpha
         reward_list[reward_update_pos[idx], idx] = rw
         reward_target_indices.append(idx)
 
