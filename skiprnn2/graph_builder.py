@@ -266,8 +266,9 @@ def build_graph_subsample_tbptt(args):
     with tf.variable_scope('label'):
         _label_logit = LinearCell(num_units=args.n_class)
 
+    seq_lengths = tf.reduce_sum(tf.to_int32(seq_x_mask), 1)
     outputs, output_state_fw, output_state_bw = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(
-        cells_fw, cells_bw, seq_x_data, init_state_fw, init_state_bw, scope='rnn')
+        cells_fw, cells_bw, seq_x_data, init_state_fw, init_state_bw, sequence_length=seq_lengths, scope='rnn')
     # outputs: n_batch, n_seq, n_hidden * 2
     
     seq_hid_2d = tf.reshape(outputs, [-1, args.n_hidden * 2 if args.n_proj == 0 else args.n_proj * 2])
