@@ -165,7 +165,6 @@ if __name__ == '__main__':
                         output_state_fw = np.transpose(np.asarray(output_state_fw), [2,0,1,3])
 
                         mixer.update_prev_state(prev_state_fw, output_state_fw)
-                        mixer.update_prev_state(prev_state_bw, output_state_bw)
 
                         pred_idx_list.append(pred_idx)
                         
