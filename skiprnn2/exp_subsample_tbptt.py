@@ -110,8 +110,6 @@ if __name__ == '__main__':
                             sess.run([tg.ml_cost, tg.output_state_fw, tg.output_state_bw, ml_op], feed_dict=feed_dict)
 
                         output_state_fw = np.transpose(np.asarray(output_state_fw), [2,0,1,3])
-                        output_state_bw = np.transpose(np.asarray(output_state_bw), [2,0,1,3])
-
                         mixer.update_prev_state(prev_state_fw, output_state_fw)
 
                         ce.add(ml_cost.sum(), x_mask.sum())
@@ -163,16 +161,15 @@ if __name__ == '__main__':
                             sess.run([tg.ml_cost, tg.pred_idx, tg.output_state_fw, tg.output_state_bw], feed_dict=feed_dict)
 
                         output_state_fw = np.transpose(np.asarray(output_state_fw), [2,0,1,3])
-
                         mixer.update_prev_state(prev_state_fw, output_state_fw)
-
-                        pred_idx_list.append(pred_idx)
+                       
+                        pred_idx_list.append(pred_idx.reshape([n_batch, -1]))
                         
                         ce.add(ml_cost.sum(), x_mask.sum())
                     
                     _, n_seq = orig_y.shape
                     pred_idx = np.concatenate(pred_idx_list, axis=-1)
-                    pred_idx = pred_idx.reshape([n_batch, -1]).repeat(args.n_skip+1, axis=1)
+                    pred_idx = pred_idx.repeat(args.n_skip+1, axis=1)
                     pred_idx = pred_idx[:,:n_seq]
 
                     orig_count, comp_count = orig_x_mask.sum(), skip_x_mask.sum()
