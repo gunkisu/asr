@@ -25,10 +25,16 @@ def lstm_init_state(args, backward=False):
     return tuple( lstm_state(args.n_hidden, l, args.n_proj, backward) for l in range(args.n_layer))
 
 def match_c(opname):
-    return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/add_1' in opname
+    return 'rnn/multi_rnn_cell/cell' in opname and opname.endswith('lstm_cell/add_1')
 
 def match_h(opname):
-    return 'rnn/multi_rnn_cell/cell' in opname and 'lstm_cell/mul_2' in opname
+    return 'rnn/multi_rnn_cell/cell' in opname and opname.endswith('lstm_cell/mul_2')
+
+def match_c_fw(opname):
+    return 'bidirectional_rnn/fw' in opname and opname.endswith('Exit_2')
+
+def match_h_fw(opname):
+    return 'bidirectional_rnn/fw' in opname and opname.endswith('Exit_3')
 
 def lstm_cell(args):
     if args.use_layer_norm: 
@@ -270,7 +276,7 @@ def build_graph_subsample_tbptt(args):
     outputs, output_state_fw, output_state_bw = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(
         cells_fw, cells_bw, seq_x_data, init_state_fw, init_state_bw, sequence_length=seq_lengths, scope='rnn')
     # outputs: n_batch, n_seq, n_hidden * 2
-    
+
     seq_hid_2d = tf.reshape(outputs, [-1, args.n_hidden * 2 if args.n_proj == 0 else args.n_proj * 2])
 
     seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')   

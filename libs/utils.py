@@ -258,6 +258,29 @@ def skip_frames_fixed(batch, every_n, return_first=False):
             new_batch.append(np.asarray(new_src_data))
         yield new_batch
 
+def skip_frames_fixed2(batch, every_n, return_first=False):
+    assert every_n > 0
+
+    if every_n == 1:
+        return batch
+
+    if return_first:
+        start_idx = 0
+    else:
+        start_idx = random.randint(0, every_n-1)
+
+    new_batch = []
+
+    for src_data in batch:
+        new_src_data = []
+        for ex in src_data:
+            new_src_data.append(ex[start_idx::every_n])
+
+        new_batch.append(np.asarray(new_src_data))
+
+    return new_batch
+
+
 def skip_frames_random(batch, every_n):
     new_batch = []
 

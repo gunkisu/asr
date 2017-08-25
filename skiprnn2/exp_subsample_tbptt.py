@@ -10,7 +10,7 @@ from itertools import islice
 from mixer import gen_zero_state, feed_init_state
 
 from data.fuel_utils import create_ivector_datastream
-from libs.utils import sync_data, skip_frames_fixed, StopWatch
+from libs.utils import sync_data, skip_frames_fixed2, StopWatch
 import mixer
 
 from utils import Accumulator
@@ -51,6 +51,9 @@ if __name__ == '__main__':
     
     tf.add_to_collection('n_skip', args.n_skip)
     tf.add_to_collection('n_hidden', args.n_hidden)
+    tf.add_to_collection('n_step', args.n_step)
+    tf.add_to_collection('n_layer', args.n_layer)
+    tf.add_to_collection('n_class', args.n_class)
 
     train_set, valid_set, test_set = utils.prepare_dataset(args)
 
@@ -90,36 +93,36 @@ if __name__ == '__main__':
             for batch in train_set.get_epoch_iterator():
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
 
-                for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1):
-                    skip_x, skip_x_mask, skip_y = sub_batch
-                    n_batch = skip_x.shape[0] # add batch size
-                    _n_exp += n_batch
+                sub_batch = skip_frames_fixed2([orig_x, orig_x_mask, orig_y], args.n_skip+1)
+                skip_x, skip_x_mask, skip_y = sub_batch
+                n_batch = skip_x.shape[0] # add batch size
+                _n_exp += n_batch
 
-                    prev_state_fw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
-                    prev_state_bw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
+                prev_state_fw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
+                prev_state_bw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
 
-                    for win_idx, win in enumerate(utils.win_iter(sub_batch, args.n_step), start=1):
-                        x, x_mask, y = win
+                for win_idx, win in enumerate(utils.win_iter(sub_batch, args.n_step), start=1):
+                    x, x_mask, y = win
 
-                        feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask, tg.seq_y_data: y}
+                    feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask, tg.seq_y_data: y}
 
-                        mixer.feed_prev_state(feed_dict, tg.init_state_fw, prev_state_fw)
-                        mixer.feed_prev_state(feed_dict, tg.init_state_bw, prev_state_bw)
+                    mixer.feed_prev_state(feed_dict, tg.init_state_fw, prev_state_fw)
+                    mixer.feed_prev_state(feed_dict, tg.init_state_bw, prev_state_bw)
+                    
+                    ml_cost, output_state_fw, _ = \
+                        sess.run([tg.ml_cost, tg.output_state_fw, ml_op], feed_dict=feed_dict)
 
-                        ml_cost, output_state_fw, output_state_bw, _ = \
-                            sess.run([tg.ml_cost, tg.output_state_fw, tg.output_state_bw, ml_op], feed_dict=feed_dict)
+                    output_state_fw = np.transpose(np.asarray(output_state_fw), [2,0,1,3])
+                    mixer.update_prev_state(prev_state_fw, output_state_fw)
 
-                        output_state_fw = np.transpose(np.asarray(output_state_fw), [2,0,1,3])
-                        mixer.update_prev_state(prev_state_fw, output_state_fw)
+                    ce.add(ml_cost.sum(), x_mask.sum())
+     
+                orig_count, comp_count = orig_x_mask.sum(), skip_x_mask.sum()
+                cr.add(float(comp_count)/orig_count, 1)
 
-                        ce.add(ml_cost.sum(), x_mask.sum())
-         
-                    orig_count, comp_count = orig_x_mask.sum(), skip_x_mask.sum()
-                    cr.add(float(comp_count)/orig_count, 1)
-
-                    summaries = sess.run([s.s for s in tr_summary],
-                        feed_dict={tr_summary.ce.ph: ce.last_avg(), tr_summary.cr.ph: cr.avg()})
-                    for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
+                summaries = sess.run([s.s for s in tr_summary],
+                    feed_dict={tr_summary.ce.ph: ce.last_avg(), tr_summary.cr.ph: cr.avg()})
+                for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
 
                 if global_step.eval() % args.display_freq == 0:
                     print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.3f} compression={:.2f} time_taken={:.2f}".format(
@@ -139,43 +142,43 @@ if __name__ == '__main__':
             for batch in valid_set.get_epoch_iterator():
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
                  
-                for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1, return_first=True):
-                    skip_x, skip_x_mask, skip_y = sub_batch
-                    n_batch = skip_x.shape[0] # add batch size
-                    _n_exp += n_batch
+                sub_batch = skip_frames_fixed2([orig_x, orig_x_mask, orig_y], args.n_skip+1, return_first=True)
+                skip_x, skip_x_mask, skip_y = sub_batch
+                n_batch = skip_x.shape[0] # add batch size
+                _n_exp += n_batch
 
-                    prev_state_fw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
-                    prev_state_bw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
+                prev_state_fw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
+                prev_state_bw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
 
-                    pred_idx_list = []
+                pred_idx_list = []
 
-                    for win_idx, win in enumerate(utils.win_iter(sub_batch, args.n_step), start=1):
-                        x, x_mask, y = win
+                for win_idx, win in enumerate(utils.win_iter(sub_batch, args.n_step), start=1):
+                    x, x_mask, y = win
 
-                        feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask, tg.seq_y_data: y}
+                    feed_dict={tg.seq_x_data: x, tg.seq_x_mask: x_mask, tg.seq_y_data: y}
 
-                        mixer.feed_prev_state(feed_dict, tg.init_state_fw, prev_state_fw)
-                        mixer.feed_prev_state(feed_dict, tg.init_state_bw, prev_state_bw)
+                    mixer.feed_prev_state(feed_dict, tg.init_state_fw, prev_state_fw)
+                    mixer.feed_prev_state(feed_dict, tg.init_state_bw, prev_state_bw)
 
-                        ml_cost, pred_idx, output_state_fw, output_state_bw = \
-                            sess.run([tg.ml_cost, tg.pred_idx, tg.output_state_fw, tg.output_state_bw], feed_dict=feed_dict)
+                    ml_cost, pred_idx, output_state_fw = \
+                        sess.run([tg.ml_cost, tg.pred_idx, tg.output_state_fw], feed_dict=feed_dict)
 
-                        output_state_fw = np.transpose(np.asarray(output_state_fw), [2,0,1,3])
-                        mixer.update_prev_state(prev_state_fw, output_state_fw)
-                       
-                        pred_idx_list.append(pred_idx.reshape([n_batch, -1]))
-                        
-                        ce.add(ml_cost.sum(), x_mask.sum())
+                    output_state_fw = np.transpose(np.asarray(output_state_fw), [2,0,1,3])
+                    mixer.update_prev_state(prev_state_fw, output_state_fw)
+                   
+                    pred_idx_list.append(pred_idx.reshape([n_batch, -1]))
                     
-                    _, n_seq = orig_y.shape
-                    pred_idx = np.concatenate(pred_idx_list, axis=-1)
-                    pred_idx = pred_idx.repeat(args.n_skip+1, axis=1)
-                    pred_idx = pred_idx[:,:n_seq]
+                    ce.add(ml_cost.sum(), x_mask.sum())
+                
+                _, n_seq = orig_y.shape
+                pred_idx = np.concatenate(pred_idx_list, axis=-1)
+                pred_idx = pred_idx.repeat(args.n_skip+1, axis=1)
+                pred_idx = pred_idx[:,:n_seq]
 
-                    orig_count, comp_count = orig_x_mask.sum(), skip_x_mask.sum()
+                orig_count, comp_count = orig_x_mask.sum(), skip_x_mask.sum()
 
-                    cr.add(float(comp_count)/orig_count, 1)
-                    ac.add(((pred_idx == orig_y) * orig_x_mask).sum(), orig_count)
+                cr.add(float(comp_count)/orig_count, 1)
+                ac.add(((pred_idx == orig_y) * orig_x_mask).sum(), orig_count)
 
             avg_fer = 1-ac.avg()
             print("VALID: epoch={} ml_cost(ce/frame)={:.3f} fer={:.3f} compression={:.2f} time_taken={:.2f}".format(
