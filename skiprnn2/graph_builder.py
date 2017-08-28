@@ -52,7 +52,7 @@ def build_graph_ri(args):
         'seq_y_data', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
 
     sg_fields = ['step_h_state', 'step_last_state', 'step_label_probs', 'step_action_probs',
-        'step_action_samples', 'step_x_data', 'init_state', 'action_entropy']
+        'step_action_samples', 'step_x_data', 'init_state', 'action_entropy', 'step_pred_idx']
 
     TrainGraph = namedtuple('TrainGraph', ' '.join(tg_fields))
     SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
@@ -85,6 +85,8 @@ def build_graph_ri(args):
     # no need to do stop_gradient because training is not done for the sampling graph
     step_label_logits = tf.layers.dense(step_h_state, args.n_class, name='label_logit')
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
+
+    step_pred_idx = tf.argmax(step_label_logits, axis=1)
 
     step_action_logits = tf.layers.dense(step_h_state, args.n_action, name='action_logit')
 
@@ -128,7 +130,7 @@ def build_graph_ri(args):
         seq_y_data, init_state, seq_action, seq_advantage, seq_action_mask, pred_idx)
 
     sample_graph = SampleGraph(step_h_state, step_last_state, step_label_probs,
-        step_action_probs, step_action_samples, step_x_data, init_state, step_action_entropy)
+        step_action_probs, step_action_samples, step_x_data, init_state, step_action_entropy, step_pred_idx)
 
     return train_graph, sample_graph
 

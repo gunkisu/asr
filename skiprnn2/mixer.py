@@ -243,9 +243,9 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         
         diff = match_count - action_size
         if diff > 0:
-            rw = -diff 
+            rw = -diff * args.speed_weight
         else:
-            rw = diff * args.alpha
+            rw = diff
         reward_list[reward_update_pos[idx], idx] = rw - 1 # shifting
         reward_target_indices.append(idx)
 
@@ -365,6 +365,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
 
     new_x = np.zeros([max_seq_len, n_batch, n_feat])
     new_y = np.zeros([max_seq_len, n_batch])
+    pred_idx = np.zeros([max_seq_len, n_batch], dtype=np.int32)
     actions = np.zeros([max_seq_len-1, n_batch, args.n_action])
     rewards = np.zeros([max_seq_len-1, n_batch])
     action_entropies = np.zeros([max_seq_len-1, n_batch])
@@ -383,16 +384,15 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
             feed_dict={sg.step_x_data: _x_step}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
-            step_label_likelihood_j, new_prev_state = \
-                sess.run([sg.step_label_probs, sg.step_last_state],
+            step_label_likelihood_j, new_prev_state, step_pred_idx = \
+                sess.run([sg.step_label_probs, sg.step_last_state, sg.step_pred_idx],
                     feed_dict=feed_dict)
-
-            step_label_idx = step_label_likelihood_j.argmax(axis=1)
 
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
+            fill(pred_idx, step_pred_idx, target_indices, update_pos)
 
             reward_target_indices = fill_seg_match_reward(rewards, y, j, 
                 prev_action_idx, prev_action_pos, target_indices, reward_update_pos, update_pos, args)
@@ -410,18 +410,17 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
             feed_dict={sg.step_x_data: _x_step}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
            
-            action_idx, step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy = \
+            action_idx, step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy, step_pred_idx = \
                 sess.run([sg.step_action_samples, sg.step_action_probs, sg.step_label_probs,
-                    sg.step_last_state, sg.action_entropy],
+                    sg.step_last_state, sg.action_entropy, sg.step_pred_idx],
                     feed_dict=feed_dict)
             
-            step_label_idx = step_label_likelihood_j.argmax(axis=1)
-
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
             action_one_hot = np.eye(args.n_action)[action_idx.flatten()]
 
             fill(new_x, _x_step, target_indices, update_pos)
             fill(new_y, _y_step, target_indices, update_pos)
+            fill(pred_idx, step_pred_idx, target_indices, update_pos)
             fill(action_entropies, action_entropy, target_indices, update_pos)
             fill(actions, action_one_hot, target_indices, update_pos)
 
@@ -434,7 +433,7 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
             advance_pos(reward_update_pos, reward_target_indices)
             update_prev_state(prev_state, new_prev_state, target_indices)
 
-            for label, idx in zip(step_label_idx, target_indices):
+            for label, idx in zip(step_pred_idx, target_indices):
                 prev_action_idx[idx] = label
                 prev_action_pos[idx] = j
 
@@ -456,6 +455,8 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
 
     output_image = gen_output_image(full_action_samples, y, args.n_class)
     outp.append(output_image)
+
+    outp.extend(transpose_all([pred_idx[:max_seq_len]]))
 
     return outp
 

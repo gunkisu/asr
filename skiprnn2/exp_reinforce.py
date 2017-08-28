@@ -14,8 +14,8 @@ import tensorflow as tf
 from collections import OrderedDict
 from collections import namedtuple
 
+import mixer
 from mixer import gen_episode_with_seg_reward
-from mixer import LinearVF, compute_advantage2
 from mixer import categorical_ent, expand_output
 from mixer import gen_zero_state, feed_init_state
 from model import LinearCell
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     with tf.name_scope("val_eval"):
         val_summary = get_summary('ce rl cr fer image'.split())
 
-    vf = LinearVF()
+    vf = mixer.LinearVF()
 
     with tf.Session() as sess:
         sess.run(init_op)
@@ -106,11 +106,21 @@ if __name__ == '__main__':
                 n_batch = x.shape[0]
                 _n_exp += n_batch
 
-                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
+                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image, pred_idx = \
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
                 orig_count, comp_count, rw_count = x_mask.sum(), new_x_mask.sum(), new_reward_mask.sum()
                 
-                advantages = compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+                if args.use_sparse_reward:
+                    pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx, args.n_fast_action)
+                    seq_lens = x_mask.sum(axis=1)
+                    comp_seq_lens = new_x_mask.sum(axis=1)
+                    red_rate = comp_seq_lens / seq_lens
+                    fer = 1.0 - ((pred_idx == y) * x_mask).sum(axis=1) / seq_lens
+                    rewards[:] = 0.
+                    rewards[:,-1] = -(args.speed_weight * fer + red_rate)
+                    advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+                else:
+                    advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
 
@@ -155,11 +165,22 @@ if __name__ == '__main__':
                 x, x_mask, _, _, y, _ = batch
                 n_batch = x.shape[0]
 
-                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image = \
+                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image, pred_idx = \
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
                 orig_count, comp_count, rw_count = x_mask.sum(), new_x_mask.sum(), new_reward_mask.sum()
 
-                advantages = compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+                if args.use_sparse_reward:
+                    pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx, args.n_fast_action)
+                    seq_lens = x_mask.sum(axis=1)
+                    comp_seq_lens = new_x_mask.sum(axis=1)
+                    red_rate = comp_seq_lens / seq_lens
+                    fer = 1.0 - ((pred_idx == y) * x_mask).sum(axis=1) / seq_lens
+                    rewards[:] = 0.
+                    rewards[:,-1] = -(args.speed_weight * fer + red_rate)
+
+                    advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+                else:
+                    advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
                 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
