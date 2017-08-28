@@ -73,7 +73,7 @@ if __name__ == '__main__':
         epoch_sw, disp_sw, eval_sw = StopWatch(), StopWatch(), StopWatch()
 
         # For each epoch 
-        for _epoch in xrange(args.n_epoch):
+        for _epoch in range(args.n_epoch):
             _n_exp = 0
 
             epoch_sw.reset(); disp_sw.reset()
@@ -84,7 +84,7 @@ if __name__ == '__main__':
             for accu in accu_list: accu.reset()                    
 
             # For each batch 
-            for batch in train_set.get_epoch_iterator():
+            for batch in islice(train_set.get_epoch_iterator(), 2):
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
                  
                 for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1):
@@ -122,7 +122,7 @@ if __name__ == '__main__':
             # Evaluate the model on the validation set
             for accu in accu_list: accu.reset()                    
             eval_sw.reset()
-            for batch in valid_set.get_epoch_iterator():
+            for batch in islice(valid_set.get_epoch_iterator(), 2):
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
                  
                 for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1, return_first=True):

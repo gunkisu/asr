@@ -2,11 +2,6 @@
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import nn_ops
-
 def _affine(args, output_size, bias=True, scope=None, init_W=None):
   # Calculate the total size of arguments on dimension 1
   total_arg_size = 0
@@ -32,15 +27,15 @@ def _affine(args, output_size, bias=True, scope=None, init_W=None):
       tf.add_to_collection('weights', W)
       tf.add_to_collection('vars', W)
       if len(args) == 1:
-        logits = math_ops.matmul(args[0], W)
+        logits = tf.matmul(args[0], W)
       else:
-        logits = math_ops.matmul(array_ops.concat(args, 1), W)
+        logits = tf.matmul(tf.concat(args, 1), W)
       if not bias:
         return logits
       b = tf.get_variable('b', [output_size], dtype=dtype,
-        initializer=init_ops.constant_initializer(0.0, dtype=dtype))
+        initializer=tf.constant_initializer(0.0, dtype=dtype))
       tf.add_to_collection('vars', b)
-  return nn_ops.bias_add(logits, b)
+  return tf.nn.bias_add(logits, b)
 
 class LinearCell(object):
   """Implementation of Linear layer"""
@@ -72,7 +67,7 @@ class LinearCell(object):
       logits = tf.reshape(tf.gather(W, tf.reshape(inputs, [-1])),
                           [-1, self._num_units])
       if self._bias:
-        logits = nn_ops.bias_add(logits, b)
+        logits = tf.nn.bias_add(logits, b)
     elif type(inputs) is list:
       logits = _affine(inputs, self._num_units, self._bias, scope=scope,
                        init_W=init_W)

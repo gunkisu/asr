@@ -2,7 +2,6 @@ from collections import OrderedDict
 
 import numpy
 
-from theano import config
 import itertools
 
 import random
@@ -292,53 +291,6 @@ class Transpose(Transformer):
         for axes, data in zip(self.axes_list, data):
             transposed_data.append(numpy.transpose(data, axes))
         return transposed_data
-
-
-class AddUniformAlignmentMask(Transformer):
-    """Adds an uniform alignment mask to the incoming batch.
-
-    Parameters
-    ----------
-
-    """
-
-    def __init__(self, data_stream):
-        super(AddUniformAlignmentMask, self).__init__(data_stream)
-        self.sources = self.data_stream.sources + ('alignment',)
-
-    def get_data(self, request=None):
-        data = next(self.child_epoch_iterator)
-        sources = self.data_stream.sources
-
-        x_idx = sources.index('x')
-        y_idx = sources.index('y')
-        x_mask_idx = sources.index('x_mask')
-        y_mask_idx = sources.index('y_mask')
-
-        batch_size = data[x_idx].shape[1]
-        max_len_output = data[y_idx].shape[0]
-        max_len_input = data[x_idx].shape[0]
-        mask_shape = (max_len_output, batch_size, max_len_input)
-        alignment = numpy.zeros(mask_shape, dtype=config.floatX)
-
-        for k in xrange(batch_size):
-            in_size = numpy.count_nonzero(data[x_mask_idx][:, k])
-            out_size = numpy.count_nonzero(data[y_mask_idx][:, k])
-            n = int(in_size / out_size)  # Maybe clever way than int to do this
-            v = numpy.hstack([numpy.ones(n, dtype=config.floatX),
-                              numpy.zeros(max_len_input - n,
-                                          dtype=config.floatX)])
-            alignment[0, k] = v
-            for i in xrange(1, out_size):
-                alignment[i, k] = numpy.roll(v, i * n)
-
-                # DEBUG
-                # plt.figure()
-                # plt.imshow(alignment[:,k,:], cmap='gray', interpolation='none')
-                # plt.show()
-        data = data + (alignment,)
-
-        return data
 
 
 class AlignmentPadding(Transformer):

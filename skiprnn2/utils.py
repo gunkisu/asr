@@ -1,13 +1,12 @@
-from __future__ import print_function
-
 import argparse
 import socket
-import tensorflow as tf
 import subprocess
 import os, errno
 import glob
 import re
 from collections import namedtuple
+
+import tensorflow as tf
 
 import numpy as np
 from data.fuel_utils import create_ivector_datastream
@@ -74,8 +73,9 @@ def prepare_dir(args):
     tf.gfile.MakeDirs(args.logdir)
 
 def get_gpuname():
-    p = subprocess.Popen("nvidia-smi -q | grep 'Product Name'", shell=True, stdout=subprocess.PIPE)
+    p = subprocess.Popen("nvidia-smi -q | grep 'Product Name'", shell=True, stdout=subprocess.PIPE, universal_newlines=True)
     out = p.stdout.read()
+#    import ipdb; ipdb.set_trace()
     gpuname = out.split(':')[1].strip()
     return gpuname
 
@@ -135,7 +135,7 @@ def get_summary(summary_kinds):
 def symlink_force(target, link_name):
     try:
         os.symlink(target, link_name)
-    except OSError, e:
+    except OSError as e:
         if e.errno == errno.EEXIST:
             os.remove(link_name)
             os.symlink(target, link_name)

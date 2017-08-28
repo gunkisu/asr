@@ -1,11 +1,12 @@
 import numpy as np
-import tensorflow as tf
 
 from collections import namedtuple
 
 from mixer import categorical_ent
 from model import LinearCell
 import utils
+
+import tensorflow as tf 
 
 def lstm_state(n_hidden, layer, n_proj, backward=False):
     c_name = 'cstate_{}'.format(layer)
@@ -203,7 +204,6 @@ def build_graph_sv(args):
 
     return train_graph, test_graph
 
-
 def build_graph_subsample(args):
     TrainGraph = namedtuple('TrainGraph', 'ml_cost seq_x_data seq_x_mask seq_y_data init_state pred_idx seq_label_probs')
     TestGraph = namedtuple('TestGraph', 'step_x_data init_state step_last_state step_label_probs')
@@ -218,17 +218,25 @@ def build_graph_subsample(args):
 
         step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
 
-    with tf.variable_scope('rnn'):
-        cell = tf.contrib.rnn.MultiRNNCell([lstm_cell(args) for _ in range(args.n_layer)])
+    cell = tf.contrib.rnn.MultiRNNCell([lstm_cell(args) for _ in range(args.n_layer)])
 
     with tf.variable_scope('label'):
         _label_logit = LinearCell(num_units=args.n_class)
+
+    # testing graph
+    step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
+
+    step_label_logits = _label_logit(step_h_state, 'label_logit')   
+    step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
+
+    test_graph = TestGraph(step_x_data, init_state, step_last_state, step_label_probs)
 
     # training graph
     seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
     seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden if args.n_proj == 0 else args.n_proj])
 
     seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')   
+
     y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=args.n_class)
 
     ml_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_label_logits, 
@@ -239,14 +247,7 @@ def build_graph_subsample(args):
 
     seq_label_probs = tf.nn.softmax(seq_label_logits, name='seq_label_probs')
 
-    # testing graph
-    step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
-    step_label_logits = _label_logit(step_h_state, 'label_logit')
-    step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
-
     train_graph = TrainGraph(ml_cost, seq_x_data, seq_x_mask, seq_y_data, init_state, pred_idx, seq_label_probs)
-
-    test_graph = TestGraph(step_x_data, init_state, step_last_state, step_label_probs)
 
     return train_graph, test_graph
 
@@ -294,3 +295,4 @@ def build_graph_subsample_tbptt(args):
         pred_idx, seq_label_probs, output_state_fw, output_state_bw, outputs)
 
     return train_graph
+
