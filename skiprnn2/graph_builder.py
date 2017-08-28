@@ -83,10 +83,10 @@ def build_graph_ri(args):
     step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
 
     # no need to do stop_gradient because training is not done for the sampling graph
-    step_label_logits = _label_logit(step_h_state, 'label_logit')
+    step_label_logits = tf.layers.dense(step_h_state, args.n_class, name='label_logit')
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
 
-    step_action_logits = _action_logit(step_h_state, 'action_logit')
+    step_action_logits = tf.layers.dense(step_h_state, args.n_action, name='action_logit')
 
     step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
     step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
@@ -96,7 +96,7 @@ def build_graph_ri(args):
     seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
     seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden])
 
-    seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')
+    seq_label_logits = tf.layers.dense(seq_hid_2d, args.n_class, reuse=True, name='label_logit')
 
     y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=args.n_class)
 
@@ -110,7 +110,7 @@ def build_graph_ri(args):
     seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
     seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
-    seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
+    seq_action_logits = tf.layers.dense(seq_hid_2d_rl, args.n_action, name='action_logit', reuse=True)
         
     seq_action_probs = tf.nn.softmax(seq_action_logits)
 
@@ -162,7 +162,7 @@ def build_graph_sv(args):
     seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
     seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden])
 
-    seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')
+    seq_label_logits = tf.layers.dense(seq_hid_2d, args.n_class, name='label_logit')
 
     y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=args.n_class)
 
@@ -176,7 +176,7 @@ def build_graph_sv(args):
     seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
     seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
-    seq_action_logits = _action_logit(seq_hid_2d_rl, 'action_logit')
+    seq_action_logits = tf.layers.dense(seq_hid_2d_rl, args.n_action, name='action_logit')
     seq_action_probs = tf.nn.softmax(seq_action_logits)
 
     jump_1hot = tf.one_hot(tf.reshape(seq_jump_data, [-1]), depth=args.n_action)
@@ -191,10 +191,10 @@ def build_graph_sv(args):
     # testing graph (step_h_state == step_last_state)
     step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
 
-    step_label_logits = _label_logit(step_h_state, 'label_logit')
+    step_label_logits = tf.layers.dense(step_h_state, args.n_class, name='label_logit', reuse=True)
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
 
-    step_action_logits = _action_logit(step_h_state, 'action_logit')
+    step_action_logits = tf.layers.dense(step_h_state, args.n_action, name='action_logit', reuse=True)
     step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
 
     step_pred_idx = tf.argmax(step_action_logits, axis=1, name='step_pred_idx')
@@ -220,13 +220,10 @@ def build_graph_subsample(args):
 
     cell = tf.contrib.rnn.MultiRNNCell([lstm_cell(args) for _ in range(args.n_layer)])
 
-    with tf.variable_scope('label'):
-        _label_logit = LinearCell(num_units=args.n_class)
-
     # testing graph
     step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
 
-    step_label_logits = _label_logit(step_h_state, 'label_logit')   
+    step_label_logits = tf.layers.dense(step_h_state, args.n_class)
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
 
     test_graph = TestGraph(step_x_data, init_state, step_last_state, step_label_probs)
@@ -235,7 +232,7 @@ def build_graph_subsample(args):
     seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
     seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden if args.n_proj == 0 else args.n_proj])
 
-    seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')   
+    seq_label_logits = tf.layers.dense(seq_hid_2d, args.n_class, reuse=True)   
 
     y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=args.n_class)
 
@@ -266,21 +263,17 @@ def build_graph_subsample_tbptt(args):
         init_state_fw = lstm_init_state(args, backward=False)
         init_state_bw = lstm_init_state(args, backward=True)
 
-    with tf.variable_scope('rnn'):
-        cells_fw = [lstm_cell(args) for _ in range(args.n_layer)]
-        cells_bw = [lstm_cell(args) for _ in range(args.n_layer)]
-
-    with tf.variable_scope('label'):
-        _label_logit = LinearCell(num_units=args.n_class)
+    cells_fw = [lstm_cell(args) for _ in range(args.n_layer)]
+    cells_bw = [lstm_cell(args) for _ in range(args.n_layer)]
 
     seq_lengths = tf.reduce_sum(tf.to_int32(seq_x_mask), 1)
     outputs, output_state_fw, output_state_bw = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(
-        cells_fw, cells_bw, seq_x_data, init_state_fw, init_state_bw, sequence_length=seq_lengths, scope='rnn')
+        cells_fw, cells_bw, seq_x_data, init_state_fw, init_state_bw, sequence_length=seq_lengths)
     # outputs: n_batch, n_seq, n_hidden * 2
 
     seq_hid_2d = tf.reshape(outputs, [-1, args.n_hidden * 2 if args.n_proj == 0 else args.n_proj * 2])
 
-    seq_label_logits = _label_logit(seq_hid_2d, 'label_logit')   
+    seq_label_logits = tf.layers.dense(seq_hid_2d, args.n_class, name='label_logit')   
     y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=args.n_class)
 
     ml_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_label_logits, 
