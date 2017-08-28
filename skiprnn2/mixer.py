@@ -244,8 +244,6 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         diff = match_count - action_size
         if diff > 0:
             rw = -diff 
-#        elif diff == 0:
-#            rw = 1
         else:
             rw = diff * args.alpha
         reward_list[reward_update_pos[idx], idx] = rw - 1 # shifting
