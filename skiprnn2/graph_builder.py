@@ -136,9 +136,9 @@ def build_graph_ri(args):
 
 def build_graph_sv(args):
     TrainGraph = namedtuple('TrainGraph', 
-        'ml_cost rl_cost seq_x_data seq_x_mask seq_y_data seq_jump_data init_state pred_idx')
+        'ml_cost rl_cost seq_x_data seq_x_mask seq_y_data seq_jump_data init_state pred_idx seq_action_samples')
     TestGraph = namedtuple('TestGraph', 
-        'step_h_state step_last_state step_label_probs step_action_probs step_pred_idx step_x_data init_state')
+        'step_h_state step_last_state step_label_probs step_action_probs step_pred_idx step_x_data init_state step_action_samples')
 
     with tf.device(args.device):
         # n_batch, n_seq, n_feat
@@ -154,17 +154,27 @@ def build_graph_sv(args):
 
     cell = tf.contrib.rnn.MultiRNNCell([lstm_cell(args) for _ in range(args.n_layer)])
 
-    with tf.variable_scope('label'):
-        _label_logit = LinearCell(num_units=args.n_class)
+    # testing graph (step_h_state == step_last_state)
+    step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
 
-    with tf.variable_scope('action'):
-        _action_logit = LinearCell(num_units=args.n_action)
+    step_label_logits = tf.layers.dense(step_h_state, args.n_class, name='label_logit')
+    step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
+
+    step_action_logits = tf.layers.dense(step_h_state, args.n_action, name='action_logit')
+    step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
+
+    step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
+
+    step_pred_idx = tf.argmax(step_action_logits, axis=1, name='step_pred_idx')
+    
+    test_graph = TestGraph(step_h_state, step_last_state, step_label_probs, 
+        step_action_probs, step_pred_idx, step_x_data, init_state, step_action_samples)
 
     # training graph
     seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
     seq_hid_2d = tf.reshape(seq_hid_3d, [-1, args.n_hidden])
 
-    seq_label_logits = tf.layers.dense(seq_hid_2d, args.n_class, name='label_logit')
+    seq_label_logits = tf.layers.dense(seq_hid_2d, args.n_class, name='label_logit', reuse=True)
 
     y_1hot = tf.one_hot(tf.reshape(seq_y_data, [-1]), depth=args.n_class)
 
@@ -178,8 +188,10 @@ def build_graph_sv(args):
     seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
     seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
-    seq_action_logits = tf.layers.dense(seq_hid_2d_rl, args.n_action, name='action_logit')
+    seq_action_logits = tf.layers.dense(seq_hid_2d_rl, args.n_action, name='action_logit', reuse=True)
     seq_action_probs = tf.nn.softmax(seq_action_logits)
+
+    seq_action_samples = tf.multinomial(logits=seq_action_logits, num_samples=1, name='seq_action_samples')
 
     jump_1hot = tf.one_hot(tf.reshape(seq_jump_data, [-1]), depth=args.n_action)
 
@@ -188,21 +200,7 @@ def build_graph_sv(args):
     rl_cost = tf.reduce_sum(rl_cost*tf.reshape(seq_x_mask[:,:-1], [-1]))
 
     train_graph = TrainGraph(ml_cost, rl_cost, seq_x_data, seq_x_mask, 
-        seq_y_data, seq_jump_data, init_state, pred_idx)
-
-    # testing graph (step_h_state == step_last_state)
-    step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
-
-    step_label_logits = tf.layers.dense(step_h_state, args.n_class, name='label_logit', reuse=True)
-    step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
-
-    step_action_logits = tf.layers.dense(step_h_state, args.n_action, name='action_logit', reuse=True)
-    step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
-
-    step_pred_idx = tf.argmax(step_action_logits, axis=1, name='step_pred_idx')
-    
-    test_graph = TestGraph(step_h_state, step_last_state, step_label_probs, 
-        step_action_probs, step_pred_idx, step_x_data, init_state)
+        seq_y_data, seq_jump_data, init_state, pred_idx, seq_action_samples)
 
     return train_graph, test_graph
 

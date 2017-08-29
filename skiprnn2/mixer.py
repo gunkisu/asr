@@ -470,79 +470,6 @@ def get_seg_len(ref_labels):
 
     return seg_len
 
-def gen_supervision(x, x_mask, y, args):
-    x = np.transpose(x, [1,0,2])
-    x_mask = np.transpose(x_mask, [1,0])
-    y = np.transpose(y, [1,0])
-
-    n_seq, n_batch, n_feat = x.shape
-    seq_lens = x_mask.sum(axis=0)
-    max_seq_len = int(max(seq_lens))
-
-    action_counters = [0]*n_batch
-    update_pos = [0]*n_batch
-    sample_done = [] # indices of examples done processing
-
-    new_x = np.zeros([max_seq_len, n_batch, n_feat])
-    new_y = np.zeros([max_seq_len, n_batch])
-    actions = np.zeros([max_seq_len-1, n_batch])
-    actions_1hot = np.zeros([max_seq_len-1, n_batch, args.n_action])
-
-    full_action_samples = np.zeros([max_seq_len, n_batch, args.n_action])
-
-    # for each time step (index j)
-    for j, (x_step, y_step) in enumerate(itertools.izip(x, y)):
-        _x_step, _y_step, target_indices = filter_last2(x_step, y_step, j, seq_lens, sample_done)
-
-        if len(_x_step):
-            fill(new_x, _x_step, target_indices, update_pos)
-            fill(new_y, _y_step, target_indices, update_pos)
-
-            advance_pos(update_pos, target_indices)
-            sample_done.extend(target_indices)
-
-        _x_step, _y_step, target_indices = filter_action_end2(x_step, y_step, j, action_counters, sample_done)
-
-        if len(_x_step):
-            best_actions = []
-
-            for idx in target_indices:
-                max_jump = args.n_fast_action if args.n_fast_action > 0 else args.n_action
-                upto = int(min(j+max_jump, seq_lens[idx]))
-                ref_labels = y[j:upto, idx]
-                seg_len = get_seg_len(ref_labels)
-                best_actions.append(seg_len - 1)
-        
-            fill(new_x, _x_step, target_indices, update_pos)
-            fill(new_y, _y_step, target_indices, update_pos)
-            fill(actions, best_actions, target_indices, update_pos)
-            action_one_hot = np.eye(args.n_action)[best_actions]
-            fill(actions_1hot, action_one_hot, target_indices, update_pos)
-            
-            update_action_counters(action_counters, best_actions, target_indices, args)
-
-            advance_pos(update_pos, target_indices)
-                
-            # For visualization
-            for i, s_idx in enumerate(target_indices):
-                full_action_samples[j, s_idx] = action_one_hot[i]
-        
-        else:
-            update_action_counters(action_counters, [], [], args)
-
-    max_seq_len, mask = gen_mask3(update_pos, n_batch)
-    outp = transpose_all([new_x[:max_seq_len],
-                         new_y[:max_seq_len],                         
-                         actions[:max_seq_len-1],
-                         actions_1hot[:max_seq_len-1],
-                         mask])
-
-
-    output_image = gen_output_image(full_action_samples, y, args.n_class)
-    outp.append(output_image)
-    return outp
-
-
 def get_best_actions(target_indices, j, seq_lens, args, y):
     best_actions = []
 
@@ -914,9 +841,10 @@ def gen_supervision_scheduled_sampling(x, y, x_mask, sess, test_graph, args):
             feed_prev_state(feed_dict, test_graph.init_state, _prev_state)
 
             pred_actions, step_label_likelihood_j, new_prev_state = \
-                sess.run([test_graph.step_pred_idx, test_graph.step_label_probs, test_graph.step_last_state],
+                sess.run([test_graph.step_action_samples, test_graph.step_label_probs, test_graph.step_last_state],
                     feed_dict=feed_dict)
 
+            pred_actions = pred_actions.flatten() # output from tf.multinomial contains one more dimension
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
             best_actions = get_best_actions(target_indices, j, seq_lens, args, y)
             
@@ -1012,7 +940,7 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, n_fast_action, y=No
             feed_prev_state(feed_dict, test_graph.init_state, _prev_state)
 
             action_idx, step_label_likelihood_j, new_prev_state = \
-                sess.run([test_graph.step_pred_idx, test_graph.step_label_probs, test_graph.step_last_state],
+                sess.run([test_graph.step_action_samples, test_graph.step_label_probs, test_graph.step_last_state],
                     feed_dict=feed_dict)
 
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
