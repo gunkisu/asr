@@ -52,6 +52,9 @@ def get_argparser():
     parser.add_argument('--discount-gamma', default=0.99, type=float, help='Discount factor')
     parser.add_argument('--use-layer-norm', action='store_true', help='Apply layer normalization')
     parser.add_argument('--use-sparse-reward', action='store_true', help='Use sparse rewards')
+    parser.add_argument('--use-unimodal', action='store_true', help='Use unimodal output distribution')
+    parser.add_argument('--tau', default=1.0, type=float, help='Temperature for softmax in unimodal distributions')
+    parser.add_argument('--distribution', default='poisson', choices=['poisson', 'binomial'], help='Unimodal distribution to use')
     
     return parser
 

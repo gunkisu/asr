@@ -160,9 +160,17 @@ def build_graph_sv(args):
     step_label_logits = tf.layers.dense(step_h_state, args.n_class, name='label_logit')
     step_label_probs = tf.nn.softmax(logits=step_label_logits, name='step_label_probs')
 
-    step_action_logits = tf.layers.dense(step_h_state, args.n_action, name='action_logit')
-    step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
-    step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
+    if args.use_unimodal: 
+        scalar_outputs = tf.layers.dense(step_h_state, 1, name='action_logit', activation=tf.nn.softplus)
+        poi = tf.contrib.distributions.Poisson(scalar_outputs)
+        k_values = list(np.arange(0.0, args.n_action, 1.0))
+        step_action_logits = poi.prob(k_values)/args.tau # smoothing
+        step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
+        step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
+    else:
+        step_action_logits = tf.layers.dense(step_h_state, args.n_action, name='action_logit')
+        step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
+        step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
 
     step_pred_idx = tf.argmax(step_action_logits, axis=1, name='step_pred_idx')
     
@@ -188,9 +196,17 @@ def build_graph_sv(args):
     seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
     seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
 
-    seq_action_logits = tf.layers.dense(seq_hid_2d_rl, args.n_action, name='action_logit', reuse=True)
-    seq_action_probs = tf.nn.softmax(seq_action_logits)
-    seq_action_samples = tf.multinomial(logits=seq_action_logits, num_samples=1, name='seq_action_samples')
+    if args.use_unimodal: 
+        seq_scalar_outputs = tf.layers.dense(seq_hid_2d_rl, 1, name='action_logit', activation=tf.nn.softplus, reuse=True)
+        poi = tf.contrib.distributions.Poisson(seq_scalar_outputs)
+        k_values = list(np.arange(0.0, args.n_action, 1.0))
+        seq_action_logits = poi.prob(k_values)/args.tau # smoothing
+        seq_action_probs = tf.nn.softmax(logits=seq_action_logits, name='seq_action_probs')
+        seq_action_samples = tf.multinomial(logits=seq_action_logits, num_samples=1, name='seq_action_samples')
+    else:
+        seq_action_logits = tf.layers.dense(seq_hid_2d_rl, args.n_action, name='action_logit', reuse=True)
+        seq_action_probs = tf.nn.softmax(seq_action_logits)
+        seq_action_samples = tf.multinomial(logits=seq_action_logits, num_samples=1, name='seq_action_samples')
 
     jump_1hot = tf.one_hot(tf.reshape(seq_jump_data, [-1]), depth=args.n_action)
 
