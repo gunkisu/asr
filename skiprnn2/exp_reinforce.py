@@ -118,9 +118,8 @@ if __name__ == '__main__':
                     fer = 1.0 - ((pred_idx == y) * x_mask).sum(axis=1) / seq_lens
                     rewards[:] = 0.
                     rewards[:,-1] = -(args.speed_weight * fer + red_rate)
-                    advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
-                else:
-                    advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+                
+                advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
 
@@ -178,9 +177,7 @@ if __name__ == '__main__':
                     rewards[:] = 0.
                     rewards[:,-1] = -(args.speed_weight * fer + red_rate)
 
-                    advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
-                else:
-                    advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+                advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
                 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
