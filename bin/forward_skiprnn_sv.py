@@ -10,7 +10,7 @@ import tensorflow as tf
 
 from collections import OrderedDict
 from collections import namedtuple
-from skiprnn.mixer import skip_rnn_forward_supervised, expand_output
+from skiprnn2.mixer import skip_rnn_forward_supervised, expand_output
 
 from skiprnn2.graph_builder import match_c, match_h
 
@@ -22,7 +22,7 @@ import kaldi_io
 import skiprnn2.utils as utils
 
 TestGraph = namedtuple('TestGraph', 
-    'step_last_state step_label_probs step_action_probs step_pred_idx step_x_data init_state')
+    'step_last_state step_label_probs step_action_probs step_action_samples step_pred_idx step_x_data init_state')
 
 if __name__ == '__main__':
     print(' '.join(sys.argv), file=sys.stderr)
@@ -48,6 +48,7 @@ if __name__ == '__main__':
         step_x_data = sess.graph.get_tensor_by_name('step_x_data:0')
         n_fast_action, = sess.graph.get_collection('n_fast_action')
         step_pred_idx = sess.graph.get_tensor_by_name('step_pred_idx:0')
+        step_action_samples = sess.graph.get_tensor_by_name('step_action_samples/Multinomial:0')
 
         cstates = [op.outputs[0] for op in sess.graph.get_operations() if 'cstate' in op.name]
         hstates = [op.outputs[0] for op in sess.graph.get_operations() if 'hstate' in op.name]
@@ -63,7 +64,7 @@ if __name__ == '__main__':
         for c, h in zip(last_cstates, last_hstates):
             step_last_state.append(tf.contrib.rnn.LSTMStateTuple(c, h))
 
-        test_graph = TestGraph(step_last_state, _step_label_probs, step_action_probs, step_pred_idx, step_x_data, init_state)
+        test_graph = TestGraph(step_last_state, _step_label_probs, step_action_probs, step_action_samples, step_pred_idx, step_x_data, init_state)
 
         writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 
