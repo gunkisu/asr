@@ -162,7 +162,6 @@ def build_graph_sv(args):
 
     step_action_logits = tf.layers.dense(step_h_state, args.n_action, name='action_logit')
     step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
-
     step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
 
     step_pred_idx = tf.argmax(step_action_logits, axis=1, name='step_pred_idx')
@@ -180,6 +179,7 @@ def build_graph_sv(args):
 
     ml_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_label_logits, 
         labels=y_1hot)
+
     ml_cost = tf.reduce_sum(ml_cost*tf.reshape(seq_x_mask, [-1]))
 
     pred_idx = tf.argmax(seq_label_logits, axis=1)
@@ -190,13 +190,11 @@ def build_graph_sv(args):
 
     seq_action_logits = tf.layers.dense(seq_hid_2d_rl, args.n_action, name='action_logit', reuse=True)
     seq_action_probs = tf.nn.softmax(seq_action_logits)
-
     seq_action_samples = tf.multinomial(logits=seq_action_logits, num_samples=1, name='seq_action_samples')
 
     jump_1hot = tf.one_hot(tf.reshape(seq_jump_data, [-1]), depth=args.n_action)
 
-    rl_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_action_probs, 
-        labels=jump_1hot)
+    rl_cost = tf.nn.softmax_cross_entropy_with_logits(logits=seq_action_logits, labels=jump_1hot)
     rl_cost = tf.reduce_sum(rl_cost*tf.reshape(seq_x_mask[:,:-1], [-1]))
 
     train_graph = TrainGraph(ml_cost, rl_cost, seq_x_data, seq_x_mask, 
