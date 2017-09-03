@@ -8,6 +8,12 @@ import utils
 
 import tensorflow as tf 
 
+def stop_gradient(tensor, args):
+    if args.no_stop_gradient:
+        return tensor
+    else:
+        return tf.stop_gradient(tensor)
+
 def lstm_state(n_hidden, layer, n_proj, backward=False):
     c_name = 'cstate_{}'.format(layer)
     if backward:
@@ -110,7 +116,7 @@ def build_graph_ri(args):
 
     seq_hid_3d_rl = seq_hid_3d[:,:-1,:] 
     seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
-    seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
+    seq_hid_2d_rl = stop_gradient(seq_hid_2d_rl, args)
 
     seq_action_logits = tf.layers.dense(seq_hid_2d_rl, args.n_action, name='action_logit', reuse=True)
         
@@ -194,7 +200,7 @@ def build_graph_sv(args):
 
     seq_hid_3d_rl = seq_hid_3d[:,:-1,:]
     seq_hid_2d_rl = tf.reshape(seq_hid_3d_rl, [-1, args.n_hidden])
-    seq_hid_2d_rl = tf.stop_gradient(seq_hid_2d_rl)
+    seq_hid_2d_rl = stop_gradient(seq_hid_2d_rl, args)
 
     if args.use_unimodal: 
         seq_scalar_outputs = tf.layers.dense(seq_hid_2d_rl, 1, name='action_logit', activation=tf.nn.softplus, reuse=True)
