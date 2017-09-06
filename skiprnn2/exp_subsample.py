@@ -15,6 +15,7 @@ from libs.utils import sync_data, skip_frames_fixed, StopWatch
 from utils import Accumulator
 import utils
 import graph_builder
+import mixer
    
 if __name__ == '__main__':
     print(' '.join(sys.argv))
@@ -84,7 +85,7 @@ if __name__ == '__main__':
             for accu in accu_list: accu.reset()                    
 
             # For each batch 
-            for batch in islice(train_set.get_epoch_iterator(), 2):
+            for batch in train_set.get_epoch_iterator():
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
                  
                 for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1):
@@ -122,7 +123,7 @@ if __name__ == '__main__':
             # Evaluate the model on the validation set
             for accu in accu_list: accu.reset()                    
             eval_sw.reset()
-            for batch in islice(valid_set.get_epoch_iterator(), 2):
+            for batch in valid_set.get_epoch_iterator():
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
                  
                 for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1, return_first=True):

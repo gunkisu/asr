@@ -42,7 +42,7 @@ def get_argparser():
     parser.add_argument('--n-class', default=3436, type=int, help='Number of target symbols')
     parser.add_argument('--n-action', default=5, type=int, help='Number of actions (max skim size)')
     parser.add_argument('--n-fast-action', default=0, type=int, help='Number of steps to skip in the fast action mode')
-    parser.add_argument('--speed-weight', default=1.0, type=float, help='Weight given to speed with 1.0 being no weight')
+    parser.add_argument('--w', default=1.0, type=float, help='Weight given to speed with 1.0 being no weight')
     parser.add_argument('--base-seed', default=20170309, type=int, help='Base random seed') 
     parser.add_argument('--add-seed', default=0, type=int, help='Add this amount to the base random seed')
     parser.add_argument('--logdir', default='skiprnn_test', help='Directory path to files')
@@ -55,7 +55,7 @@ def get_argparser():
     parser.add_argument('--use-unimodal', action='store_true', help='Use unimodal output distribution')
     parser.add_argument('--tau', default=1.0, type=float, help='Temperature for softmax in unimodal distributions')
     parser.add_argument('--distribution', default='poisson', choices=['poisson', 'binomial'], help='Unimodal distribution to use')
-    parser.add_argument('--no-stop-gradient', action='store_true', help='Do not stop gradient flows')
+    parser.add_argument('--stop-gradient', action='store_true', help='Stop gradient flows')
     
     return parser
 

@@ -3,6 +3,7 @@ import numpy as np
 import scipy.signal
 import itertools
 import subprocess
+import random
 
 import tensorflow as tf
 
@@ -243,7 +244,7 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         
         diff = match_count - action_size
         if diff > 0:
-            rw = -diff * args.speed_weight
+            rw = -diff * args.w
         elif diff == 0:
             rw = 1
         else:
@@ -738,38 +739,66 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action):
     new_max_seq_len, mask = gen_mask_from(update_pos)
     return transpose_all([actions_1hot[:new_max_seq_len-1], label_probs[:new_max_seq_len], mask])
 
+
+def get_actions_image(actions_taken):
+    # n_batch, n_action, n_seq
+    actions_img = np.transpose(actions_taken, [1, 2, 0])
+    # n_batch, n_action, n_seq, 1
+    actions_img = np.expand_dims(actions_img, axis=-1)
+    # make it thicker: n_batch, n_action*5, n_seq*5, 1
+    actions_img = np.repeat(actions_img, repeats=5, axis=1) 
+    actions_img = np.repeat(actions_img, repeats=5, axis=2)
+
+    return actions_img
+
+def get_labels_image(y, n_class):
+
+    # n_seq, n_batch
+    y = to_label_change(y, n_class)
+
+    # n_seq, n_batch, 1
+    full_label_data = np.expand_dims(y, axis=-1)
+
+    # n_batch, 1, n_seq
+    full_label_data = np.transpose(full_label_data, [1, 2, 0])
+    # n_batch, 1, n_seq, 1
+    full_label_data = np.expand_dims(full_label_data, axis=-1)
+    # make it thicker: n_batch, 1*5, n_seq*5, 1
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=1) 
+    full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
+    full_label_data /= float(n_class)
+    
+    return full_label_data
+
+def get_frame_reads_image(actions_taken):
+    # n_batch, n_action, n_seq
+    frame_reads = np.transpose(actions_taken, [1,2,0])
+    # n_batch, 1, n_seq
+    frame_reads = np.sum(frame_reads, axis=1, keepdims=True)
+    # n_batch, 1, n_seq, 1
+    frame_reads = np.expand_dims(frame_reads, axis=-1)
+    # make it thicker: n_batch, 1*5, n_seq*5, 1
+    frame_reads = np.repeat(frame_reads, repeats=5, axis=1) 
+    frame_reads = np.repeat(frame_reads, repeats=5, axis=2)
+
+    return frame_reads
+
 def gen_output_image(actions_taken, y, n_class, pred_idx=None):
     # actions_taken: n_seq, n_batch, n_action
     # y: n_seq, n_batch
     # pred_idx: n_seq, n_batch
 
-    full_action_samples = np.transpose(actions_taken, [1, 2, 0])
-    full_action_samples = np.expand_dims(full_action_samples, axis=-1)
-    # make it thicker
-    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=1) 
-    full_action_samples = np.repeat(full_action_samples, repeats=5, axis=2)
+    actions_img = get_actions_image(actions_taken)
+    labels_img = get_labels_image(y, n_class)    
+    frame_reads = get_frame_reads_image(actions_taken)
 
-    y = to_label_change(y, n_class)
-
-    full_label_data = np.expand_dims(y, axis=-1)
-    full_label_data = np.transpose(full_label_data, [1, 2, 0])
-    full_label_data = np.expand_dims(full_label_data, axis=-1)
-    # make it thicker
-    full_label_data = np.repeat(full_label_data, repeats=5, axis=1) 
-    full_label_data = np.repeat(full_label_data, repeats=5, axis=2).astype(np.float32)
-    full_label_data /= float(n_class)
-
-    output_image = np.concatenate([np.concatenate([full_label_data,
-                                                   np.zeros_like(full_label_data),
-                                                   np.zeros_like(full_label_data)], axis=-1),
-                                   np.concatenate([np.zeros_like(full_action_samples),
-                                                   full_action_samples,
-                                                   np.zeros_like(full_action_samples)], axis=-1)],
-                                   axis=1)
+    output_image = np.concatenate([
+        np.concatenate([labels_img, np.zeros_like(labels_img), np.zeros_like(labels_img)], axis=-1),
+        np.concatenate([np.zeros_like(frame_reads), np.zeros_like(frame_reads), frame_reads], axis=-1),
+        np.concatenate([np.zeros_like(actions_img), actions_img, np.zeros_like(actions_img)], axis=-1)
+    ], axis=1)
 
     return output_image
-
-import random
 
 def choose(epsilon, a, b):
     if random.random() < epsilon:

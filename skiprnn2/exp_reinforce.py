@@ -117,7 +117,7 @@ if __name__ == '__main__':
                     red_rate = comp_seq_lens / seq_lens
                     fer = 1.0 - ((pred_idx == y) * x_mask).sum(axis=1) / seq_lens
                     rewards[:] = 0.
-                    rewards[:,-1] = -(args.speed_weight * fer + red_rate)
+                    rewards[:,-1] = -(args.w * fer + red_rate)
                 
                 advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
@@ -175,7 +175,7 @@ if __name__ == '__main__':
                     red_rate = comp_seq_lens / seq_lens
                     fer = 1.0 - ((pred_idx == y) * x_mask).sum(axis=1) / seq_lens
                     rewards[:] = 0.
-                    rewards[:,-1] = -(args.speed_weight * fer + red_rate)
+                    rewards[:,-1] = -(args.w * fer + red_rate)
 
                 advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
                 

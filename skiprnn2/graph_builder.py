@@ -9,10 +9,10 @@ import utils
 import tensorflow as tf 
 
 def stop_gradient(tensor, args):
-    if args.no_stop_gradient:
-        return tensor
-    else:
+    if args.stop_gradient:
         return tf.stop_gradient(tensor)
+    else:
+        return tensor
 
 def lstm_state(n_hidden, layer, n_proj, backward=False):
     c_name = 'cstate_{}'.format(layer)
