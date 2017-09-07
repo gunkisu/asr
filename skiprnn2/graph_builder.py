@@ -3,7 +3,6 @@ import numpy as np
 from collections import namedtuple
 
 from mixer import categorical_ent
-from model import LinearCell
 import utils
 
 import tensorflow as tf 
@@ -78,12 +77,6 @@ def build_graph_ri(args):
         step_x_data = tf.placeholder(tf.float32, shape=(None, args.n_input), name='step_x_data')
        
     cell = tf.contrib.rnn.MultiRNNCell([lstm_cell(args) for _ in range(args.n_layer)])
-
-    with tf.variable_scope('label'):
-        _label_logit = LinearCell(num_units=args.n_class)
-
-    with tf.variable_scope('action'):
-        _action_logit = LinearCell(num_units=args.n_action)
 
     # sampling graph
     step_h_state, step_last_state = cell(step_x_data, init_state, scope='rnn/multi_rnn_cell')
