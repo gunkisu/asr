@@ -57,9 +57,9 @@ if __name__ == '__main__':
     best_save_op = tf.train.Saver(max_to_keep=5)
 
     with tf.name_scope("tr_eval"):
-        tr_summary = utils.get_summary('ce cr'.split())
+        tr_summary = utils.get_summary('ce cr image'.split())
     with tf.name_scope("val_eval"):
-        val_summary = utils.get_summary('ce cr fer'.split())
+        val_summary = utils.get_summary('ce cr fer image'.split())
 
     with tf.Session() as sess:
         sess.run(init_op)
@@ -87,6 +87,8 @@ if __name__ == '__main__':
             # For each batch 
             for batch in train_set.get_epoch_iterator():
                 orig_x, orig_x_mask, _, _, orig_y, _ = batch
+                n_action = args.n_skip + 1
+                n_orig_batch, n_orig_seq, n_orig_feat = orig_x
                  
                 for sub_batch in skip_frames_fixed([orig_x, orig_x_mask, orig_y], args.n_skip+1):
                     x, x_mask, y = sub_batch

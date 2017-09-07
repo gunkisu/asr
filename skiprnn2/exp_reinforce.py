@@ -60,6 +60,8 @@ if __name__ == '__main__':
     ml_op = ml_opt_func.apply_gradients(zip(ml_grads, tvars), global_step=global_step)
 
     tg_rl_cost = tf.reduce_mean(tg.rl_cost)
+    tg_rl_cost -= args.beta * tg.seq_action_entropy
+
     rl_grads = tf.gradients(tg_rl_cost, tvars)
     # do not increase global step -- ml op increases it 
     rl_op = rl_opt_func.apply_gradients(zip(rl_grads, tvars))
@@ -110,15 +112,6 @@ if __name__ == '__main__':
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
                 orig_count, comp_count, rw_count = x_mask.sum(), new_x_mask.sum(), new_reward_mask.sum()
                 
-                if args.use_sparse_reward:
-                    pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx, args.n_fast_action)
-                    seq_lens = x_mask.sum(axis=1)
-                    comp_seq_lens = new_x_mask.sum(axis=1)
-                    red_rate = comp_seq_lens / seq_lens
-                    fer = 1.0 - ((pred_idx == y) * x_mask).sum(axis=1) / seq_lens
-                    rewards[:] = 0.
-                    rewards[:,-1] = -(args.w * fer + red_rate)
-                
                 advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
@@ -167,15 +160,6 @@ if __name__ == '__main__':
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image, pred_idx = \
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
                 orig_count, comp_count, rw_count = x_mask.sum(), new_x_mask.sum(), new_reward_mask.sum()
-
-                if args.use_sparse_reward:
-                    pred_idx = expand_output(actions_1hot, x_mask, new_x_mask, pred_idx, args.n_fast_action)
-                    seq_lens = x_mask.sum(axis=1)
-                    comp_seq_lens = new_x_mask.sum(axis=1)
-                    red_rate = comp_seq_lens / seq_lens
-                    fer = 1.0 - ((pred_idx == y) * x_mask).sum(axis=1) / seq_lens
-                    rewards[:] = 0.
-                    rewards[:,-1] = -(args.w * fer + red_rate)
 
                 advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
                 

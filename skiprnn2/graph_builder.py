@@ -54,7 +54,7 @@ def lstm_cell(args):
 
 def build_graph_ri(args):
     tg_fields = ['ml_cost', 'rl_cost', 'seq_x_data', 'seq_x_mask',
-        'seq_y_data', 'init_state', 'seq_action', 'seq_advantage', 'seq_action_mask', 'pred_idx']
+        'seq_y_data', 'init_state', 'seq_action', 'seq_action_entropy', 'seq_advantage', 'seq_action_mask', 'pred_idx']
 
     sg_fields = ['step_h_state', 'step_last_state', 'step_label_probs', 'step_action_probs',
         'step_action_samples', 'step_x_data', 'init_state', 'action_entropy', 'step_pred_idx']
@@ -115,9 +115,9 @@ def build_graph_ri(args):
         
     seq_action_probs = tf.nn.softmax(seq_action_logits)
 
-    action_prob_entropy = categorical_ent(seq_action_probs)
-    action_prob_entropy *= tf.reshape(seq_action_mask, [-1])
-    action_prob_entropy = tf.reduce_sum(action_prob_entropy)/tf.reduce_sum(seq_action_mask)
+    seq_action_entropy = categorical_ent(seq_action_probs)
+    seq_action_entropy *= tf.reshape(seq_action_mask, [-1])
+    seq_action_entropy = tf.reduce_sum(seq_action_entropy)/tf.reduce_sum(seq_action_mask)
 
     # Optimizing over the surrogate function 
     rl_cost = tf.reduce_sum(tf.log(seq_action_probs+1e-8) \
@@ -126,7 +126,7 @@ def build_graph_ri(args):
     rl_cost = -tf.reduce_sum(rl_cost*tf.reshape(seq_action_mask, [-1]))
 
     train_graph = TrainGraph(ml_cost, rl_cost, seq_x_data, seq_x_mask, 
-        seq_y_data, init_state, seq_action, seq_advantage, seq_action_mask, pred_idx)
+        seq_y_data, init_state, seq_action, seq_action_entropy, seq_advantage, seq_action_mask, pred_idx)
 
     sample_graph = SampleGraph(step_h_state, step_last_state, step_label_probs,
         step_action_probs, step_action_samples, step_x_data, init_state, step_action_entropy, step_pred_idx)

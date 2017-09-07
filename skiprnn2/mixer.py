@@ -225,7 +225,7 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
 
         prev_step_idx = prev_step_idx_list[idx]
         prev_pred_idx = prev_pred_idx_list[idx]
-        action_size = cur_step_idx - prev_step_idx
+        cur_skip = cur_step_idx - prev_step_idx
 #        ref_labels = y[prev_step_idx:cur_step_idx, idx]
 
         max_jump = args.n_fast_action if args.n_fast_action > 0 else args.n_action
@@ -241,14 +241,18 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         for l in ref_labels:
             if l == target_label: match_count += 1
             else: break
-        
-        diff = match_count - action_size
+      
+        target_skip = match_count
+        diff = target_skip - cur_skip
+        # short skip
         if diff > 0:
-            rw = -diff * args.w
+            rw = -diff
+        # target skip
         elif diff == 0:
-            rw = 1
+            rw = 0
+        # long skip
         else:
-            rw = diff
+            rw = diff * args.alpha
 
 #        reward_list[reward_update_pos[idx], idx] = rw - 1 # shifting
         reward_list[reward_update_pos[idx], idx] = rw
@@ -794,11 +798,15 @@ def gen_output_image(actions_taken, y, n_class, pred_idx=None):
 
     output_image = np.concatenate([
         np.concatenate([labels_img, np.zeros_like(labels_img), np.zeros_like(labels_img)], axis=-1),
-        np.concatenate([np.zeros_like(frame_reads), np.zeros_like(frame_reads), frame_reads], axis=-1),
-        np.concatenate([np.zeros_like(actions_img), actions_img, np.zeros_like(actions_img)], axis=-1)
+        np.concatenate([np.zeros_like(frame_reads), frame_reads, np.zeros_like(frame_reads)], axis=-1),
+        np.concatenate([np.zeros_like(actions_img), np.zeros_like(actions_img), actions_img], axis=-1)
     ], axis=1)
 
     return output_image
+
+def gen_output_image_subsample(x, y, n_class):
+    actions_taken = []
+    return gen_output_image(actions_taken, y, n_class)
 
 def choose(epsilon, a, b):
     if random.random() < epsilon:
