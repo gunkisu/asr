@@ -54,7 +54,7 @@ def get_argparser():
     parser.add_argument('--use-unimodal', action='store_true', help='Use unimodal output distribution')
     parser.add_argument('--tau', default=1.0, type=float, help='Temperature for softmax in unimodal distributions')
     parser.add_argument('--distribution', default='poisson', choices=['poisson', 'binomial'], help='Unimodal distribution to use')
-    parser.add_argument('--stop-gradient', action='store_true', help='Stop gradient flows')
+    parser.add_argument('--no-stop-gradient', action='store_true', help='Do not stop gradient from flowing')
     parser.add_argument('--alpha', default=1.0, type=float, help='Coefficient for long skips')
     parser.add_argument('--beta', default=1.0, type=float, help='Hyperparameter for entropy regularizer')
   
