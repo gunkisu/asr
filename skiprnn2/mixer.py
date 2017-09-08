@@ -804,9 +804,18 @@ def gen_output_image(actions_taken, y, n_class, pred_idx=None):
 
     return output_image
 
-def gen_output_image_subsample(x, y, n_class):
-    actions_taken = []
-    return gen_output_image(actions_taken, y, n_class)
+def gen_output_image_subsample(x, y, n_skip, start_idx):
+    # n_seq, n_batch, n_action
+    n_action = n_skip+1
+    n_batch, n_seq, n_feat = x.shape
+    actions_taken = np.zeros([n_batch, n_seq, n_action])
+
+    action_idx = [n_action - 1 for i in range(start_idx, n_seq, n_action)]
+    action_one_hot = np.eye(n_action)[action_idx]
+    actions_taken[:,start_idx::n_action] = action_one_hot
+
+    return gen_output_image(
+        np.transpose(actions_taken, [1, 0, 2]), np.transpose(y, [1, 0]), n_action)
 
 def choose(epsilon, a, b):
     if random.random() < epsilon:
