@@ -59,7 +59,7 @@ def get_argparser():
     parser.add_argument('--alpha', default=1.0, type=float, help='Coefficient for long skips')
     parser.add_argument('--beta', default=1.0, type=float, help='Hyperparameter for entropy regularizer')
   
-
+    
     return parser
 
 def get_forward_argparser():
@@ -72,6 +72,7 @@ def get_forward_argparser():
     parser.add_argument('--wxfilename', default='ark:-', help='File to write')
     parser.add_argument('--metafile', default='best_model.ckpt-1000.meta', help='Model file to load')
     parser.add_argument('--show-progress', action='store_true', help='Whether to show progress')
+    parser.add_argument('--no-sampling', action='store_true', help='Do not sample actions')
 
     return parser
 

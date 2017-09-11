@@ -2,7 +2,7 @@
 from __future__ import print_function
 import argparse
 
-from skiprnn2.utils import find_model_iter_nums
+from skiprnn2.utils2 import find_model_iter_nums
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('exp_dir')
