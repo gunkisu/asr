@@ -665,7 +665,7 @@ def fixed_skip_forward(x, x_mask, sess, test_graph):
 
     return transpose_all([label_probs[:max_seq_len]])
 
-def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action):
+def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, no_sampling=False):
     sg = sample_graph
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
@@ -719,10 +719,16 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action):
             feed_dict={sg.step_x_data: _x_step}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
-            action_idx, step_label_likelihood_j, new_prev_state = \
-                sess.run([sg.step_action_samples, sg.step_label_probs, sg.step_last_state],
+            if not no_sampling:
+                action_idx, step_label_likelihood_j, new_prev_state = \
+                    sess.run([sg.step_action_samples, sg.step_label_probs, sg.step_last_state],
+                        feed_dict=feed_dict)
+            else:
+                step_action_probs, step_label_likelihood_j, new_prev_state = \
+                sess.run([sg.step_action_probs, sg.step_label_probs, sg.step_last_state],
                     feed_dict=feed_dict)
-
+                action_idx = np.argmax(step_action_probs, axis=-1)
+            
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
 
             fill(new_x, _x_step, target_indices, update_pos)
@@ -797,8 +803,11 @@ def gen_output_image(actions_taken, y, n_class, pred_idx=None):
     frame_reads = get_frame_reads_image(actions_taken)
 
     output_image = np.concatenate([
+        # R channel (red)
         np.concatenate([labels_img, np.zeros_like(labels_img), np.zeros_like(labels_img)], axis=-1),
+        # G channel (green)
         np.concatenate([np.zeros_like(frame_reads), frame_reads, np.zeros_like(frame_reads)], axis=-1),
+        # B channel (blue)
         np.concatenate([np.zeros_like(actions_img), np.zeros_like(actions_img), actions_img], axis=-1)
     ], axis=1)
 
