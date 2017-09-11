@@ -177,6 +177,23 @@ def find_model(metafile):
     else:
         return metafile
 
+def find_model_iter_nums(exp_dir, best=True):
+    file_pat = 'model.ckpt*meta*'
+    if best:
+        file_pat = 'best_{}'.format(file_pat)
+    model_list = glob.glob(os.path.join(exp_dir, file_pat))
+
+    pat = re.compile('ckpt-(\d+).meta')
+
+    tmp_model_list = []
+    for model in model_list:
+        m = pat.search(model)
+        if m:
+            tmp_model_list.append(int(m.group(1)))
+
+    tmp_model_list.sort(reverse=True)
+    return tmp_model_list
+
 def reduce_lr(lr, factor, sess):
     if factor < 1.0:
         assign_op = tf.assign(lr, lr * factor)
