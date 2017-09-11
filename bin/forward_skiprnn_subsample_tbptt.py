@@ -32,8 +32,9 @@ def main(_):
 
     with tf.Session() as sess:
 
-        print('Loading model...', file=sys.stderr)
         model = utils.find_model(args.metafile)
+        print('Loading model: {}'.format(model), file=sys.stderr)
+
         save_op = tf.train.import_meta_graph(model)
         save_op.restore(sess, model[:-5])
 

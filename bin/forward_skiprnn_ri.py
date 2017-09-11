@@ -36,8 +36,8 @@ def main(_):
 
     with tf.Session() as sess:
 
-        print('Loading model...', file=sys.stderr)
         model = utils.find_model(args.metafile)
+        print('Loading model: {}'.format(model), file=sys.stderr)
         save_op = tf.train.import_meta_graph(model)
         save_op.restore(sess, model[:-5])
 
@@ -78,7 +78,7 @@ def main(_):
             feat_lens = orig_x_mask.sum(axis=1, dtype=np.int32)
 
             actions_1hot, label_probs, new_mask = skip_rnn_forward_parallel2(
-                orig_x, orig_x_mask, sess, sample_graph, n_fast_action)
+                orig_x, orig_x_mask, sess, sample_graph, n_fast_action, no_sampling=args.no_sampling)
 
             seq_label_probs = expand_output(actions_1hot, orig_x_mask, new_mask, label_probs)
 
