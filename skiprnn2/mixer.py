@@ -351,7 +351,7 @@ def to_label_change(y, n_class):
 
     return label_change
 
-def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
+def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sampling=True):
 
     sg = sample_graph
 
@@ -381,7 +381,6 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
 
     # for recording
     full_action_samples = np.zeros([max_seq_len, n_batch, args.n_action])
-    full_action_probs = np.zeros([max_seq_len, n_batch, args.n_action])
 
     # for each time step (index j)
     for j, (x_step, y_step) in enumerate(itertools.izip(x, y)):
@@ -418,12 +417,19 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
         
             feed_dict={sg.step_x_data: _x_step}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
-           
-            action_idx, step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy, step_pred_idx = \
-                sess.run([sg.step_action_samples, sg.step_action_probs, sg.step_label_probs,
-                    sg.step_last_state, sg.action_entropy, sg.step_pred_idx],
-                    feed_dict=feed_dict)
-            
+
+            if sampling:
+                action_idx, step_label_likelihood_j, new_prev_state, action_entropy, step_pred_idx = \
+                    sess.run([sg.step_action_samples, sg.step_label_probs,
+                        sg.step_last_state, sg.action_entropy, sg.step_pred_idx],
+                        feed_dict=feed_dict)
+            else:
+                step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy, step_pred_idx = \
+                    sess.run([sg.step_action_probs, sg.step_label_probs,
+                        sg.step_last_state, sg.action_entropy, sg.step_pred_idx],
+                        feed_dict=feed_dict)
+                action_idx = np.argmax(step_action_prob_j, axis=-1)
+                
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
             action_one_hot = np.eye(args.n_action)[action_idx.flatten()]
 
@@ -448,7 +454,6 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args):
 
             for i, s_idx in enumerate(target_indices):
                 full_action_samples[j, s_idx] = action_one_hot[i]
-                full_action_probs[j, s_idx] = step_action_prob_j[i]
         else:
             update_action_counters(action_counters, [], [], args)
 
@@ -724,10 +729,10 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, sam
                     sess.run([sg.step_action_samples, sg.step_label_probs, sg.step_last_state],
                         feed_dict=feed_dict)
             else:
-                step_action_probs, step_label_likelihood_j, new_prev_state = \
+                step_action_probs_j, step_label_likelihood_j, new_prev_state = \
                 sess.run([sg.step_action_probs, sg.step_label_probs, sg.step_last_state],
                     feed_dict=feed_dict)
-                action_idx = np.argmax(step_action_probs, axis=-1)
+                action_idx = np.argmax(step_action_probs_j, axis=-1)
             
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
 

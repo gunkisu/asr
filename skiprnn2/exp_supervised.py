@@ -161,8 +161,8 @@ if __name__ == '__main__':
                 cr.add(float(comp_count)/orig_count, 1)
          
             avg_fer = 1-ac.avg()
-            print("VALID: epoch={} fer={:.3f} compression={:.2f} time_taken={:.2f}".format(_epoch, 
-                avg_fer, cr.avg(), eval_sw.elapsed()))
+            print("VALID: epoch={} iter={} fer={:.3f} compression={:.2f} time_taken={:.2f}".format(_epoch, 
+                avg_fer, global_step.eval(), cr.avg(), eval_sw.elapsed()))
 
             summaries = sess.run([s.s for s in val_summary],
                 feed_dict={val_summary.fer.ph: avg_fer, val_summary.image.ph: output_image, 

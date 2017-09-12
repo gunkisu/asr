@@ -157,8 +157,9 @@ if __name__ == '__main__':
                 x, x_mask, _, _, y, _ = batch
                 n_batch = x.shape[0]
 
+                # Do not sample actions at test times
                 new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image, pred_idx = \
-                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
+                        gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, sampling=False)
                 orig_count, comp_count, rw_count = x_mask.sum(), new_x_mask.sum(), new_reward_mask.sum()
 
                 advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
@@ -180,8 +181,8 @@ if __name__ == '__main__':
                 rw.add(rewards.sum(), rw_count)
 
             avg_fer = 1-ac.avg()
-            print("VALID: epoch={} ml_cost(ce/frame)={:.3f} rl_cost={:.4f} fer={:.3f} reward={:.4f} action_entropy={:.2f} compression={:.2f} time_taken={:.2f}".format(
-                    _epoch, ce.avg(), rl.avg(), avg_fer, rw.avg(), ae.avg(), cr.avg(), eval_sw.elapsed()))
+            print("VALID: epoch={} iter={} ml_cost(ce/frame)={:.3f} rl_cost={:.4f} fer={:.3f} reward={:.4f} action_entropy={:.2f} compression={:.2f} time_taken={:.2f}".format(
+                    _epoch, global_step.eval(), ce.avg(), rl.avg(), avg_fer, rw.avg(), ae.avg(), cr.avg(), eval_sw.elapsed()))
 
             summaries = sess.run([s.s for s in val_summary],
                 feed_dict={val_summary.ce.ph: ce.avg(), val_summary.fer.ph: avg_fer, 
