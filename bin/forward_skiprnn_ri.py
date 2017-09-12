@@ -23,7 +23,7 @@ import kaldi_io
 
 SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples step_action_probs step_last_state step_x_data init_state')
 
-def main(_):
+if __name__ == '__main__':
     print(' '.join(sys.argv), file=sys.stderr)
 
     args = utils.get_forward_argparser().parse_args()
@@ -94,9 +94,6 @@ def main(_):
         print('Done', file=sys.stderr)
         print('Took {}'.format(sw.elapsed()), file=sys.stderr)
             
-if __name__ == '__main__':
-    tf.app.run()
-
 
 
 

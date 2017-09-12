@@ -19,7 +19,7 @@ from skiprnn2.graph_builder import match_c_fw, match_h_fw
 import skiprnn2.utils as utils
 import kaldi_io
 
-def main(_):
+if __name__ == '__main__':
     print(' '.join(sys.argv), file=sys.stderr)
 
     args = utils.get_forward_argparser().parse_args()
@@ -121,7 +121,4 @@ def main(_):
         print('', file=sys.stderr)
         print('Done', file=sys.stderr)
         print('Took {}'.format(sw.elapsed()), file=sys.stderr)
-
-if __name__ == '__main__':
-    tf.app.run()
 
