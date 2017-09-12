@@ -72,7 +72,7 @@ def get_forward_argparser():
     parser.add_argument('--wxfilename', default='ark:-', help='File to write')
     parser.add_argument('--metafile', default='best_model.ckpt-1000.meta', help='Model file to load')
     parser.add_argument('--show-progress', action='store_true', help='Whether to show progress')
-    parser.add_argument('--no-sampling', action='store_true', help='Do not sample actions')
+    parser.add_argument('--sampling', action='store_true', help='Sample actions')
 
     return parser
 

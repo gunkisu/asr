@@ -665,7 +665,7 @@ def fixed_skip_forward(x, x_mask, sess, test_graph):
 
     return transpose_all([label_probs[:max_seq_len]])
 
-def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, no_sampling=False):
+def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, sampling=False):
     sg = sample_graph
 
     # n_batch, n_seq, n_feat -> n_seq, n_batch, n_feat
@@ -719,7 +719,7 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, no_
             feed_dict={sg.step_x_data: _x_step}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
-            if not no_sampling:
+            if sampling:
                 action_idx, step_label_likelihood_j, new_prev_state = \
                     sess.run([sg.step_action_samples, sg.step_label_probs, sg.step_last_state],
                         feed_dict=feed_dict)
