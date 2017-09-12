@@ -53,8 +53,8 @@ if __name__ == '__main__':
     train_set, valid_set, test_set = utils.prepare_dataset(args)
 
     init_op = tf.global_variables_initializer()
-    save_op = tf.train.Saver(max_to_keep=args.n_epoch)
-    best_save_op = tf.train.Saver(max_to_keep=args.n_epoch)
+
+    save_op, best_save_op = utils.init_savers(args)
 
     with tf.name_scope("tr_eval"):
         tr_summary = utils.get_summary('ce cr image'.split())

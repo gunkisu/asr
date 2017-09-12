@@ -58,6 +58,7 @@ def get_argparser():
     parser.add_argument('--no-stop-gradient', action='store_true', help='Do not stop gradient from flowing')
     parser.add_argument('--alpha', default=1.0, type=float, help='Coefficient for long skips')
     parser.add_argument('--beta', default=1.0, type=float, help='Hyperparameter for entropy regularizer')
+    parser.add_argument('--max-to-keep', default=10, type=int, help='Number of models to keep')
   
     
     return parser
@@ -141,18 +142,23 @@ def get_summary(summary_kinds):
     return summary
 
 
-def symlink_force(target, link_name):
+def hardlink_force(target, link_name):
     try:
-        os.symlink(target, link_name)
+        os.link(target, link_name)
     except OSError as e:
         if e.errno == errno.EEXIST:
             os.remove(link_name)
-            os.symlink(target, link_name)
+            os.link(target, link_name)
         else:
             raise e
 
+def init_savers(args):
+    save_op = tf.train.Saver(max_to_keep=args.max_to_keep)
+    best_save_op = tf.train.Saver(max_to_keep=args.max_to_keep)
+    return save_op, best_save_op
+
 def link_to_best_model(best_ckpt, args):
-    symlink_force(os.path.abspath('{}.meta'.format(best_ckpt)), os.path.join(args.logdir, 'best_model.meta'))
+    hardlink_force(os.path.abspath('{}.meta'.format(best_ckpt)), os.path.join(args.logdir, 'best_model.meta'))
 
 def get_model_size(trainable_variables):
     return float(np.sum([np.prod(v.get_shape().as_list()) for v in trainable_variables])) / 1000000
