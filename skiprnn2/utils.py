@@ -59,9 +59,7 @@ def get_argparser():
     parser.add_argument('--alpha', default=1.0, type=float, help='Coefficient for long skips')
     parser.add_argument('--beta', default=1.0, type=float, help='Hyperparameter for entropy regularizer')
     parser.add_argument('--max-to-keep', default=10, type=int, help='Number of models to keep')
-    parser.add_argument('--clean-start', action='store_true', help='Delete log dir')
-  
-    
+      
     return parser
 
 def get_forward_argparser():
@@ -79,10 +77,9 @@ def get_forward_argparser():
     return parser
 
 def prepare_dir(args):
-    if args.clean_start:
-        if tf.gfile.Exists(args.logdir):
-            tf.gfile.DeleteRecursively(args.logdir)
-        tf.gfile.MakeDirs(args.logdir)
+    if tf.gfile.Exists(args.logdir):
+        tf.gfile.DeleteRecursively(args.logdir)
+    tf.gfile.MakeDirs(args.logdir)
 
 def get_gpuname():
     p = subprocess.Popen("nvidia-smi -q | grep 'Product Name'", shell=True, stdout=subprocess.PIPE, universal_newlines=True)
