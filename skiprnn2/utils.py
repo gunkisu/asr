@@ -59,6 +59,7 @@ def get_argparser():
     parser.add_argument('--alpha', default=1.0, type=float, help='Coefficient for long skips')
     parser.add_argument('--beta', default=1.0, type=float, help='Hyperparameter for entropy regularizer')
     parser.add_argument('--max-to-keep', default=10, type=int, help='Number of models to keep')
+    parser.add_argument('--clean-start', action='store_true', help='Delete log dir')
   
     
     return parser
@@ -78,9 +79,10 @@ def get_forward_argparser():
     return parser
 
 def prepare_dir(args):
-    if tf.gfile.Exists(args.logdir):
-        tf.gfile.DeleteRecursively(args.logdir)
-    tf.gfile.MakeDirs(args.logdir)
+    if args.clean_start:
+        if tf.gfile.Exists(args.logdir):
+            tf.gfile.DeleteRecursively(args.logdir)
+        tf.gfile.MakeDirs(args.logdir)
 
 def get_gpuname():
     p = subprocess.Popen("nvidia-smi -q | grep 'Product Name'", shell=True, stdout=subprocess.PIPE, universal_newlines=True)
@@ -183,23 +185,6 @@ def find_model(metafile):
         return model
     else:
         return metafile
-
-def find_model_iter_nums(exp_dir, best=True):
-    file_pat = 'model*meta*'
-    if best:
-        file_pat = 'best_{}'.format(file_pat)
-    model_list = glob.glob(os.path.join(exp_dir, file_pat))
-
-    pat = re.compile('-(\d+).meta')
-
-    tmp_model_list = []
-    for model in model_list:
-        m = pat.search(model)
-        if m:
-            tmp_model_list.append(int(m.group(1)))
-
-    tmp_model_list.sort(reverse=True)
-    return tmp_model_list
 
 def reduce_lr(lr, factor, sess):
     if factor < 1.0:
