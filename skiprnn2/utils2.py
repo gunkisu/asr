@@ -3,12 +3,12 @@ import re
 import os
 
 def find_model_iter_nums(exp_dir, best=True):
-    file_pat = 'model.ckpt*meta*'
+    file_pat = 'model*meta*'
     if best:
         file_pat = 'best_{}'.format(file_pat)
     model_list = glob.glob(os.path.join(exp_dir, file_pat))
 
-    pat = re.compile('ckpt-(\d+).meta')
+    pat = re.compile('-(\d+).meta')
 
     tmp_model_list = []
     for model in model_list:
