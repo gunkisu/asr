@@ -58,7 +58,7 @@ def get_argparser():
     parser.add_argument('--no-stop-gradient', action='store_true', help='Do not stop gradient from flowing')
     parser.add_argument('--alpha', default=1.0, type=float, help='Coefficient for long skips')
     parser.add_argument('--beta', default=1.0, type=float, help='Hyperparameter for entropy regularizer')
-    parser.add_argument('--max-to-keep', default=10, type=int, help='Number of models to keep')
+    parser.add_argument('--max-to-keep', default=20, type=int, help='Number of models to keep')
       
     return parser
 
