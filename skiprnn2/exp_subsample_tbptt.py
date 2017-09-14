@@ -189,12 +189,6 @@ if __name__ == '__main__':
                     val_summary.fer.ph: avg_fer})
             for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
 
-            # Save model
-            if avg_fer < _best_score:
-                _best_score = avg_fer
-                best_ckpt = best_save_op.save(sess, os.path.join(args.logdir, "best_model"), global_step=global_step)
-                print("Best checkpoint stored in: %s" % best_ckpt)
-
             ckpt = save_op.save(sess, os.path.join(args.logdir, "model"), global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
 

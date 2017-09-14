@@ -162,19 +162,12 @@ if __name__ == '__main__':
          
             avg_fer = 1-ac.avg()
             print("VALID: epoch={} iter={} fer={:.3f} compression={:.2f} time_taken={:.2f}".format(_epoch, 
-                avg_fer, global_step.eval(), cr.avg(), eval_sw.elapsed()))
+                global_step.eval(), avg_fer, cr.avg(), eval_sw.elapsed()))
 
             summaries = sess.run([s.s for s in val_summary],
                 feed_dict={val_summary.fer.ph: avg_fer, val_summary.image.ph: output_image, 
                     val_summary.cr.ph: cr.avg()})
             for s in summaries: summary_writer.add_summary(s, global_step.eval())
-
-            # Save model
-            if avg_fer < _best_score:
-                _best_score = avg_fer
-                best_ckpt = best_save_op.save(sess, os.path.join(args.logdir, "best_model"), 
-                    global_step=global_step)
-                print("Best checkpoint stored in: %s" % best_ckpt)
 
             ckpt = save_op.save(sess, os.path.join(args.logdir, "model"), global_step=global_step)
             print("Checkpoint stored in: %s" % ckpt)
