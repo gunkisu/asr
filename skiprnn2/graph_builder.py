@@ -57,7 +57,7 @@ def build_graph_ri(args):
         'seq_y_data', 'init_state', 'seq_action', 'seq_action_entropy', 'seq_advantage', 'seq_action_mask', 'pred_idx']
 
     sg_fields = ['step_h_state', 'step_last_state', 'step_label_probs', 'step_action_probs',
-        'step_action_samples', 'step_x_data', 'init_state', 'action_entropy', 'step_pred_idx']
+        'step_action_samples', 'step_x_data', 'init_state', 'action_entropy', 'step_pred_idx', 'step_action_greedy']
 
     TrainGraph = namedtuple('TrainGraph', ' '.join(tg_fields))
     SampleGraph = namedtuple('SampleGraph', ' '.join(sg_fields))
@@ -92,6 +92,7 @@ def build_graph_ri(args):
     step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
     step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
     step_action_entropy = categorical_ent(step_action_probs)
+    step_action_greedy = tf.argmax(step_action_logits, axis=-1, name='step_action_greedy')
 
     # training graph
     seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')
@@ -129,7 +130,7 @@ def build_graph_ri(args):
         seq_y_data, init_state, seq_action, seq_action_entropy, seq_advantage, seq_action_mask, pred_idx)
 
     sample_graph = SampleGraph(step_h_state, step_last_state, step_label_probs,
-        step_action_probs, step_action_samples, step_x_data, init_state, step_action_entropy, step_pred_idx)
+        step_action_probs, step_action_samples, step_x_data, init_state, step_action_entropy, step_pred_idx, step_action_greedy)
 
     return train_graph, sample_graph
 
@@ -137,7 +138,7 @@ def build_graph_sv(args):
     TrainGraph = namedtuple('TrainGraph', 
         'ml_cost rl_cost seq_x_data seq_x_mask seq_y_data seq_jump_data init_state pred_idx seq_action_samples')
     TestGraph = namedtuple('TestGraph', 
-        'step_h_state step_last_state step_label_probs step_action_probs step_pred_idx step_x_data init_state step_action_samples')
+        'step_h_state step_last_state step_label_probs step_action_probs step_x_data init_state step_action_samples step_action_greedy')
 
     with tf.device(args.device):
         # n_batch, n_seq, n_feat
@@ -164,6 +165,7 @@ def build_graph_sv(args):
         poi = tf.contrib.distributions.Poisson(scalar_outputs)
         k_values = list(np.arange(0.0, args.n_action, 1.0))
         step_action_logits = poi.prob(k_values)/args.tau # smoothing
+       
         step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
         step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
     else:
@@ -171,10 +173,11 @@ def build_graph_sv(args):
         step_action_probs = tf.nn.softmax(logits=step_action_logits, name='step_action_probs')
         step_action_samples = tf.multinomial(logits=step_action_logits, num_samples=1, name='step_action_samples')
 
-    step_pred_idx = tf.argmax(step_action_logits, axis=1, name='step_pred_idx')
+
+    step_action_greedy = tf.argmax(step_action_logits, axis=-1, name='step_action_greedy')
     
     test_graph = TestGraph(step_h_state, step_last_state, step_label_probs, 
-        step_action_probs, step_pred_idx, step_x_data, init_state, step_action_samples)
+        step_action_probs, step_x_data, init_state, step_action_samples, step_action_greedy)
 
     # training graph
     seq_hid_3d, _ = tf.nn.dynamic_rnn(cell=cell, inputs=seq_x_data, initial_state=init_state, scope='rnn')

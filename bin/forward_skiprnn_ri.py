@@ -21,7 +21,7 @@ import skiprnn2.utils as utils
 
 import kaldi_io
 
-SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples step_action_probs step_last_state step_x_data init_state')
+SampleGraph = namedtuple('SampleGraph', 'step_label_probs step_action_samples step_action_greedy step_last_state step_x_data init_state')
 
 if __name__ == '__main__':
     print(' '.join(sys.argv), file=sys.stderr)
@@ -44,7 +44,7 @@ if __name__ == '__main__':
         writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 
         _step_label_probs = sess.graph.get_tensor_by_name('step_label_probs:0')
-        step_action_probs = sess.graph.get_tensor_by_name('step_action_probs:0')
+        step_action_greedy = sess.graph.get_tensor_by_name('step_action_greedy:0')
         step_action_samples = sess.graph.get_tensor_by_name('step_action_samples/Multinomial:0')
         step_x_data = sess.graph.get_tensor_by_name('step_x_data:0')
         n_fast_action, = sess.graph.get_collection('n_fast_action')
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         for c, h in zip(last_cstates, last_hstates):
             step_last_state.append(tf.contrib.rnn.LSTMStateTuple(c, h))
 
-        sample_graph = SampleGraph(_step_label_probs, step_action_samples, step_action_probs, step_last_state, step_x_data, init_state)
+        sample_graph = SampleGraph(_step_label_probs, step_action_samples, step_action_greedy, step_last_state, step_x_data, init_state)
 
         writer = kaldi_io.BaseFloatMatrixWriter(args.wxfilename)
 

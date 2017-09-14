@@ -417,19 +417,14 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sampling
         
             feed_dict={sg.step_x_data: _x_step}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
-
-            if sampling:
-                action_idx, step_label_likelihood_j, new_prev_state, action_entropy, step_pred_idx = \
-                    sess.run([sg.step_action_samples, sg.step_label_probs,
-                        sg.step_last_state, sg.action_entropy, sg.step_pred_idx],
-                        feed_dict=feed_dict)
-            else:
-                step_action_prob_j, step_label_likelihood_j, new_prev_state, action_entropy, step_pred_idx = \
-                    sess.run([sg.step_action_probs, sg.step_label_probs,
-                        sg.step_last_state, sg.action_entropy, sg.step_pred_idx],
-                        feed_dict=feed_dict)
-                action_idx = np.argmax(step_action_prob_j, axis=-1)
                 
+            action_taken = sg.step_action_samples if sampling else sg.step_action_greedy
+
+            action_idx, step_label_likelihood_j, new_prev_state, action_entropy, step_pred_idx = \
+                    sess.run([action_taken, sg.step_label_probs,
+                        sg.step_last_state, sg.action_entropy, sg.step_pred_idx],
+                        feed_dict=feed_dict)
+
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
             action_one_hot = np.eye(args.n_action)[action_idx.flatten()]
 
@@ -724,15 +719,10 @@ def skip_rnn_forward_parallel2(x, x_mask, sess, sample_graph, n_fast_action, sam
             feed_dict={sg.step_x_data: _x_step}
             feed_prev_state(feed_dict, sg.init_state, _prev_state)
 
-            if sampling:
-                action_idx, step_label_likelihood_j, new_prev_state = \
-                    sess.run([sg.step_action_samples, sg.step_label_probs, sg.step_last_state],
+            action_taken = sg.step_action_samples if sampling else sg.step_action_greedy
+            action_idx, step_label_likelihood_j, new_prev_state = \
+                    sess.run([action_taken, sg.step_label_probs, sg.step_last_state],
                         feed_dict=feed_dict)
-            else:
-                step_action_probs_j, step_label_likelihood_j, new_prev_state = \
-                sess.run([sg.step_action_probs, sg.step_label_probs, sg.step_last_state],
-                    feed_dict=feed_dict)
-                action_idx = np.argmax(step_action_probs_j, axis=-1)
             
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
 
@@ -1004,7 +994,7 @@ def skip_rnn_forward_supervised(x, x_mask, sess, test_graph, n_fast_action, y=No
             feed_prev_state(feed_dict, test_graph.init_state, _prev_state)
 
             action_idx, step_label_likelihood_j, new_prev_state = \
-                sess.run([test_graph.step_action_samples, test_graph.step_label_probs, test_graph.step_last_state],
+                sess.run([test_graph.step_action_greedy, test_graph.step_label_probs, test_graph.step_last_state],
                     feed_dict=feed_dict)
 
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
