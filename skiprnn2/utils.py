@@ -152,8 +152,8 @@ def hardlink_force(target, link_name):
             raise e
 
 def init_savers(args):
-    save_op = tf.train.Saver(max_to_keep=args.max_to_keep)
-    best_save_op = tf.train.Saver(max_to_keep=args.max_to_keep)
+    save_op = tf.train.Saver(max_to_keep=args.n_epoch)
+    best_save_op = tf.train.Saver(max_to_keep=args.n_epoch)
     return save_op, best_save_op
 
 def link_to_best_model(best_ckpt, args):
