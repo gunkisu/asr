@@ -204,9 +204,6 @@ def win_iter(batch, win_size, right_context=0):
 def skip_frames_fixed(batch, every_n, return_first=False, return_start_idx=False):
     assert every_n > 0
 
-    if every_n == 1:
-        return batch
-
     if return_first:
         start_idx = 0
     else:
