@@ -74,13 +74,11 @@ if __name__ == '__main__':
         epoch_sw, disp_sw, eval_sw = StopWatch(), StopWatch(), StopWatch()
 
         # For each epoch 
-        for _epoch in range(args.n_epoch):
-            _n_exp = 0
-
+        for _epoch in range(1, args.n_epoch+1):
             epoch_sw.reset(); disp_sw.reset()
 
             print('--')
-            print('Epoch {} training'.format(_epoch+1))
+            print('Epoch {} training'.format(_epoch))
 
             for accu in accu_list: accu.reset()                    
 
@@ -92,7 +90,6 @@ if __name__ == '__main__':
                     args.n_skip+1, return_start_idx=True)
                 x, x_mask, y = sub_batch
                 n_batch, _, _ = x.shape
-                _n_exp += n_batch
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
 
@@ -105,21 +102,21 @@ if __name__ == '__main__':
                 ce.add(ml_cost.sum(), comp_count)
                 cr.add(float(comp_count)/orig_count, 1)
 
-                output_image = mixer.gen_output_image_subsample(orig_x, orig_y, args.n_skip, start_idx)
-
-                summaries = sess.run([s.s for s in tr_summary],
-                    feed_dict={tr_summary.ce.ph: ce.last_avg(), tr_summary.cr.ph: cr.avg(),
-                        tr_summary.image.ph: output_image})
-                for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
-
                 if global_step.eval() % args.display_freq == 0:
+    
                     print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.3f} compression={:.2f} time_taken={:.2f}".format(
                             _epoch, global_step.eval(), ce.avg(), cr.avg(), disp_sw.elapsed()))
+                    output_image = mixer.gen_output_image_subsample(orig_x, orig_y, args.n_skip, start_idx)
+                    summaries = sess.run([s.s for s in tr_summary],
+                        feed_dict={tr_summary.ce.ph: ce.avg(), tr_summary.cr.ph: cr.avg(),
+                            tr_summary.image.ph: output_image})
+                    for s in summaries: summary_writer.add_summary(s, global_step.eval())
+                    
                     for accu in accu_list: accu.reset()                    
                     disp_sw.reset()
 
             print('--')
-            print('End of epoch {}'.format(_epoch+1))
+            print('End of epoch {}'.format(_epoch))
             epoch_sw.print_elapsed()
 
             print('Testing')

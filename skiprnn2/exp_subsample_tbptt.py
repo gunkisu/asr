@@ -79,13 +79,11 @@ if __name__ == '__main__':
         epoch_sw, disp_sw, eval_sw = StopWatch(), StopWatch(), StopWatch()
 
         # For each epoch 
-        for _epoch in xrange(args.n_epoch):
-            _n_exp = 0
-
+        for _epoch in xrange(1, args.n_epoch+1):
             epoch_sw.reset(); disp_sw.reset()
 
             print('--')
-            print('Epoch {} training'.format(_epoch+1))
+            print('Epoch {} training'.format(_epoch))
 
             for accu in accu_list: accu.reset()                    
 
@@ -96,7 +94,6 @@ if __name__ == '__main__':
                 sub_batch = skip_frames_fixed2([orig_x, orig_x_mask, orig_y], args.n_skip+1)
                 skip_x, skip_x_mask, skip_y = sub_batch
                 n_batch = skip_x.shape[0] # add batch size
-                _n_exp += n_batch
 
                 prev_state_fw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
                 prev_state_bw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
@@ -120,18 +117,18 @@ if __name__ == '__main__':
                 orig_count, comp_count = orig_x_mask.sum(), skip_x_mask.sum()
                 cr.add(float(comp_count)/orig_count, 1)
 
-                summaries = sess.run([s.s for s in tr_summary],
-                    feed_dict={tr_summary.ce.ph: ce.last_avg(), tr_summary.cr.ph: cr.avg()})
-                for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
-
                 if global_step.eval() % args.display_freq == 0:
                     print("TRAIN: epoch={} iter={} ml_cost(ce/frame)={:.3f} compression={:.2f} time_taken={:.2f}".format(
                             _epoch, global_step.eval(), ce.avg(), cr.avg(), disp_sw.elapsed()))
+                    summaries = sess.run([s.s for s in tr_summary],
+                        feed_dict={tr_summary.ce.ph: ce.avg(), tr_summary.cr.ph: cr.avg()})
+                    for s in summaries: summary_writer.add_summary(s, global_step.eval())                                 
+
                     for accu in accu_list: accu.reset()                    
                     disp_sw.reset()
 
             print('--')
-            print('End of epoch {}'.format(_epoch+1))
+            print('End of epoch {}'.format(_epoch))
             epoch_sw.print_elapsed()
 
             print('Testing')
@@ -145,7 +142,6 @@ if __name__ == '__main__':
                 sub_batch = skip_frames_fixed2([orig_x, orig_x_mask, orig_y], args.n_skip+1, return_first=True)
                 skip_x, skip_x_mask, skip_y = sub_batch
                 n_batch = skip_x.shape[0] # add batch size
-                _n_exp += n_batch
 
                 prev_state_fw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
                 prev_state_bw = np.zeros([n_batch, args.n_layer, 2, args.n_hidden])
