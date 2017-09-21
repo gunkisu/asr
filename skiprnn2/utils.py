@@ -34,7 +34,7 @@ def get_argparser():
     parser.add_argument('--lr', default=0.001, type=float, help='Initial learning rate')
     parser.add_argument('--lr2', default=0.001, type=float, help='Initial learning rate for RL')
     parser.add_argument('--factor', default=0.5, type=float, help='Learning rate scheduling factor')
-    parser.add_argument('--n-epoch', default=10, type=int, help='Maximum number of epochs')
+    parser.add_argument('--n-epoch', default=15, type=int, help='Maximum number of epochs')
     parser.add_argument('--display-freq', default=50, type=int, help='Display frequency')
     parser.add_argument('--n-input', default=123, type=int, help='Number of RNN hidden units')
     parser.add_argument('--n-layer', default=1, type=int, help='Number of RNN hidden layers')
