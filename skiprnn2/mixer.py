@@ -1135,7 +1135,7 @@ def _normalize_advantages(advantages, new_reward_mask):
 
     return advantages
 
-def compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args):
+def compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args, test=False):
     # shape: [n_batch, n_seq, n_hidden] or [n_batch, n_seq] 
     discounted_rewards = _compute_discounted_rewards(rewards, new_reward_mask, args.discount_gamma)
     advantages = _compute_advantages(new_x, new_x_mask, vf, rewards, discounted_rewards, new_reward_mask) # [n_batch, n_seq]
@@ -1144,7 +1144,8 @@ def compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args):
     valid_h_indices= np.where(new_reward_mask==1.)
     valid_new_x = new_x[valid_h_indices]
     discounted_rewards_1d = np.concatenate(discounted_rewards, axis=0)
-    vf.fit(valid_new_x, discounted_rewards_1d)
+    if not test:
+        vf.fit(valid_new_x, discounted_rewards_1d)
 
     return advantages
 

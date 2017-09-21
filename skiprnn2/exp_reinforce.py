@@ -158,7 +158,7 @@ if __name__ == '__main__':
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, sampling=False)
                 orig_count, comp_count, rw_count = x_mask.sum(), new_x_mask.sum(), new_reward_mask.sum()
 
-                advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+                advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args, test=True)
                 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 
