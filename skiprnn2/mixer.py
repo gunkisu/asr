@@ -66,42 +66,7 @@ def nats2bits(x):
 def save_npz2(file_name, param_dict):
   np.savez(file_name, **param_dict)
 
-class LinearVF(object):
-#    def __init__(self, reg_coeff=2.0, num_iter=1):
-    def __init__(self, reg_coeff=2.0, num_iter=5):
-        self.coeffs = None
-#        self.reg_coeff = 2.0
-        self.reg_coeff = 1e-5
-        self.num_iter = num_iter
 
-    def _features(self, x):
-        o = x.astype('float32')
-        return np.concatenate([o, o**2, o**3])
-
-    def get_featmat(self, X):
-        return np.asarray([self._features(x) for x in X])
-
-    def fit(self, X, returns):
-        featmat = self.get_featmat(X)
-        reg_coeff = self.reg_coeff
-        for _ in range(self.num_iter):
-            # Equation 3.28 in PRML
-            self.coeffs = np.linalg.lstsq(
-                featmat.T.dot(featmat) + reg_coeff * np.identity(featmat.shape[1]),
-                featmat.T.dot(returns)
-            )[0]
-            if not np.any(np.isnan(self.coeffs)):
-                break
-#            reg_coeff *= 2
-            reg_coeff *= 10
-
-    def predict(self, X):
-        # [n_batch * n_seq, n_feat]
-        
-        if self.coeffs is None: 
-            return np.zeros(X.shape[0]) # zeros of [n_batch * n_seq]
-
-        return self.get_featmat(X).dot(self.coeffs)
 
 def filter_last(x_step, y_step, prev_state, j, seq_lens, sample_done):
     new_x_step = []
@@ -274,6 +239,7 @@ def update_prev_state(prev_state, new_prev_state, target_indices=None):
             prev_state[i] = ps
 
 
+
 def update_action_counters2(action_counters, action_idx, target_indices, n_action, n_fast_action):
     new_ac = list(action_counters)
     for ai, i in zip(action_idx, target_indices):
@@ -379,6 +345,8 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sampling
     rewards = np.zeros([max_seq_len-1, n_batch])
     action_entropies = np.zeros([max_seq_len-1, n_batch])
 
+    final_hstates = np.zeros([max_seq_len-1, n_batch, args.n_hidden])
+
     # for recording
     full_action_samples = np.zeros([max_seq_len, n_batch, args.n_action])
 
@@ -425,6 +393,8 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sampling
                         sg.step_last_state, sg.action_entropy, sg.step_pred_idx],
                         feed_dict=feed_dict)
 
+            # shape of new_prev_state: [n_batch, n_layer, 2, n_hidden]
+            fill(final_hstates, np.asarray(new_prev_state)[:,-1,-1,:], target_indices, update_pos)
             new_prev_state = np.transpose(np.asarray(new_prev_state), [2,0,1,3])
             action_one_hot = np.eye(args.n_action)[action_idx.flatten()]
 
@@ -460,7 +430,8 @@ def gen_episode_with_seg_reward(x, x_mask, y, sess, sample_graph, args, sampling
                          rewards[:max_reward_seq_len],
                          action_entropies[:max_seq_len-1],
                          mask,
-                         reward_mask])
+                         reward_mask,
+                         final_hstates[:max_reward_seq_len]])
 
     output_image = gen_output_image(full_action_samples, y, args.n_class)
     outp.append(output_image)

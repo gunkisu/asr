@@ -79,7 +79,7 @@ if __name__ == '__main__':
     with tf.name_scope("val_eval"):
         val_summary = get_summary('ce rl cr fer image'.split())
 
-    vf = mixer.LinearVF()
+    vf = utils.LinearVF()
 
     with tf.Session() as sess:
         sess.run(init_op)
@@ -105,11 +105,12 @@ if __name__ == '__main__':
                 x, x_mask, _, _, y, _ = batch
                 n_batch = x.shape[0]
 
-                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image, pred_idx = \
+                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, final_hstates, output_image, pred_idx = \
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args)
                 orig_count, comp_count, rw_count = x_mask.sum(), new_x_mask.sum(), new_reward_mask.sum()
                 
-                advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+#                advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args)
+                advantages = mixer.compute_advantage2(final_hstates, new_reward_mask, rewards, new_reward_mask, vf, args)
 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
 
@@ -154,11 +155,12 @@ if __name__ == '__main__':
                 n_batch = x.shape[0]
 
                 # Do not sample actions at test times
-                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, output_image, pred_idx = \
+                new_x, new_y, actions_1hot, rewards, action_entropies, new_x_mask, new_reward_mask, final_hstates, output_image, pred_idx = \
                         gen_episode_with_seg_reward(x, x_mask, y, sess, sg, args, sampling=False)
                 orig_count, comp_count, rw_count = x_mask.sum(), new_x_mask.sum(), new_reward_mask.sum()
 
-                advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args, test=True)
+#                advantages = mixer.compute_advantage2(new_x, new_x_mask, rewards, new_reward_mask, vf, args, test=True)
+                advantages = mixer.compute_advantage2(final_hstates, new_reward_mask, rewards, new_reward_mask, vf, args, test=True)
                 
                 zero_state = gen_zero_state(n_batch, args.n_hidden)
                 feed_dict={tg.seq_x_data: new_x, tg.seq_x_mask: new_x_mask, tg.seq_y_data: new_y, 

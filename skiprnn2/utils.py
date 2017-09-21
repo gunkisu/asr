@@ -222,3 +222,38 @@ def skip_frames_fixed(batch, every_n, return_first=False, return_start_idx=False
         return new_batch, start_idx
     else:
         return new_batch
+
+class LinearVF(object):
+    def __init__(self, num_iter=1):
+        self.coeffs = None
+        self.reg_coeff = 0.0
+        self.num_iter = num_iter
+
+    def _features(self, x):
+        o = x.astype('float32')
+#        return np.concatenate([o, o**2, o**3])
+        return np.concatenate([o])
+
+    def get_featmat(self, X):
+        return np.asarray([self._features(x) for x in X])
+
+    def fit(self, X, returns):
+        featmat = self.get_featmat(X)
+        reg_coeff = self.reg_coeff
+        for _ in range(self.num_iter):
+            # Equation 3.28 in PRML
+            self.coeffs = np.linalg.lstsq(
+                featmat.T.dot(featmat) + reg_coeff * np.identity(featmat.shape[1]),
+                featmat.T.dot(returns)
+            )[0]
+            if not np.any(np.isnan(self.coeffs)):
+                break
+            reg_coeff *= 2
+
+    def predict(self, X):
+        # [n_batch * n_seq, n_feat]
+        
+        if self.coeffs is None: 
+            return np.zeros(X.shape[0]) # zeros of [n_batch * n_seq]
+
+        return self.get_featmat(X).dot(self.coeffs)
