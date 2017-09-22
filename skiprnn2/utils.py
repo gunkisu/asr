@@ -59,6 +59,8 @@ def get_argparser():
     parser.add_argument('--alpha', default=1.0, type=float, help='Coefficient for long skips')
     parser.add_argument('--beta', default=1.0, type=float, help='Hyperparameter for entropy regularizer')
     parser.add_argument('--max-to-keep', default=10, type=int, help='Number of models to keep')
+    parser.add_argument('--use-label-miss-penalty', action='store_true', help='Penalize skips that miss label predictions')
+    parser.add_argument('--label-miss-penalty', default=1, type=int, help='How much to penalize')
       
     return parser
 

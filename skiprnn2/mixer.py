@@ -197,18 +197,35 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
         ref_labels = y[prev_step_idx:prev_step_idx+max_jump, idx]
         
         match_count = 0
+        second_match_count = 0
         miss_count = 0
         if args.use_prediction:
             target_label = prev_pred_idx
         else:
             target_label = ref_labels[0]
 
-        for l in ref_labels:
-            if l == target_label: match_count += 1
-            else: break
+        if not args.use_label_miss_penalty:
+
+            for l in ref_labels:
+                if l == target_label: 
+                    match_count += 1
+                else:
+                    break
+        else:
+            is_first_seg = True
+            for l in ref_labels:
+                if l == target_label: 
+                    match_count += 1
+                elif is_first_seg:
+                    second_match_count += 1
+                    is_first_seg = False
+                    target_label = l
+                else:
+                    break
       
         target_skip = match_count
         diff = target_skip - cur_skip
+ 
         # short skip
         if diff > 0:
             rw = -diff
@@ -217,9 +234,12 @@ def fill_seg_match_reward(reward_list, y, cur_step_idx, prev_pred_idx_list,
             rw = 0
         # long skip
         else:
-            rw = diff * args.alpha
+            if args.use_label_miss_penalty and (match_count + second_match_count) <= cur_skip:
+                # passed over the next segment 
+                rw = (diff-args.label_miss_penalty) * args.alpha
+            else:
+                rw = diff * args.alpha
 
-#        reward_list[reward_update_pos[idx], idx] = rw - 1 # shifting
         reward_list[reward_update_pos[idx], idx] = rw
         reward_target_indices.append(idx)
 
