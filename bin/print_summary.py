@@ -15,9 +15,9 @@ if __name__ == '__main__':
     for e in tf.train.summary_iterator(args.event_file):
         for v in e.summary.value:
             if v.tag == args.summary_kind:
-                history.append(float(v.simple_value))
+                history.append((int(e.step), float(v.simple_value)))
     
-    history = [(i, h) for i, h in enumerate(history, start=1)]
+#    history = [(i, h) for i, h in enumerate(history, start=1)]
     if args.max or args.min:
         history.sort(key=lambda x: x[-1])
 
