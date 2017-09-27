@@ -18,7 +18,6 @@ import mixer
 from mixer import gen_episode_with_seg_reward
 from mixer import categorical_ent, expand_output
 from mixer import gen_zero_state, feed_init_state
-from model import LinearCell
 
 from data.fuel_utils import create_ivector_datastream
 import utils
